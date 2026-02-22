@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #000000;
+  --foreground: #ffffff;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+html, body {
+  height: 100%;
+}
+
+@keyframes satl-marquee {
+  0% { transform: translate3d(0,0,0); }
+  100% { transform: translate3d(-50%,0,0); }
+}
+
+@font-face {
+  font-family: "Yeast";
+  src: url("/fonts/Yeast22-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Brygada";
+  src: url("/fonts/Brygada1918.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "YrsaBold";
+  src: url("/fonts/Yrsa-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "KanitExtraBold";
+  src: url("/fonts/Kanit-ExtraBold.ttf") format("truetype");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #ffffff;
+    --foreground: #000000;
+  }
+} 
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+@layer components {
+
+  .doc-h1 {
+    @apply text-[35px] font-bold tracking-[-0.02em];
+  }
+
+  .doc-h2 {
+    @apply text-[20px] font-semibold tracking-[-0.01em];
+  }
+
+  .doc-h3 {
+    @apply text-[15px] font-medium;
+  }
+
+  .doc-text {
+    @apply text-[13px] leading-[1.6] text-black/85;
+  }
+
+}

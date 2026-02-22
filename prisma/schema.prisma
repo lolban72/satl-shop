@@ -1,0 +1,192 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id       String  @id @default(cuid())
+  email    String  @unique
+  password String
+  name     String?
+  phone    String?
+
+  // старое поле можно оставить для совместимости
+  address String?
+
+  // ✅ новые поля для доставки
+  addressCountry   String?
+  addressRegion    String?
+  addressCity      String?
+  addressStreet    String?
+  addressHouse     String?
+  addressApartment String?
+  addressPostcode  String?
+  addressComment   String?
+
+  role String @default("user")
+
+  // ✅ общий флаг подтверждения аккаунта
+  // (можешь включать его после успешной привязки TG)
+  isVerified Boolean @default(false)
+
+  // ✅ Telegram (привязка)
+  tgChatId     String?   @unique
+  tgUsername   String?
+  tgLinkedAt   DateTime?
+  tgVerifiedAt DateTime? // оставил, если хочешь отдельно фиксировать "верификацию" через TG
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders            Order[]
+  newsletterEnabled Boolean @default(false)
+
+  tgLinkCodes        TgLinkCode[]
+  passwordResetCodes PasswordResetCode[]
+}
+
+model TgAdminState {
+  chatId     String   @id
+  mode       String   @default("IDLE") // IDLE | BROADCAST_DRAFT
+  draftText  String?
+  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now())
+}
+
+model TgLinkCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([usedAt])
+}
+
+model Category {
+  id    String @id @default(cuid())
+  slug  String @unique
+  title String
+
+  // показ
+  showInNav  Boolean @default(true)
+  showOnHome Boolean @default(true)
+
+  // раздельная сортировка
+  navOrder  Int @default(0)
+  homeOrder Int @default(0)
+
+  createdAt DateTime  @default(now())
+  products  Product[]
+}
+
+model HeroBanner {
+  id      String  @id @default(cuid())
+  enabled Boolean @default(true)
+
+  title      String
+  subtitle   String?
+  buttonText String?
+  buttonHref String?
+
+  imageDesktop String?
+  imageMobile  String?
+
+  overlay   Int      @default(25)
+  createdAt DateTime @default(now())
+}
+
+model PasswordResetCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([usedAt])
+}
+
+model Product {
+  id              String    @id @default(cuid())
+  slug            String    @unique
+  title           String
+  description     String?
+  price           Int
+  images          String[]
+  createdAt       DateTime  @default(now())
+  isSoon          Boolean   @default(false)
+  variants        Variant[]
+  discountPercent Int       @default(0)
+  sizeChartImage  String?
+  categoryId      String?
+  category        Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+}
+
+model Variant {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  size  String
+  color String
+  sku   String @unique
+  stock Int    @default(0)
+}
+
+model MarqueeSettings {
+  id           String   @id @default(cuid())
+  text         String   @default("СКИДКИ 20%")
+  speedSeconds Int      @default(10)
+  enabled      Boolean  @default(true)
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+}
+
+model Order {
+  id        String      @id @default(cuid())
+  userId    String?
+  user      User?       @relation(fields: [userId], references: [id])
+  status    OrderStatus @default(NEW)
+  total     Int
+  createdAt DateTime    @default(now())
+
+  name    String
+  phone   String
+  address String
+
+  items OrderItem[]
+}
+
+model OrderItem {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId String
+  variantId String?
+  title     String
+  price     Int
+  quantity  Int
+}
+
+enum OrderStatus {
+  NEW
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELED
+  RETURNED
+}
