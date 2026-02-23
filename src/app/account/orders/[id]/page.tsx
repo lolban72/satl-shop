@@ -4,6 +4,10 @@ import { prisma } from "@/lib/prisma";
 import AccountShell from "../../ui/AccountShell";
 import OrderStatusBadge from "@/components/OrderStatusBadge";
 import OrderProgress from "@/components/OrderProgress";
+import type { Prisma } from "@prisma/client";
+
+type OrderWithItems = Prisma.OrderGetPayload<{ include: { items: true } }>;
+type OrderItem = OrderWithItems["items"][number];
 
 function rub(cents: number) {
   return (cents / 100).toFixed(0) + "р";
@@ -28,7 +32,6 @@ export default async function OrderDetailsPage(props: {
   return (
     <AccountShell active="orders">
       <div className="max-w-[760px] mx-auto space-y-8">
-
         {/* HEADER */}
         <div className="border border-black/15 p-6">
           <div className="flex items-start justify-between gap-4">
@@ -50,27 +53,22 @@ export default async function OrderDetailsPage(props: {
 
         {/* PROGRESS */}
         <div className="border border-black/15 p-6">
-          <div className="text-[14px] font-semibold mb-3">
-          </div>
+          <div className="text-[14px] font-semibold mb-3"></div>
           <OrderProgress status={order.status as any} />
         </div>
 
         {/* ITEMS */}
         <div className="border border-black/15 p-6">
-          <div className="text-[14px] font-semibold mb-5">
-            Состав заказа
-          </div>
+          <div className="text-[14px] font-semibold mb-5">Состав заказа</div>
 
           <div className="space-y-4">
-            {order.items.map((item) => (
+            {order.items.map((item: OrderItem) => (
               <div
                 key={item.id}
                 className="flex items-center justify-between border-b border-black/10 pb-3 last:border-0 last:pb-0"
               >
                 <div>
-                  <div className="text-[14px] font-medium">
-                    {item.title}
-                  </div>
+                  <div className="text-[14px] font-medium">{item.title}</div>
                   <div className="text-[12px] text-black/45 mt-1">
                     Количество: {item.quantity}
                   </div>
@@ -85,12 +83,8 @@ export default async function OrderDetailsPage(props: {
 
           {/* TOTAL */}
           <div className="flex justify-between items-center mt-6 pt-5 border-t border-black/15">
-            <div className="text-[15px] font-semibold">
-              Итого
-            </div>
-            <div className="text-[18px] font-bold">
-              {rub(order.total)}
-            </div>
+            <div className="text-[15px] font-semibold">Итого</div>
+            <div className="text-[18px] font-bold">{rub(order.total)}</div>
           </div>
         </div>
 
@@ -100,7 +94,6 @@ export default async function OrderDetailsPage(props: {
           службой поддержки. Укажите ID заказа для более быстрого решения
           вопроса.
         </div>
-
       </div>
     </AccountShell>
   );
