@@ -31,7 +31,7 @@ export default async function OrderSuccessPage({
         </div>
 
         <div className="mt-[8px] text-[12px] sm:text-[13px] text-black/55">
-          Спасибо за покупку. Мы свяжемся с вами для подтверждения доставки.
+          Спасибо за покупку.
         </div>
 
         {/* ORDER NUMBER */}

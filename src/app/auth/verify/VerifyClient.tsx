@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
@@ -31,6 +31,13 @@ function Input(
   );
 }
 
+type SessionUser = {
+  id?: string;
+  email?: string;
+  name?: string | null;
+  tgChatId?: string | null;
+};
+
 export default function VerifyTgPage() {
   const router = useRouter();
 
@@ -43,10 +50,72 @@ export default function VerifyTgPage() {
   const [copyOk, setCopyOk] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  const [verified, setVerified] = useState(false);
+  const [checking, setChecking] = useState(false);
+
+  const pollTimer = useRef<number | null>(null);
+
+  async function checkVerifiedOnce(): Promise<boolean> {
+    try {
+      const res = await fetch("/api/auth/session", { cache: "no-store" });
+      if (!res.ok) return false;
+      const s = (await res.json()) as { user?: SessionUser } | null;
+
+      const tg = s?.user?.tgChatId;
+      return Boolean(tg);
+    } catch {
+      return false;
+    }
+  }
+
+  function stopPolling() {
+    if (pollTimer.current) {
+      window.clearInterval(pollTimer.current);
+      pollTimer.current = null;
+    }
+  }
+
+  function startPolling() {
+    if (pollTimer.current) return;
+
+    setChecking(true);
+
+    // сразу один раз проверим
+    checkVerifiedOnce().then((ok) => {
+      if (ok) {
+        setVerified(true);
+        setChecking(false);
+        stopPolling();
+        router.refresh();
+      }
+    });
+
+    pollTimer.current = window.setInterval(async () => {
+      const ok = await checkVerifiedOnce();
+      if (ok) {
+        setVerified(true);
+        setChecking(false);
+        stopPolling();
+        router.refresh();
+      }
+    }, 2500);
+  }
+
+  useEffect(() => {
+    // Авто-проверка сразу при заходе на страницу
+    startPolling();
+
+    return () => {
+      stopPolling();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function generateCode() {
     setErr(null);
     setCopyOk(null);
     setLoading(true);
+
     try {
       const res = await fetch("/api/auth/tg-link-code", {
         method: "POST",
@@ -56,6 +125,9 @@ export default function VerifyTgPage() {
       if (!res.ok) throw new Error(data?.error || "Не удалось сгенерировать код");
 
       setCode(String(data?.code || ""));
+
+      // после генерации кода точно включаем проверку (если вдруг была остановлена)
+      startPolling();
     } catch (e: any) {
       setErr(e?.message || "Ошибка");
     } finally {
@@ -83,10 +155,33 @@ export default function VerifyTgPage() {
           Подтверждение
         </div>
 
+        {/* ✅ УСПЕХ */}
+        {verified ? (
+          <div className="mt-6 rounded-md border border-green-200 bg-green-50 p-4">
+            <div className="text-[12px] font-semibold text-green-800">
+              Telegram успешно привязан ✅
+            </div>
+            <div className="mt-1 text-[11px] leading-[1.5] text-green-800/70">
+              Теперь вы можете оформлять заказы и получать уведомления.
+            </div>
+
+            <Link
+              href="/catalog"
+              className="
+                mt-4 inline-flex h-[42px] w-full items-center justify-center
+                bg-black text-white text-[11px] font-bold uppercase tracking-[0.12em]
+                hover:bg-black/85 transition
+              "
+            >
+              Перейти в каталог
+            </Link>
+          </div>
+        ) : null}
+
         <div className="mt-6 grid gap-6">
           <button
             onClick={generateCode}
-            disabled={loading}
+            disabled={loading || verified}
             className={[
               "h-[42px] w-full bg-black text-white",
               "text-[11px] font-bold uppercase tracking-[0.12em]",
@@ -94,7 +189,7 @@ export default function VerifyTgPage() {
               "disabled:opacity-50 disabled:cursor-not-allowed",
             ].join(" ")}
           >
-            {loading ? "ГЕНЕРИРУЮ..." : "Сгенерировать код"}
+            {verified ? "УЖЕ ПОДТВЕРЖДЕНО" : loading ? "ГЕНЕРИРУЮ..." : "Сгенерировать код"}
           </button>
 
           <div>
@@ -121,8 +216,12 @@ export default function VerifyTgPage() {
                 Скопировать
               </button>
             </div>
+
             <div className="mt-3 text-[11px] leading-[1.5] text-black/55">
-              Отправьте код боту — аккаунт привяжется автоматически 
+              Отправьте код боту — аккаунт привяжется автоматически
+              {checking && !verified ? (
+                <span className="ml-1 text-black/45">• проверяю привязку…</span>
+              ) : null}
             </div>
 
             {copyOk ? (
@@ -139,9 +238,7 @@ export default function VerifyTgPage() {
               "inline-flex h-[42px] w-full items-center justify-center",
               "bg-black text-white text-[11px] font-bold uppercase tracking-[0.12em]",
               "transition",
-              botLink
-                ? "hover:bg-black/85"
-                : "opacity-50 pointer-events-none",
+              botLink ? "hover:bg-black/85" : "opacity-50 pointer-events-none",
             ].join(" ")}
           >
             Открыть телеграм-бота

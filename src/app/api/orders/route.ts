@@ -186,8 +186,7 @@ export async function POST(req: Request) {
       const userText =
         `<b>Заказ принят ✅</b>\n` +
         `Номер: <code>${order.id}</code>\n` +
-        `Сумма: ${rubFromCents(total)}\n\n` +
-        `Мы свяжемся с вами для подтверждения доставки.`;
+        `Сумма: ${rubFromCents(total)}\n\n`;
 
       tgSendMessage(user.tgChatId, userText).catch(() => {});
     }

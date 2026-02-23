@@ -6,6 +6,8 @@ const Schema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
   name: z.string().min(2).optional(),
+  lastName: z.string().min(2).optional(), // ✅ ДОБАВИЛИ
+  phone: z.string().min(5).optional(), // ✅
 });
 
 export async function POST(req: Request) {
@@ -15,7 +17,10 @@ export async function POST(req: Request) {
 
     const exists = await prisma.user.findUnique({ where: { email } });
     if (exists) {
-      return Response.json({ error: "Пользователь уже существует" }, { status: 400 });
+      return Response.json(
+        { error: "Пользователь уже существует" },
+        { status: 400 }
+      );
     }
 
     const hash = await bcrypt.hash(body.password, 10);
@@ -24,9 +29,11 @@ export async function POST(req: Request) {
       data: {
         email,
         password: hash,
-        name: body.name ?? null,
+        name: body.name?.trim() || null,
+        lastName: body.lastName?.trim() || null, // ✅
+        phone: body.phone?.trim() || null, // ✅
       },
-      select: { id: true, email: true, name: true },
+      select: { id: true, email: true, name: true, lastName: true, phone: true },
     });
 
     return Response.json({ ok: true, user });

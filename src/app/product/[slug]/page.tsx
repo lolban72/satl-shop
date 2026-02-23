@@ -4,6 +4,9 @@ import ProductGallery from "./ui/ProductGallery";
 import AddToCart from "./ui/AddToCart";
 import ProductCard from "@/components/ProductCard";
 
+// ✅ чтобы generateMetadata работал с Prisma на сервере всегда
+export const dynamic = "force-dynamic";
+
 function calcOldPrice(price: number, discountPercent?: number | null) {
   const d = Number(discountPercent ?? 0);
   if (!d || d <= 0 || d >= 100) return null;
@@ -15,9 +18,13 @@ function calcOldPrice(price: number, discountPercent?: number | null) {
 export async function generateMetadata({
   params,
 }: {
-  params: { slug: string };
+  // ✅ делаем как у тебя в page.tsx — params может приходить Promise
+  params: Promise<{ slug: string }> | { slug: string };
 }): Promise<Metadata> {
-  const slug = decodeURIComponent(params.slug);
+  // ✅ безопасно поддерживаем оба варианта
+  const p = "then" in (params as any) ? await (params as Promise<{ slug: string }>) : (params as { slug: string });
+
+  const slug = decodeURIComponent(p.slug);
 
   const product = await prisma.product.findUnique({
     where: { slug },
@@ -25,8 +32,6 @@ export async function generateMetadata({
       title: true,
       description: true,
       images: true,
-      discountPercent: true,
-      price: true,
     },
   });
 
@@ -158,7 +163,7 @@ export default async function ProductPage({
               price={product.price}
               image={product.images?.[0]}
               variants={product.variants}
-              sizeChartImage={product.sizeChartImage} // передаем сюда ссылку на таблицу размеров
+              sizeChartImage={product.sizeChartImage}
             />
           </div>
 
@@ -179,11 +184,9 @@ export default async function ProductPage({
         <div
           className="
             grid justify-center justify-items-center
-
             grid-cols-2 md:grid-cols-2 xl:grid-cols-3
             gap-x-[12px] gap-y-[22px]
             md:gap-x-[300px] md:gap-y-[80px]
-
             md:grid-cols-2 xl:grid-cols-3
           "
         >

@@ -17,24 +17,25 @@ export default async function ProfilePage() {
     where: { id: userId },
     select: {
       name: true,
+      lastName: true, // ✅
       phone: true,
       email: true,
-      tgChatId: true, // ✅ добавили
-      // или можно tgLinkedAt: true
+      tgChatId: true,
     },
   });
 
   if (!user) redirect("/auth/login");
 
-  const tgLinked = Boolean(user.tgChatId); // ✅ признак привязки
+  const tgLinked = Boolean(user.tgChatId);
 
   return (
     <AccountShell active="profile">
       <ProfileClient
         initialName={user.name ?? ""}
+        initialLastName={user.lastName ?? ""} // ✅
         initialPhone={user.phone ?? ""}
         email={user.email}
-        tgLinked={tgLinked} // ✅ передали
+        tgLinked={tgLinked}
       />
     </AccountShell>
   );

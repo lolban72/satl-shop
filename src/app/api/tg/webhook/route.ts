@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
-import { tgSendMessage, parseChatIds } from "@/lib/tg";
+import { tgSendMessage, tgSendPhoto, parseChatIds } from "@/lib/tg";
 
 const TG_WEBHOOK_SECRET = process.env.TG_WEBHOOK_SECRET || "";
 
@@ -24,6 +24,26 @@ function normalizeCode(text: string) {
   return text.trim().toUpperCase().replace(/\s+/g, "");
 }
 
+/**
+ * Храним в draftText:
+ *  - обычный текст: "Привет!"
+ *  - фото: "__PHOTO__:<file_id>\n<caption>"
+ */
+function encodePhotoDraft(fileId: string, caption?: string | null) {
+  const cap = (caption ?? "").trim();
+  return `__PHOTO__:${fileId}\n${cap}`;
+}
+
+function decodePhotoDraft(draftText: string) {
+  if (!draftText.startsWith("__PHOTO__:")) return null;
+  const rest = draftText.slice("__PHOTO__:".length);
+  const nl = rest.indexOf("\n");
+  const fileId = (nl >= 0 ? rest.slice(0, nl) : rest).trim();
+  const caption = (nl >= 0 ? rest.slice(nl + 1) : "").trim();
+  if (!fileId) return null;
+  return { fileId, caption: caption || undefined };
+}
+
 export async function POST(req: Request) {
   try {
     // ✅ Проверка секрета вебхука от Telegram
@@ -40,12 +60,23 @@ export async function POST(req: Request) {
     const msg = update?.message || update?.edited_message;
     const chatIdNum = msg?.chat?.id;
     const chatId = chatIdNum ? String(chatIdNum) : null;
-    const textRaw = msg?.text ? String(msg.text) : "";
 
     if (!chatId) return Response.json({ ok: true });
 
     const username = msg?.from?.username ? String(msg.from.username) : null;
+
+    // text
+    const textRaw = msg?.text ? String(msg.text) : "";
     const text = (textRaw || "").trim();
+
+    // photo (берём самое большое качество = последний элемент)
+    const photos: any[] = Array.isArray(msg?.photo) ? msg.photo : [];
+    const photoFileId: string | null =
+      photos.length > 0 ? String(photos[photos.length - 1]?.file_id || "") : null;
+
+    // caption (у фото может быть подпись)
+    const caption: string =
+      typeof msg?.caption === "string" ? String(msg.caption).trim() : "";
 
     // ✅ узнаём — привязан ли уже этот chatId к пользователю
     const linkedUser = await prisma.user.findFirst({
@@ -57,16 +88,14 @@ export async function POST(req: Request) {
     // ✅ ADMIN: рассылка из бота
     // =========================
     if (isAdminChatId(chatId)) {
-      const t = text;
-
       // /myid — узнать chatId
-      if (t === "/myid") {
+      if (text === "/myid") {
         await tgSendMessage(chatId, `Ваш chatId: <b>${chatId}</b>`);
         return Response.json({ ok: true });
       }
 
       // /broadcast — начать рассылку
-      if (t === "/broadcast") {
+      if (text === "/broadcast") {
         await prisma.tgAdminState.upsert({
           where: { chatId },
           update: { mode: "BROADCAST_DRAFT", draftText: null },
@@ -75,13 +104,13 @@ export async function POST(req: Request) {
 
         await tgSendMessage(
           chatId,
-          "🟢 Режим рассылки включён.\n\nОтправьте <b>следующим сообщением</b> текст рассылки.\n\nОтмена: /cancel"
+          "🟢 Режим рассылки включён.\n\nОтправьте <b>следующим сообщением</b>:\n— <b>текст</b> рассылки\nИЛИ\n— <b>фото</b> (можно с подписью)\n\nОтмена: /cancel"
         );
         return Response.json({ ok: true });
       }
 
       // /cancel — отмена
-      if (t === "/cancel") {
+      if (text === "/cancel") {
         await prisma.tgAdminState.upsert({
           where: { chatId },
           update: { mode: "IDLE", draftText: null },
@@ -93,18 +122,19 @@ export async function POST(req: Request) {
       }
 
       // /send — отправить рассылку
-      if (t === "/send") {
+      if (text === "/send") {
         const state = await prisma.tgAdminState.findUnique({ where: { chatId } });
 
         if (!state || state.mode !== "BROADCAST_DRAFT" || !state.draftText?.trim()) {
           await tgSendMessage(
             chatId,
-            "Нет текста для рассылки.\n\nСначала: /broadcast → затем текст → затем /send"
+            "Нет черновика рассылки.\n\nСначала: /broadcast → затем текст или фото → затем /send"
           );
           return Response.json({ ok: true });
         }
 
-        const msgText = state.draftText.trim();
+        const draft = state.draftText.trim();
+        const photoDraft = decodePhotoDraft(draft);
 
         const users = await prisma.user.findMany({
           where: { newsletterEnabled: true, tgChatId: { not: null } },
@@ -131,13 +161,17 @@ export async function POST(req: Request) {
 
         for (const to of recipients) {
           try {
-            await tgSendMessage(to, msgText);
+            if (photoDraft) {
+              await tgSendPhoto(to, photoDraft.fileId, photoDraft.caption);
+            } else {
+              await tgSendMessage(to, draft);
+            }
             okCount++;
           } catch {
             failCount++;
           }
-          // аккуратно по лимитам
-          await sleep(60);
+          // аккуратно по лимитам телеги
+          await sleep(80);
         }
 
         await prisma.tgAdminState.update({
@@ -153,13 +187,34 @@ export async function POST(req: Request) {
         return Response.json({ ok: true });
       }
 
-      // Если админ в режиме draft — любое сообщение считаем текстом
+      // ✅ Если админ в режиме draft — любое сообщение считаем черновиком
       const state = await prisma.tgAdminState.findUnique({ where: { chatId } });
       if (state?.mode === "BROADCAST_DRAFT") {
-        const draft = t;
+        // 1) Если пришло фото — сохраняем file_id (+ caption)
+        if (photoFileId) {
+          const draft = encodePhotoDraft(photoFileId, caption);
 
-        if (draft.length < 2) {
-          await tgSendMessage(chatId, "Текст слишком короткий. Отправьте нормальный текст или /cancel.");
+          await prisma.tgAdminState.update({
+            where: { chatId },
+            data: { draftText: draft },
+          });
+
+          await tgSendMessage(
+            chatId,
+            `🖼️ Черновик: <b>фото</b>${caption ? " с подписью" : ""} сохранён.\n\nЕсли всё ок — /send\nЕсли передумали — /cancel`
+          );
+
+          return Response.json({ ok: true });
+        }
+
+        // 2) Если пришёл текст — сохраняем текст
+        const draft = text;
+
+        if (!draft || draft.length < 2) {
+          await tgSendMessage(
+            chatId,
+            "Текст слишком короткий. Отправьте нормальный текст/фото или /cancel."
+          );
           return Response.json({ ok: true });
         }
 
@@ -170,7 +225,7 @@ export async function POST(req: Request) {
 
         await tgSendMessage(
           chatId,
-          `📝 Предпросмотр:\n\n${draft}\n\nЕсли всё ок — отправьте /send\nЕсли передумали — /cancel`
+          `📝 Предпросмотр:\n\n${draft}\n\nЕсли всё ок — /send\nЕсли передумали — /cancel`
         );
 
         return Response.json({ ok: true });
@@ -181,7 +236,7 @@ export async function POST(req: Request) {
     // ✅ USER: привязка аккаунта
     // =========================
 
-    // /start — объясняем что делать (и привязанным и не привязанным)
+    // /start — объясняем что делать
     if (text.toLowerCase().startsWith("/start")) {
       await tgSendMessage(
         chatId,
@@ -199,7 +254,6 @@ export async function POST(req: Request) {
     // ✅ ниже логика ТОЛЬКО для НЕ привязанных
     const code = normalizeCode(text);
 
-    // если сообщение не похоже на код — подсказываем
     if (!/^[A-Z0-9]{6,10}$/.test(code)) {
       await tgSendMessage(chatId, "Я не понимаю. Отправьте код привязки с сайта или напишите /start.");
       return Response.json({ ok: true });

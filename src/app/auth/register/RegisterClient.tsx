@@ -36,9 +36,9 @@ export default function RegisterPage() {
   const router = useRouter();
 
   const [name, setName] = useState("");
-  const [lastName, setLastName] = useState(""); // UI only
-  const [country, setCountry] = useState("Российская Федерация"); // UI only
-  const [phone, setPhone] = useState(""); // UI only
+  const [lastName, setLastName] = useState(""); // ✅ теперь сохраняем
+  const [country] = useState("Российская Федерация"); // UI only
+  const [phone, setPhone] = useState("");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -56,24 +56,30 @@ export default function RegisterPage() {
 
     const eMail = email.trim().toLowerCase();
     const n = name.trim();
+    const ln = lastName.trim(); // ✅
+    const p = phone.trim();
 
-    // ✅ name теперь НЕ обязателен (можно пустым)
     if (!eMail) return setErr("Введите e-mail");
     if (password.length < 6) return setErr("Пароль минимум 6 символов");
     if (password !== password2) return setErr("Пароли не совпадают");
     if (!agree) return setErr("Нужно дать согласие на обработку данных");
 
+    // (опционально) если хочешь сделать фамилию обязательной — раскомментируй:
+    // if (!ln) return setErr("Введите фамилию");
+    // если хочешь сделать телефон обязательным — раскомментируй:
+    // if (!p) return setErr("Введите телефон");
+
     setSaving(true);
     try {
-      // 1) регистрация
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: eMail,
           password,
-          // ✅ отправляем name только если он не пустой (иначе вообще не шлём)
           ...(n ? { name: n } : {}),
+          ...(ln ? { lastName: ln } : {}), // ✅ ДОБАВИЛИ
+          ...(p ? { phone: p } : {}),
         }),
       });
 
@@ -83,15 +89,12 @@ export default function RegisterPage() {
         return;
       }
 
-      // ✅ если сервер вернул код (devCode) — сохраняем, чтобы показать на verify странице (для теста)
-      // (потом можно убрать, когда будет TG-бот)
       if (data?.devCode) {
         try {
           localStorage.setItem("satl_verify_dev_code", String(data.devCode));
         } catch {}
       }
 
-      // 2) сразу логиним
       const login = await signIn("credentials", {
         email: eMail,
         password,
@@ -104,7 +107,6 @@ export default function RegisterPage() {
         return;
       }
 
-      // ✅ после успешного логина — на страницу подтверждения
       router.push("/auth/verify");
       router.refresh();
     } catch (e: any) {
@@ -136,26 +138,30 @@ export default function RegisterPage() {
           <form onSubmit={onSubmit} className="mt-[18px]">
             <div className="grid gap-[12px]">
               <label className="block">
-                <Label>Имя (необязательно)</Label>
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
+                <Label>Имя</Label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} />
               </label>
 
               <label className="block">
                 <Label>Фамилия</Label>
-                <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                <Input
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                />
               </label>
 
               <label className="block">
                 <Label>Страна</Label>
-                <Input value={country} onChange={(e) => setCountry(e.target.value)} />
+                <Input value={country} readOnly />
               </label>
 
               <label className="block">
                 <Label>Телефон</Label>
-                <Input value={phone} onChange={(e) => setPhone(e.target.value)} type="tel" />
+                <Input
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  type="tel"
+                />
               </label>
 
               <label className="block">

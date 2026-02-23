@@ -2,21 +2,24 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Title, Label, Input, PrimaryButton } from "../ui/Fields";
+import { Title, Label, Input } from "../ui/Fields";
 import ChangePasswordButton from "./ChangePasswordButton";
 
 export default function ProfileClient({
   initialName,
+  initialLastName,
   initialPhone,
   email,
-  tgLinked, // ✅ новый проп
+  tgLinked,
 }: {
   initialName: string;
+  initialLastName: string; // ✅
   initialPhone: string;
   email: string;
   tgLinked: boolean;
 }) {
   const [name, setName] = useState(initialName);
+  const [lastName, setLastName] = useState(initialLastName); // ✅
   const [phone, setPhone] = useState(initialPhone);
 
   const [saving, setSaving] = useState(false);
@@ -31,10 +34,16 @@ export default function ProfileClient({
       const res = await fetch("/api/account/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, phone }),
+        body: JSON.stringify({
+          name,
+          lastName, // ✅
+          phone,
+        }),
       });
+
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Не удалось сохранить");
+
       setOk("Сохранено ✅");
     } catch (e: any) {
       setErr(e?.message || "Ошибка");
@@ -52,6 +61,11 @@ export default function ProfileClient({
           <label className="block w-full">
             <Label>Имя</Label>
             <Input value={name} onChange={setName} />
+          </label>
+
+          <label className="block w-full">
+            <Label>Фамилия</Label>
+            <Input value={lastName} onChange={setLastName} /> {/* ✅ */}
           </label>
 
           <label className="block w-full">
@@ -91,24 +105,25 @@ export default function ProfileClient({
             >
               {saving ? "Сохранение..." : "Сохранить"}
             </button>
+
             <div className="mt-[8px]">
               {tgLinked ? (
                 <div className="h-[35px] w-full border border-black/15 flex items-center justify-center text-[11px] text-black/60">
                   Telegram привязан
                 </div>
               ) : (
-              <Link
-                href="/auth/verify"
-                className={`
-                  h-[35px] w-full
-                  bg-black text-white
-                  flex items-center justify-center
-                  text-[12px] font-semibold uppercase tracking-[0.02em]
-                  transition hover:bg-black/85
-                `}
-              >
-                Привязать телеграм
-              </Link>
+                <Link
+                  href="/auth/verify"
+                  className={`
+                    h-[35px] w-full
+                    bg-black text-white
+                    flex items-center justify-center
+                    text-[12px] font-semibold uppercase tracking-[0.02em]
+                    transition hover:bg-black/85
+                  `}
+                >
+                  Привязать телеграм
+                </Link>
               )}
             </div>
           </div>
@@ -134,8 +149,6 @@ export default function ProfileClient({
           </form>
         </div>
       </div>
-
-      {/* ================== БЕЗОПАСНОСТЬ ================== */}
 
       <div className="mt-[28px] px-[14px] sm:px-0">
         <Title>Безопасность</Title>
