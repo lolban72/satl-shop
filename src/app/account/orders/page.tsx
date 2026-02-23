@@ -5,6 +5,10 @@ import { prisma } from "@/lib/prisma";
 import AccountShell from "../ui/AccountShell";
 import OrderStatusBadge from "@/components/OrderStatusBadge";
 
+export const metadata = {
+  title: "Мои заказы | SATL",
+};
+
 export default async function OrdersPage() {
   const session = await auth();
   const userId = (session?.user as any)?.id as string | undefined;

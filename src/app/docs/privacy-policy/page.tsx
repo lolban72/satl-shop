@@ -1,5 +1,9 @@
 import { kanitBold } from "@/app/layout";
 
+export const metadata = {
+  title: "Политика конфиденциальности | SATL",
+};
+
 export default function PrivacyPage() {
   return (
     <div className="bg-white text-black">

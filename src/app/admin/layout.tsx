@@ -65,38 +65,10 @@ export default async function AdminLayout({
 
   return (
     <div className="mx-auto max-w-[1440px] px-[16px] md:px-[40px] pt-[28px] pb-[90px]">
-      {/* Top bar */}
-      <div className="mb-8 flex items-start justify-between gap-6">
-        <div>
-          <div className="text-[18px] md:text-[22px] font-semibold tracking-[-0.02em]">
-            Админ-панель
-          </div>
-          <div className="mt-1 text-[11px] text-black/45">
-            Управление товарами, заказами и витриной
-          </div>
-        </div>
-
-        <Link
-          href="/"
-          className={[
-            "inline-flex items-center justify-center",
-            "h-[38px] px-4",
-            "border border-black/20 rounded-2xl",
-            "text-[11px] uppercase tracking-[0.08em] font-semibold",
-            "text-black/70 hover:text-black hover:border-black/35 hover:bg-black/[0.03] transition",
-          ].join(" ")}
-        >
-          ← На сайт
-        </Link>
-      </div>
-
       <div className="grid gap-8 lg:grid-cols-[280px_1fr]">
         {/* Sidebar */}
         <aside className="lg:sticky lg:top-[18px] h-fit">
           <div className="rounded-3xl border border-black/15 p-4">
-            <div className="text-[11px] uppercase tracking-[0.1em] text-black/45">
-              Разделы
-            </div>
 
             <div className="mt-4 grid gap-2">
               {nav.map((i) => (
@@ -106,7 +78,6 @@ export default async function AdminLayout({
 
             <div className="mt-4 border-t border-black/10 pt-4">
               <div className="text-[10px] text-black/45 leading-[1.5]">
-                Доступ: <span className="font-semibold text-black/70">admin</span>
                 <div className="mt-1 break-all">{session.user.email}</div>
               </div>
             </div>

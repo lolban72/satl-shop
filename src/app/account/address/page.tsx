@@ -4,6 +4,10 @@ import { prisma } from "@/lib/prisma";
 import AccountShell from "../ui/AccountShell";
 import AddressClient from "./AddressClient";
 
+export const metadata = {
+  title: "Адрес доставки | SATL",
+};
+
 export default async function AddressPage() {
   const session = await auth();
   const userId = (session?.user as any)?.id as string | undefined;

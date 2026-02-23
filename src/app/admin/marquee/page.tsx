@@ -1,5 +1,9 @@
 import MarqueeForm from "./ui/MarqueeForm";
 
+export const metadata = {
+  title: "Бегущая строка | SATL-админ",
+};
+
 export default function AdminMarqueePage() {
   return (
     <div className="rounded-2xl border p-4">

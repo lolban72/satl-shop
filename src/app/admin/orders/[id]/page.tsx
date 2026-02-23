@@ -92,12 +92,6 @@ export default async function AdminOrderPage(props: {
 
           {/* Блок печати */}
           <div className="rounded-2xl border p-4">
-            <div className="text-sm font-semibold">Этикетка</div>
-
-            <div className="mt-3 text-[12px] text-black/60">
-              Печать наклейки для отправки
-            </div>
-
             <Link
               href={`/admin/orders/${order.id}/label`}
               target="_blank"

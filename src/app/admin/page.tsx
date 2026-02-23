@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 
+export const metadata = {
+  title: "Админ-панель | SATL-админ",
+};
+
 function StatPill({ label, value }: { label: string; value: any }) {
   return (
     <div className="rounded-2xl border border-black/15 px-4 py-3">
@@ -102,7 +106,7 @@ export default async function AdminDashboard() {
     },
     {
       title: "Маркетинг",
-      desc: "Hero-баннер на главной (текст, кнопка, фон, включение).",
+      desc: "Баннер на главной (текст, кнопка, фон, включение).",
       links: [{ href: "/admin/marketing/hero", label: "Hero баннер" }],
     },
     {
@@ -119,9 +123,6 @@ export default async function AdminDashboard() {
           <div>
             <div className="text-[16px] font-semibold tracking-[-0.01em]">
               Сводка
-            </div>
-            <div className="mt-1 text-[12px] text-black/55">
-              Коротко по основным сущностям проекта
             </div>
           </div>
 

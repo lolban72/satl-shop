@@ -1,5 +1,9 @@
 "use client";
 
+export const metadata = {
+  title: "Регистрация | SATL",
+};
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";

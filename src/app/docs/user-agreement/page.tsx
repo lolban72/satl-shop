@@ -1,5 +1,9 @@
 import { kanitBold } from "@/app/layout";
 
+export const metadata = {
+  title: "Пользовательское соглашение | SATL",
+};
+
 export default function TermsPage() {
   return (
     <div className="bg-white text-black">

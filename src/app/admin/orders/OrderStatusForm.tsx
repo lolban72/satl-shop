@@ -83,13 +83,6 @@ export default function OrderStatusForm(props: {
         </button>
       </div>
 
-      <div className="mt-2 text-[12px] text-black/50">
-        Разрешённые переходы:{" "}
-        {(ALLOWED_TRANSITIONS[status] ?? [])
-          .map((s) => STATUS_META[s].label)
-          .join(", ") || "—"}
-      </div>
-
       {err ? <div className="mt-2 text-sm text-red-600">{err}</div> : null}
       {ok ? <div className="mt-2 text-sm text-green-600">{ok}</div> : null}
     </div>

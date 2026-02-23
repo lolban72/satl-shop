@@ -94,7 +94,7 @@ export default function ProfileClient({
             <div className="mt-[8px]">
               {tgLinked ? (
                 <div className="h-[35px] w-full border border-black/15 flex items-center justify-center text-[11px] text-black/60">
-                  Telegram привязан ✅
+                  Telegram привязан
                 </div>
               ) : (
               <Link

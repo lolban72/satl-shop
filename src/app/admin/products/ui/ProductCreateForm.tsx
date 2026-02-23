@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
+export const metadata = {
+  title: "Создание товара | SATL-админ",
+};
+
 type Category = {
   id: string;
   title: string;

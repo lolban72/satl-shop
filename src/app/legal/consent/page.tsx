@@ -1,5 +1,9 @@
 import { kanitBold } from "@/app/layout";
 
+export const metadata = {
+  title: "Согласие на обработку персональных данных | SATL",
+};
+
 export default function ConsentPage() {
   return (
     <div className="bg-white text-black">

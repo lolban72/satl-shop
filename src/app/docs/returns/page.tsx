@@ -1,5 +1,9 @@
 import { kanitBold } from "@/app/layout";
 
+export const metadata = {
+  title: "Обмен и возврат | SATL",
+};
+
 export default function ReturnsPage() {
   return (
     <div className="bg-white text-black">

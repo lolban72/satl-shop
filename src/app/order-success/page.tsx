@@ -1,4 +1,9 @@
 import Link from "next/link";
+import OrderSuccessClient from "./OrderSuccessClient";
+
+export const metadata = {
+  title: "Заказ оформлен | SATL",
+};
 
 export default async function OrderSuccessPage({
   searchParams,
@@ -16,6 +21,9 @@ export default async function OrderSuccessPage({
         md:px-[65px] md:pt-[90px] md:pb-[160px]
       "
     >
+      {/* ✅ очистка корзины строго на успешной странице */}
+      <OrderSuccessClient orderId={orderId} />
+
       <div className="max-w-[720px]">
         {/* TITLE */}
         <div className="text-[22px] sm:text-[24px] md:text-[28px] font-semibold tracking-[-0.02em]">
@@ -60,11 +68,6 @@ export default async function OrderSuccessPage({
           >
             На главную
           </Link>
-        </div>
-
-        {/* INFO TEXT */}
-        <div className="mt-[18px] sm:mt-[22px] md:mt-[28px] text-[10px] sm:text-[11px] italic leading-[1.35] text-black/45">
-          Если у вас возникнут вопросы по заказу, пожалуйста, сохраните номер заказа и свяжитесь с поддержкой.
         </div>
       </div>
     </div>

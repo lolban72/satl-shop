@@ -3,6 +3,10 @@ import { prisma } from "@/lib/prisma";
 import CheckoutForm from "./ui/CheckoutForm";
 import { redirect } from "next/navigation";
 
+export const metadata = {
+  title: "Оформление заказа | SATL",
+};
+
 export default async function CheckoutPage() {
   const session = await auth();
   const userId = (session?.user as any)?.id as string | undefined;

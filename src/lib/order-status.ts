@@ -70,7 +70,7 @@ export const STATUS_ORDER: OrderStatus[] = [
   "RETURNED",
 ];
 
-// Разрешённые переходы (чтобы не было “магии”)
+// Разрешённые переходы
 export const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   NEW: ["PROCESSING", "CANCELED"],
   PROCESSING: ["SHIPPED", "CANCELED"],

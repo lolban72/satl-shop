@@ -2,6 +2,10 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import DeleteProductButton from "./ui/DeleteProductButton";
 
+export const metadata = {
+  title: "Товары | SATL-админ",
+};
+
 export default async function ProductsListPage() {
   const products = await prisma.product.findMany({
     orderBy: { createdAt: "desc" },

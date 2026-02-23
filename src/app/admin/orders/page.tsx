@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { STATUS_META, STATUS_ORDER } from "@/lib/order-status";
+import type { OrderStatus } from "@/lib/order-status";
+
+export const metadata = {
+  title: "Заказы | SATL-админ",
+};
 
 function rub(cents: number) {
   const v = (cents ?? 0) / 100;
@@ -11,6 +16,11 @@ function rub(cents: number) {
   }).format(v);
 }
 
+function isOrderStatus(v?: string): v is OrderStatus {
+  if (!v) return false;
+  return (STATUS_ORDER as readonly string[]).includes(v);
+}
+
 export default async function AdminOrdersPage(props: {
   searchParams?: Promise<{
     q?: string;
@@ -19,7 +29,7 @@ export default async function AdminOrdersPage(props: {
 }) {
   const sp = (await props.searchParams) ?? {};
   const q = sp.q?.trim() ?? "";
-  const status = sp.status?.toUpperCase();
+  const statusRaw = sp.status?.trim().toUpperCase();
 
   const where: any = {};
 
@@ -31,9 +41,8 @@ export default async function AdminOrdersPage(props: {
     ];
   }
 
-  if (status && STATUS_ORDER.includes(status as any)) {
-    where.status = status;
-  }
+  const status = isOrderStatus(statusRaw) ? (statusRaw as OrderStatus) : undefined;
+  if (status) where.status = status;
 
   const orders = await prisma.order.findMany({
     where,
@@ -95,14 +104,26 @@ export default async function AdminOrdersPage(props: {
 
           <tbody className="divide-y">
             {orders.map((o) => {
+              // Prisma отдаёт enum, но TS иногда видит как string — приводим безопасно:
+              const os = o.status as OrderStatus;
+
               const meta =
-                STATUS_META[o.status as any] ??
-                { label: o.status, badgeClass: "border-black/15 bg-gray-50 text-black/70" };
+                STATUS_META[os] ??
+                {
+                  label: String(o.status),
+                  badgeClass: "border-black/15 bg-gray-50 text-black/70",
+                };
 
               return (
                 <tr key={o.id} className="[&>td]:px-4 [&>td]:py-3">
-                  <td>{new Date(o.createdAt).toLocaleString("ru-RU")}</td>
-                  <td className="font-mono text-[12px]">{o.id.slice(0, 10)}…</td>
+                  <td className="whitespace-nowrap text-black/70">
+                    {new Date(o.createdAt).toLocaleString("ru-RU")}
+                  </td>
+
+                  <td className="font-mono text-[12px] text-black/70">
+                    {o.id.slice(0, 10)}…
+                  </td>
+
                   <td>
                     <span
                       className={[
@@ -113,13 +134,17 @@ export default async function AdminOrdersPage(props: {
                       {meta.label}
                     </span>
                   </td>
+
                   <td className="font-semibold">{rub(o.total)}</td>
-                  <td>{o.items.length}</td>
-                  <td>
+
+                  <td className="text-black/70">{o.items.length}</td>
+
+                  <td className="text-black/70">
                     {o.user?.email ?? "—"}
                     <div className="text-[12px] text-black/50">{o.name}</div>
                   </td>
-                  <td>
+
+                  <td className="whitespace-nowrap">
                     <Link
                       href={`/admin/orders/${o.id}`}
                       className="rounded-xl border px-3 py-2 text-[12px] hover:bg-gray-50"
@@ -130,6 +155,14 @@ export default async function AdminOrdersPage(props: {
                 </tr>
               );
             })}
+
+            {orders.length === 0 ? (
+              <tr>
+                <td className="px-4 py-8 text-center text-black/50" colSpan={7}>
+                  Ничего не найдено
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>

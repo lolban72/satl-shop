@@ -3,6 +3,11 @@
 import { useMemo, useState } from "react";
 import { useCart } from "@/lib/cart-store";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+
+export const metadata = {
+  title: "Оформление заказа | SATL",
+};
 
 function moneyRub(cents: number) {
   return `${(cents / 100).toFixed(0)}р`;
@@ -75,7 +80,6 @@ export default function CheckoutForm(props: {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Не удалось создать заказ");
 
-      clear();
       router.push(`/order-success?orderId=${encodeURIComponent(data.orderId)}`);
     } catch (e: any) {
       setErr(e?.message || "Ошибка");
@@ -238,7 +242,14 @@ export default function CheckoutForm(props: {
                 </button>
 
                 <div className="text-[11px] italic leading-[1.25] text-black/45 mt-[6px]">
-                  Нажимая кнопку, вы подтверждаете оформление заказа.
+                  Нажимая кнопку, вы соглашаетесь с{" "}
+                  <Link
+                    href="https://satl.shop/docs/public-offer"
+                    target="_blank"
+                    className="underline hover:text-black transition"
+                  >
+                    публичной офертой
+                  </Link>
                 </div>
               </div>
             </>

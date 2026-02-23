@@ -1,21 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
-import { tgSendMessage } from "@/lib/tg";
+import { tgSendMessage, parseChatIds } from "@/lib/tg";
 
 const TG_WEBHOOK_SECRET = process.env.TG_WEBHOOK_SECRET || "";
 
 // Админы (chatId через запятую)
 const TG_ADMIN_CHAT_IDS = process.env.TG_ADMIN_CHAT_IDS || "";
 
-function parseAdminChatIds(v?: string) {
-  return (v ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
 function isAdminChatId(chatId: string) {
-  const admins = parseAdminChatIds(TG_ADMIN_CHAT_IDS);
+  const admins = parseChatIds(TG_ADMIN_CHAT_IDS);
   return admins.includes(String(chatId));
 }
 
@@ -37,7 +30,6 @@ export async function POST(req: Request) {
     if (TG_WEBHOOK_SECRET) {
       const header = req.headers.get("x-telegram-bot-api-secret-token") || "";
       if (header !== TG_WEBHOOK_SECRET) {
-        // всегда 200, чтобы Telegram не ретраил
         return Response.json({ ok: true });
       }
     }
@@ -55,13 +47,19 @@ export async function POST(req: Request) {
     const username = msg?.from?.username ? String(msg.from.username) : null;
     const text = (textRaw || "").trim();
 
+    // ✅ узнаём — привязан ли уже этот chatId к пользователю
+    const linkedUser = await prisma.user.findFirst({
+      where: { tgChatId: chatId },
+      select: { id: true },
+    });
+
     // =========================
     // ✅ ADMIN: рассылка из бота
     // =========================
     if (isAdminChatId(chatId)) {
       const t = text;
 
-      // /myid — чтобы узнать свой chatId
+      // /myid — узнать chatId
       if (t === "/myid") {
         await tgSendMessage(chatId, `Ваш chatId: <b>${chatId}</b>`);
         return Response.json({ ok: true });
@@ -108,7 +106,6 @@ export async function POST(req: Request) {
 
         const msgText = state.draftText.trim();
 
-        // Берём подписчиков: newsletterEnabled=true + tgChatId
         const users = await prisma.user.findMany({
           where: { newsletterEnabled: true, tgChatId: { not: null } },
           select: { tgChatId: true },
@@ -132,7 +129,6 @@ export async function POST(req: Request) {
         let okCount = 0;
         let failCount = 0;
 
-        // осторожно по лимитам телеги
         for (const to of recipients) {
           try {
             await tgSendMessage(to, msgText);
@@ -140,10 +136,10 @@ export async function POST(req: Request) {
           } catch {
             failCount++;
           }
+          // аккуратно по лимитам
           await sleep(60);
         }
 
-        // сброс состояния
         await prisma.tgAdminState.update({
           where: { chatId },
           data: { mode: "IDLE", draftText: null },
@@ -185,7 +181,7 @@ export async function POST(req: Request) {
     // ✅ USER: привязка аккаунта
     // =========================
 
-    // /start — просто объясняем что делать
+    // /start — объясняем что делать (и привязанным и не привязанным)
     if (text.toLowerCase().startsWith("/start")) {
       await tgSendMessage(
         chatId,
@@ -194,17 +190,23 @@ export async function POST(req: Request) {
       return Response.json({ ok: true });
     }
 
+    // ✅ если уже привязан — НЕ просим код, отвечаем нейтрально
+    if (linkedUser) {
+      await tgSendMessage(chatId, "Я не понимаю команду. Напиши /start.");
+      return Response.json({ ok: true });
+    }
+
+    // ✅ ниже логика ТОЛЬКО для НЕ привязанных
     const code = normalizeCode(text);
 
     // если сообщение не похоже на код — подсказываем
     if (!/^[A-Z0-9]{6,10}$/.test(code)) {
-      await tgSendMessage(chatId, "Отправь мне код, который выдал сайт (обычно 6 символов).");
+      await tgSendMessage(chatId, "Я не понимаю. Отправьте код привязки с сайта или напишите /start.");
       return Response.json({ ok: true });
     }
 
     const codeHash = sha256(code);
 
-    // ищем активный код
     const row = await prisma.tgLinkCode.findFirst({
       where: {
         codeHash,
@@ -220,13 +222,11 @@ export async function POST(req: Request) {
     }
 
     await prisma.$transaction(async (tx) => {
-      // помечаем код использованным
       await tx.tgLinkCode.update({
         where: { id: row.id },
         data: { usedAt: new Date() },
       });
 
-      // привязываем tg к пользователю + подтверждаем аккаунт
       await tx.user.update({
         where: { id: row.userId },
         data: {
@@ -238,7 +238,6 @@ export async function POST(req: Request) {
         },
       });
 
-      // чистим остальные неиспользованные коды этого пользователя
       await tx.tgLinkCode.deleteMany({
         where: { userId: row.userId, usedAt: null },
       });

@@ -1,6 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import ProductEditForm from "../ui/ProductEditForm";
 
+export const metadata = {
+  title: "Редактирование товара | SATL-админ",
+};
+
 export default async function AdminProductEditPage({
   params,
 }: {

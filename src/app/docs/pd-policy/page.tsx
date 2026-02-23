@@ -1,5 +1,9 @@
 import { kanitBold } from "@/app/layout";
 
+export const metadata = {
+  title: "Политика обработки персональных данных | SATL",
+};
+
 export default function PdPolicyPage() {
   return (
     <div className="bg-white text-black">

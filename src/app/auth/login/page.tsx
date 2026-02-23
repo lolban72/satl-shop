@@ -1,5 +1,9 @@
 "use client";
 
+export const metadata = {
+  title: "Вход в личный кабинет | SATL",
+};
+
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";

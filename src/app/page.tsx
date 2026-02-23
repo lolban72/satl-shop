@@ -2,6 +2,11 @@ import { prisma } from "@/lib/prisma";
 import HeroBanner from "@/components/HeroBanner";
 import ProductCard from "@/components/ProductCard";
 
+export const metadata = {
+  title: "SATL | официальный интернет-магазин",
+  description: "Интернет-магазин одежды SATL. Новые коллекции, лимитированные релизы.",
+};
+
 export default async function HomePage() {
   const banner = await prisma.heroBanner.findFirst({
     orderBy: { createdAt: "asc" },

@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { useCart } from "../../lib/cart-store";
 
+export const metadata = {
+  title: "Корзина | SATL",
+};
+
 function moneyRub(cents: number) {
   return `${(cents / 100).toFixed(0)}р`;
 }
@@ -289,7 +293,7 @@ export default function CartPage() {
             </Link>
 
             <div className="mt-[12px] text-[10px] italic leading-[1.25] text-black/45">
-              Итоговая стоимость доставки и скидок (если появятся) будет рассчитана на этапе оформления.
+              Итоговая стоимость доставки будет рассчитана на этапе оформления.
             </div>
           </aside>
         </div>

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import ProductGallery from "./ui/ProductGallery";
 import AddToCart from "./ui/AddToCart";
@@ -8,6 +9,53 @@ function calcOldPrice(price: number, discountPercent?: number | null) {
   if (!d || d <= 0 || d >= 100) return null;
   const old = Math.round(price / (1 - d / 100));
   return old > price ? old : null;
+}
+
+// ✅ Динамический title/description для каждой карточки товара
+export async function generateMetadata({
+  params,
+}: {
+  params: { slug: string };
+}): Promise<Metadata> {
+  const slug = decodeURIComponent(params.slug);
+
+  const product = await prisma.product.findUnique({
+    where: { slug },
+    select: {
+      title: true,
+      description: true,
+      images: true,
+      discountPercent: true,
+      price: true,
+    },
+  });
+
+  if (!product) {
+    return {
+      title: "Товар не найден | SATL",
+      description: "К сожалению, этот товар не найден.",
+    };
+  }
+
+  const title = `${product.title} | SATL`;
+  const description =
+    (product.description || "").trim().slice(0, 160) ||
+    `Купить ${product.title} в интернет-магазине SATL.`;
+
+  const ogImage =
+    Array.isArray(product.images) && product.images.length > 0
+      ? product.images[0]
+      : undefined;
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      images: ogImage ? [{ url: ogImage }] : [],
+    },
+  };
 }
 
 export default async function ProductPage({
@@ -67,7 +115,10 @@ export default async function ProductPage({
 
           {/* PRICE */}
           <div className="mt-[12px] md:mt-[14px] flex items-end gap-[10px]">
-            <div className="text-[26px] md:text-[30px]" style={{ fontFamily: "Yeast" }}>
+            <div
+              className="text-[26px] md:text-[30px]"
+              style={{ fontFamily: "Yeast" }}
+            >
               {(product.price / 100).toFixed(0)}р
             </div>
 
@@ -84,10 +135,16 @@ export default async function ProductPage({
           {/* DISCOUNT */}
           {product.discountPercent > 0 && (
             <div className="text-[18px] md:text-[20px] font-bold text-[#B60404] mt-[-5px]">
-              <span style={{ fontFamily: "Yeast" }} className="tracking-[0.02em]">
+              <span
+                style={{ fontFamily: "Yeast" }}
+                className="tracking-[0.02em]"
+              >
                 -{product.discountPercent}
               </span>
-              <span style={{ fontFamily: "YrsaBold" }} className="text-[15px] md:text-[17px]">
+              <span
+                style={{ fontFamily: "YrsaBold" }}
+                className="text-[15px] md:text-[17px]"
+              >
                 %
               </span>
             </div>
@@ -108,7 +165,7 @@ export default async function ProductPage({
           {/* DESCRIPTION */}
           {product.description && (
             <div
-              className="mt-[16px] md:mt-[22px] text-[13px] md:text-[15px] leading-[1.6] text-black/55"
+              className="mt-[16px] md:mt-[22px] text-[13px] md:text-[15px] leading-[1.6] text-black/55 whitespace-pre-wrap"
               style={{ fontFamily: "Brygada" }}
             >
               {product.description}

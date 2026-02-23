@@ -1,5 +1,9 @@
 "use client";
 
+export const metadata = {
+  title: "Удаление товара | SATL-админ",
+};
+
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 

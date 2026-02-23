@@ -2,6 +2,7 @@ import "../styles/globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import TopMarquee from "@/components/TopMarquee";
+import CookieBanner from "@/components/CookieBanner"; // ✅ добавили
 import { Kanit, Brygada_1918 } from "next/font/google";
 import { prisma } from "@/lib/prisma";
 
@@ -43,9 +44,13 @@ export default async function RootLayout({
             fontClass={brygada.className}
           />
         )}
+
         <Header />
         <main className="flex-1">{children}</main>
         <Footer />
+
+        {/* ✅ Плашка cookie отображается на всех страницах */}
+        <CookieBanner />
       </body>
     </html>
   );

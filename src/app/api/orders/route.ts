@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { tgSendMessage, parseChatIds } from "@/lib/tg";
 
 const BodySchema = z.object({
   customer: z.object({
@@ -19,6 +20,10 @@ const BodySchema = z.object({
     .min(1),
 });
 
+function rubFromCents(cents: number) {
+  return `${((cents ?? 0) / 100).toFixed(0)}р`;
+}
+
 export async function POST(req: Request) {
   try {
     const session = await auth();
@@ -35,7 +40,7 @@ export async function POST(req: Request) {
     // ✅ 2) Берём пользователя из БД и проверяем Telegram + адрес
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { tgChatId: true, address: true },
+      select: { tgChatId: true, address: true, email: true },
     });
 
     if (!user) {
@@ -51,7 +56,6 @@ export async function POST(req: Request) {
     }
 
     // ✅ 4) Требуем заполненный адрес в профиле
-    // (логика как ты хотел: если в ЛК пусто — оформление запрещаем)
     if (!user.address || !user.address.trim()) {
       return Response.json(
         { error: "Заполните адрес доставки в личном кабинете" },
@@ -130,7 +134,7 @@ export async function POST(req: Request) {
         select: { id: true },
       });
 
-      // ✅ сохраняем данные пользователя (как у тебя)
+      // ✅ сохраняем данные пользователя
       await tx.user.update({
         where: { id: userId },
         data: {
@@ -152,6 +156,41 @@ export async function POST(req: Request) {
 
       return created;
     });
+
+    // ===================================================
+    // ✅ TG уведомления (только после успешного заказа)
+    // ===================================================
+
+    const adminChatIds = parseChatIds(process.env.TG_ADMIN_CHAT_IDS);
+
+    // 1) админу — новый заказ (ВСЕГДА)
+    const adminText =
+      `<b>Новый заказ</b>\n` +
+      `ID: <code>${order.id}</code>\n` +
+      `Имя: ${body.customer.name}\n` +
+      `Телефон: ${body.customer.phone}\n` +
+      `Адрес: ${body.customer.address}\n\n` +
+      `<b>Состав:</b>\n` +
+      detailedItems
+        .map((i) => `• ${i.title} × ${i.quantity} = ${rubFromCents(i.price * i.quantity)}`)
+        .join("\n") +
+      `\n\n<b>Итого:</b> ${rubFromCents(total)}\n` +
+      `Админка: https://satl.shop/admin/orders/${order.id}`;
+
+    for (const chatId of adminChatIds) {
+      tgSendMessage(chatId, adminText).catch(() => {});
+    }
+
+    // 2) пользователю — заказ принят ✅ (если привязан TG)
+    if (user.tgChatId) {
+      const userText =
+        `<b>Заказ принят ✅</b>\n` +
+        `Номер: <code>${order.id}</code>\n` +
+        `Сумма: ${rubFromCents(total)}\n\n` +
+        `Мы свяжемся с вами для подтверждения доставки.`;
+
+      tgSendMessage(user.tgChatId, userText).catch(() => {});
+    }
 
     return Response.json({ ok: true, orderId: order.id });
   } catch (e: any) {

@@ -1,5 +1,9 @@
 import { kanitBold } from "@/app/layout";
 
+export const metadata = {
+  title: "Публичная оферта | SATL",
+};
+
 export default function PublicOfferPage() {
   return (
     <div className="bg-white text-black">

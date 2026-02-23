@@ -4,6 +4,10 @@ import { prisma } from "@/lib/prisma";
 import AccountShell from "../ui/AccountShell";
 import SubscriptionsClient from "./SubscriptionsClient";
 
+export const metadata = {
+  title: "Подписки | SATL",
+};
+
 export default async function SubscriptionsPage() {
   const session = await auth();
   const userId = (session?.user as any)?.id as string | undefined;

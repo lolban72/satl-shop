@@ -2,6 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+export const metadata = {
+  title: "Порядок категорий в шапке | SATL-админ",
+};
+
 type Category = {
   id: string;
   title: string;

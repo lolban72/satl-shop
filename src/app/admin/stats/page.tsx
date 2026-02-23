@@ -1,5 +1,9 @@
 import { prisma } from "@/lib/prisma";
 
+export const metadata = {
+  title: "Статистика | SATL-админ",
+};
+
 function rub(cents: number) {
   const v = (cents ?? 0) / 100;
   return new Intl.NumberFormat("ru-RU", {
