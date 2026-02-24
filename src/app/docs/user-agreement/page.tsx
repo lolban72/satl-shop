@@ -14,7 +14,7 @@ export default function TermsPage() {
           // ✅ mobile paddings (меньше)
           "px-[16px] pt-[24px] pb-[60px]",
           // ✅ desktop paddings (как было)
-          "md:px-[65px] md:pt-[65px] md:pb-[120px]",
+          "md:px-[65px] md:pt-[65px] md:pb-[20px]",
         ].join(" ")}
       >
         {/* TITLE */}

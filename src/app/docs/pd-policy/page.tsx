@@ -14,7 +14,7 @@ export default function PdPolicyPage() {
           // ✅ MOBILE (меньше отступы)
           "px-[16px] pt-[24px] pb-[60px]",
           // ✅ DESKTOP (как было)
-          "md:px-[65px] md:pt-[65px] md:pb-[120px]",
+          "md:px-[65px] md:pt-[65px] md:pb-[20px]",
         ].join(" ")}
       >
         {/* TITLE */}

@@ -14,11 +14,11 @@ export default function PrivacyPage() {
           // ✅ MOBILE — компактнее
           "px-[16px] pt-[24px] pb-[60px]",
           // ✅ DESKTOP — как было
-          "md:px-[65px] md:pt-[65px] md:pb-[120px]",
+          "md:px-[65px] md:pt-[65px] md:pb-[20px]",
         ].join(" ")}
       >
         {/* TITLE */}
-        <h1 className="doc-h1 uppercase">Политика конфиденциальности</h1>
+        <h1 className="doc-h1 uppercase break-words">Политика конфиденциальности</h1>
 
         {/* BODY */}
         <div

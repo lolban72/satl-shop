@@ -12,7 +12,7 @@ export default function CookieConsentPage() {
           kanitBold.className,
           "mx-auto max-w-[1440px] font-bold",
           "px-[14px] pt-[22px] pb-[70px]",
-          "md:px-[65px] md:pt-[65px] md:pb-[120px]",
+          "md:px-[65px] md:pt-[65px] md:pb-[20px]",
         ].join(" ")}
       >
         {/* TITLE */}

@@ -7,7 +7,7 @@ export default function DocsLayout({
   return (
     <div className="bg-white text-black">
 
-      <main className="mx-auto max-w-[1440px] px-[65px] pt-[90px] pb-[120px]">
+      <main className="mx-auto max-w-[1440px] px-[65px] pt-[90px] pb-[20px]">
         {children}
       </main>
 

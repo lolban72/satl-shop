@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { User, ShoppingBag, ChevronDown } from "lucide-react";
 import MobileNav from "@/components/header/MobileNav"; // путь подстрой под себя
 import { auth } from "@/auth"; // ✅ ДОБАВИЛИ
+import Image from "next/image";
+
 
 function Dropdown({
   label,
@@ -93,14 +95,14 @@ export default async function Header({ className = "" }: { className?: string })
         {/* LEFT GROUP */}
         <div className="flex items-center gap-[14px] md:gap-[100px]">
           {/* LOGO */}
-          <Link
-            href="/"
-            className="
-              font-bold leading-none tracking-[-0.19em]
-              text-[60px] md:text-[65px]
-            "
-          >
-            SATL
+          <Link href="/" className="inline-block">
+            <Image
+              src="/logo.svg"
+              alt="SATL"
+              width={180}
+              height={60}
+              priority
+            />
           </Link>
 
           {/* DESKTOP NAV */}

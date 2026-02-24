@@ -1,66 +1,113 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import JsBarcode from "jsbarcode";
+
+function val(v: any) {
+  const s = String(v ?? "").trim();
+  return s ? s : "—";
+}
 
 export default function LabelClient({ order }: any) {
   const ref = useRef<SVGSVGElement | null>(null);
 
+  const firstItem = useMemo(() => {
+    const items = Array.isArray(order?.items) ? order.items : [];
+    return items[0] ?? null;
+  }, [order?.items]);
+
+  const productTitle = val(firstItem?.title);
+
+  const color =
+    val(firstItem?.color) !== "—"
+      ? val(firstItem?.color)
+      : val(firstItem?.variant?.color);
+
+  const size =
+    val(firstItem?.size) !== "—"
+      ? val(firstItem?.size)
+      : val(firstItem?.variant?.size);
+
+  // ПВЗ/Трек — подстрахуемся разными названиями
+  const pvz = val(
+    order?.pvz ??
+      order?.pvzName ??
+      order?.pickupPoint ??
+      order?.deliveryPoint ??
+      order?.deliveryPvz
+  );
+
+  const track = val(
+    order?.track ??
+      order?.trackingNumber ??
+      order?.trackNumber ??
+      order?.tracking ??
+      order?.trackId
+  );
+
   useEffect(() => {
     if (ref.current) {
-      JsBarcode(ref.current, order.id, {
+      JsBarcode(ref.current, String(order.id), {
         format: "CODE128",
         width: 2,
         height: 70,
-        displayValue: true,
+        displayValue: false, // как на эталоне — без текста внутри штрихкода
+        margin: 0,
       });
     }
 
-    setTimeout(() => {
+    const t = setTimeout(() => {
       window.print();
     }, 300);
-  }, [order.id]);
+
+    return () => clearTimeout(t);
+  }, [order?.id]);
 
   return (
     <div className="label-page">
       <style>{`
         @media print {
-          body * {
-            visibility: hidden;
-          }
-
-          .print-area, .print-area * {
-            visibility: visible;
-          }
-
-          .print-area {
-            position: absolute;
-            left: 0;
-            top: 0;
-          }
-
-          body {
-            margin: 0;
-          }
+          body * { visibility: hidden; }
+          .print-area, .print-area * { visibility: visible; }
+          .print-area { position: absolute; left: 0; top: 0; }
+          body { margin: 0; }
         }
       `}</style>
 
-      <div className="print-area w-[180mm] border p-4 text-[14px] text-black">
-        <div className="text-[16px] font-bold mb-3">
-          SATL
+      <div className="print-area w-[180mm] p-4 text-black">
+        {/* BARCODE */}
+        <div className="w-full flex justify-center">
+          <svg ref={ref} className="w-full" />
         </div>
 
-        <div className="mb-2">
-          <div><strong>Получатель:</strong> {order.name}</div>
-          <div><strong>Телефон:</strong> {order.phone}</div>
-          <div><strong>Адрес:</strong> {order.address}</div>
-        </div>
+        {/* FIELDS */}
+        <div className="mt-6 space-y-3 text-[18px] leading-[1.2]">
+          <div>
+            <span className="font-bold">Товар:</span>{" "}
+            <span>{productTitle}</span>
+          </div>
 
-        <div className="mb-3 font-mono text-[12px] break-all">
-          {order.id}
-        </div>
+          <div>
+            <span className="font-bold">Цвет:</span> <span>{color}</span>
+          </div>
 
-        <svg ref={ref}></svg>
+          <div>
+            <span className="font-bold">Размер:</span> <span>{size}</span>
+          </div>
+
+          <div>
+            <span className="font-bold">ПВЗ:</span> <span>{pvz}</span>
+          </div>
+
+          <div>
+            <span className="font-bold">Трек:</span> <span>{track}</span>
+          </div>
+
+          <div>
+            <span className="font-bold">Номер заказа:</span>{" "}
+            <span className="font-mono">{val(order?.id)}</span>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -121,7 +121,7 @@ export default async function ProductPage({
           {/* PRICE */}
           <div className="mt-[12px] md:mt-[14px] flex items-end gap-[10px]">
             <div
-              className="text-[26px] md:text-[30px]"
+              className="text-[22px] md:text-[30px]"
               style={{ fontFamily: "Yeast" }}
             >
               {(product.price / 100).toFixed(0)}р
@@ -139,7 +139,7 @@ export default async function ProductPage({
 
           {/* DISCOUNT */}
           {product.discountPercent > 0 && (
-            <div className="text-[18px] md:text-[20px] font-bold text-[#B60404] mt-[-5px]">
+            <div className="text-[14px] md:text-[20px] font-bold text-[#B60404] mt-[-5px]">
               <span
                 style={{ fontFamily: "Yeast" }}
                 className="tracking-[0.02em]"
