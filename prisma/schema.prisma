@@ -49,6 +49,16 @@ model User {
   passwordResetCodes PasswordResetCode[]
 }
 
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 model TgAdminState {
   chatId     String   @id
   mode       String   @default("IDLE") // IDLE | BROADCAST_DRAFT
