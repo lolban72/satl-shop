@@ -10,40 +10,41 @@ export async function POST(req: Request) {
   try {
     const { token, password } = await req.json();
 
-    if (!token || !password || password.length < 6) {
+    if (!token || !password || String(password).length < 6) {
       return Response.json({ error: "Некорректные данные" }, { status: 400 });
     }
 
-    const tokenHash = sha256(token);
+    const tokenHash = sha256(String(token));
 
-    const row = await prisma.passwordResetToken.findUnique({
-      where: { tokenHash },
+    // ✅ ищем по codeHash (если у тебя так называется поле)
+    const row = await prisma.passwordResetCode.findFirst({
+      where: {
+        codeHash: tokenHash,
+        usedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      select: { id: true, userId: true },
     });
 
-    if (
-      !row ||
-      row.usedAt ||
-      row.expiresAt < new Date()
-    ) {
+    if (!row) {
       return Response.json({ error: "Ссылка недействительна" }, { status: 400 });
     }
 
-    const hash = await bcrypt.hash(password, 10);
+    const hash = await bcrypt.hash(String(password), 10);
 
     await prisma.$transaction([
       prisma.user.update({
         where: { id: row.userId },
         data: { password: hash },
       }),
-      prisma.passwordResetToken.update({
+      prisma.passwordResetCode.update({
         where: { id: row.id },
         data: { usedAt: new Date() },
       }),
     ]);
 
     return Response.json({ ok: true });
-
-  } catch {
-    return Response.json({ error: "Ошибка" }, { status: 400 });
+  } catch (e: any) {
+    return Response.json({ error: e?.message || "Ошибка" }, { status: 400 });
   }
 }

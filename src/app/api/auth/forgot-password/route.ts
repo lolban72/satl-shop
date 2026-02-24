@@ -13,34 +13,33 @@ export async function POST(req: Request) {
     }
 
     const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() },
+      where: { email: String(email).toLowerCase().trim() },
+      select: { id: true },
     });
 
-    // Никогда не раскрываем, существует ли пользователь
-    if (!user) {
-      return Response.json({ ok: true });
-    }
+    // Не палим, существует ли пользователь
+    if (!user) return Response.json({ ok: true });
 
     const rawToken = crypto.randomBytes(32).toString("hex");
     const tokenHash = sha256(rawToken);
-
     const expiresAt = new Date(Date.now() + 1000 * 60 * 30); // 30 минут
 
-    await prisma.passwordResetToken.create({
+    // ✅ Используем существующую модель PasswordResetCode
+    // Поля могут отличаться — ниже самый частый вариант:
+    await prisma.passwordResetCode.create({
       data: {
         userId: user.id,
-        tokenHash,
+        codeHash: tokenHash, // ✅ если у тебя поле называется codeHash
         expiresAt,
+        usedAt: null,
       },
     });
 
-    // ⚠️ Пока возвращаем ссылку прямо в ответе (для теста)
     return Response.json({
       ok: true,
       resetUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/reset-password?token=${rawToken}`,
     });
-
-  } catch {
-    return Response.json({ error: "Ошибка" }, { status: 400 });
+  } catch (e: any) {
+    return Response.json({ error: e?.message || "Ошибка" }, { status: 400 });
   }
 }
