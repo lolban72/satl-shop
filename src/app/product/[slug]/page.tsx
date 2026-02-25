@@ -121,7 +121,7 @@ export default async function ProductPage({
           {/* PRICE */}
           <div className="mt-[12px] md:mt-[14px] flex items-end gap-[10px]">
             <div
-              className="text-[22px] md:text-[30px]"
+              className="text-[18px] md:text-[30px]"
               style={{ fontFamily: "Yeast" }}
             >
               {(product.price / 100).toFixed(0)}р

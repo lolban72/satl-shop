@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { X, Menu, ChevronDown } from "lucide-react";
 
@@ -10,20 +10,38 @@ type InfoLink = { href: string; label: string };
 export default function MobileNav(props: {
   categories: NavCategory[];
   infoLinks: InfoLink[];
-  isAuthed: boolean; // ✅ добавили
+  isAuthed: boolean;
 }) {
   const { categories, infoLinks, isAuthed } = props;
 
   const [open, setOpen] = useState(false);
   const [catsOpen, setCatsOpen] = useState(true);
   const [infoOpen, setInfoOpen] = useState(true);
-  const [profileOpen, setProfileOpen] = useState(true); // ✅ добавили
+  const [profileOpen, setProfileOpen] = useState(true);
 
   const cats = useMemo(() => categories ?? [], [categories]);
 
   function close() {
     setOpen(false);
   }
+
+  // ✅ Блокируем скролл BODY, когда меню открыто
+  useEffect(() => {
+    if (!open) return;
+
+    const prevOverflow = document.body.style.overflow;
+    const prevPaddingRight = document.body.style.paddingRight;
+
+    // Компенсация "прыжка" из-за исчезновения scrollbar
+    const scrollBarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = "hidden";
+    if (scrollBarWidth > 0) document.body.style.paddingRight = `${scrollBarWidth}px`;
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.paddingRight = prevPaddingRight;
+    };
+  }, [open]);
 
   return (
     <>
@@ -62,10 +80,12 @@ export default function MobileNav(props: {
             "shadow-[0_18px_55px_rgba(0,0,0,0.18)]",
             "transition-transform duration-200",
             open ? "translate-x-0" : "translate-x-full",
+            // ✅ важно: делаем колонку, чтобы body мог скроллиться отдельно
+            "flex flex-col",
           ].join(" ")}
         >
-          {/* Header */}
-          <div className="h-[72px] px-[18px] flex items-center justify-between">
+          {/* Header (фиксированный) */}
+          <div className="h-[72px] px-[18px] flex items-center justify-between shrink-0">
             <div className="text-[13px] font-bold uppercase tracking-[0.06em] text-black/70" />
             <button
               type="button"
@@ -77,8 +97,15 @@ export default function MobileNav(props: {
             </button>
           </div>
 
-          {/* Body */}
-          <div className="px-[18px] py-[6px]">
+          {/* ✅ Body (скроллится) */}
+          <div
+            className="
+              px-[18px] py-[6px]
+              flex-1 overflow-y-auto
+              overscroll-contain
+              touch-pan-y
+            "
+          >
             {/* Accordion: Categories */}
             <button
               type="button"
@@ -171,7 +198,7 @@ export default function MobileNav(props: {
 
             <div className="h-[1px] bg-black/10" />
 
-            {/* ✅ Accordion: Profile */}
+            {/* Accordion: Profile */}
             <button
               type="button"
               onClick={() => setProfileOpen((v) => !v)}
@@ -232,15 +259,15 @@ export default function MobileNav(props: {
                         Подписки
                       </Link>
 
-                    <form action="/auth/logout" method="POST" className="border-t border-black/10">
-                    <button
-                        type="submit"
-                        onClick={close}
-                        className="w-full text-left py-[12px] text-[12px] font-semibold uppercase tracking-[0.06em] text-black/75 hover:text-black hover:bg-black/5 px-[10px] transition"
-                    >
-                        Выход
-                    </button>
-                    </form>
+                      <form action="/auth/logout" method="POST" className="border-t border-black/10">
+                        <button
+                          type="submit"
+                          onClick={close}
+                          className="w-full text-left py-[12px] text-[12px] font-semibold uppercase tracking-[0.06em] text-black/75 hover:text-black hover:bg-black/5 px-[10px] transition"
+                        >
+                          Выход
+                        </button>
+                      </form>
                     </>
                   ) : (
                     <Link
@@ -254,6 +281,9 @@ export default function MobileNav(props: {
                 </div>
               </div>
             </div>
+
+            {/* небольшой нижний отступ, чтобы последние пункты не прилипали */}
+            <div className="h-[18px]" />
           </div>
         </aside>
       </div>
