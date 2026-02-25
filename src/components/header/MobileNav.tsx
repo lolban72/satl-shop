@@ -17,7 +17,7 @@ export default function MobileNav(props: {
   const [open, setOpen] = useState(false);
   const [catsOpen, setCatsOpen] = useState(true);
   const [infoOpen, setInfoOpen] = useState(true);
-  const [contactsOpen, setContactsOpen] = useState(true); // ✅ ДОБАВИЛИ
+  const [contactsOpen, setContactsOpen] = useState(true); // ✅
   const [profileOpen, setProfileOpen] = useState(true);
 
   const cats = useMemo(() => categories ?? [], [categories]);
@@ -33,7 +33,6 @@ export default function MobileNav(props: {
     const prevOverflow = document.body.style.overflow;
     const prevPaddingRight = document.body.style.paddingRight;
 
-    // Компенсация "прыжка" из-за исчезновения scrollbar
     const scrollBarWidth = window.innerWidth - document.documentElement.clientWidth;
     document.body.style.overflow = "hidden";
     if (scrollBarWidth > 0) document.body.style.paddingRight = `${scrollBarWidth}px`;
@@ -46,7 +45,7 @@ export default function MobileNav(props: {
 
   return (
     <>
-      {/* Burger (visible on mobile only) */}
+      {/* Burger */}
       <button
         type="button"
         onClick={() => setOpen(true)}
@@ -84,7 +83,7 @@ export default function MobileNav(props: {
             "flex flex-col",
           ].join(" ")}
         >
-          {/* Header (фиксированный) */}
+          {/* Header */}
           <div className="h-[72px] px-[18px] flex items-center justify-between shrink-0">
             <div className="text-[13px] font-bold uppercase tracking-[0.06em] text-black/70" />
             <button
@@ -97,7 +96,7 @@ export default function MobileNav(props: {
             </button>
           </div>
 
-          {/* Body (скроллится) */}
+          {/* Body */}
           <div
             className="
               px-[18px] py-[6px]
@@ -106,7 +105,7 @@ export default function MobileNav(props: {
               touch-pan-y
             "
           >
-            {/* Accordion: Categories */}
+            {/* Categories */}
             <button
               type="button"
               onClick={() => setCatsOpen((v) => !v)}
@@ -155,7 +154,7 @@ export default function MobileNav(props: {
 
             <div className="h-[1px] bg-black/10" />
 
-            {/* Accordion: Info */}
+            {/* Info */}
             <button
               type="button"
               onClick={() => setInfoOpen((v) => !v)}
@@ -198,7 +197,7 @@ export default function MobileNav(props: {
 
             <div className="h-[1px] bg-black/10" />
 
-            {/* ✅ Accordion: Contacts */}
+            {/* ✅ Contacts (как остальные пункты) */}
             <button
               type="button"
               onClick={() => setContactsOpen((v) => !v)}
@@ -220,47 +219,43 @@ export default function MobileNav(props: {
             <div
               className={[
                 "overflow-hidden transition-[max-height,opacity] duration-200",
-                contactsOpen ? "max-h-[280px] opacity-100" : "max-h-0 opacity-0",
+                contactsOpen ? "max-h-[260px] opacity-100" : "max-h-0 opacity-0",
               ].join(" ")}
             >
               <div className="pb-[10px]">
-                <div className="grid border-t border-black/10 px-[10px] py-[12px]">
-                  <div className="font-bold italic text-[20px] leading-none tracking-[-0.05em]">
-                    Контакты
-                  </div>
+                <div className="grid">
+                  <a
+                    href="https://web.telegram.org/k/#@MANAGER_SATL_SHOP"
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={close}
+                    className="py-[12px] border-t border-black/10 text-[12px] font-semibold uppercase tracking-[0.06em] text-black/75 hover:text-black hover:bg-black/5 px-[10px] transition"
+                  >
+                    Телеграм
+                  </a>
 
-                  <div className="mt-[10px] flex gap-x-[48px]">
-                    <div className="flex flex-col gap-y-[6px] text-[9px] leading-[1.2] uppercase tracking-[0.02em] text-black/80">
-                      <a
-                        href="https://web.telegram.org/k/#@MANAGER_SATL_SHOP"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="hover:text-black transition"
-                      >
-                        телеграм
-                      </a>
-                      <a
-                        href="mailto:Satl.Shop.ru@gmail.com"
-                        className="hover:text-black transition"
-                      >
-                        почта
-                      </a>
-                      <a href="#" className="hover:text-black transition">
-                        тикток
-                      </a>
-                    </div>
+                  <a
+                    href="mailto:Satl.Shop.ru@gmail.com"
+                    onClick={close}
+                    className="py-[12px] border-t border-black/10 text-[12px] font-semibold uppercase tracking-[0.06em] text-black/75 hover:text-black hover:bg-black/5 px-[10px] transition"
+                  >
+                    Почта
+                  </a>
 
-                    <div className="flex flex-col gap-y-[6px] text-[9px] leading-[1.2] uppercase tracking-[0.02em] text-black/80">
-                      {/* второй столбец оставлен пустым как в твоём примере */}
-                    </div>
-                  </div>
+                  <a
+                    href="#"
+                    onClick={close}
+                    className="py-[12px] border-t border-black/10 text-[12px] font-semibold uppercase tracking-[0.06em] text-black/75 hover:text-black hover:bg-black/5 px-[10px] transition"
+                  >
+                    Тикток
+                  </a>
                 </div>
               </div>
             </div>
 
             <div className="h-[1px] bg-black/10" />
 
-            {/* Accordion: Profile */}
+            {/* Profile */}
             <button
               type="button"
               onClick={() => setProfileOpen((v) => !v)}
