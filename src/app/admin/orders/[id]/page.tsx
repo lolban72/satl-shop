@@ -13,9 +13,9 @@ function rub(cents: number) {
 }
 
 export default async function AdminOrderPage(props: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  const { id } = props.params;
+  const { id } = await props.params;
 
   const order = await prisma.order.findUnique({
     where: { id },
@@ -27,17 +27,18 @@ export default async function AdminOrderPage(props: {
 
   if (!order) notFound();
 
-  // ✅ Подтягиваем варианты отдельно
+  // ✅ подтягиваем варианты отдельным запросом
   const variantIds = Array.from(
     new Set(order.items.map((it) => it.variantId).filter(Boolean) as string[])
   );
 
-  const variants = variantIds.length
-    ? await prisma.variant.findMany({
-        where: { id: { in: variantIds } },
-        select: { id: true, size: true, color: true },
-      })
-    : [];
+  const variants =
+    variantIds.length > 0
+      ? await prisma.variant.findMany({
+          where: { id: { in: variantIds } },
+          select: { id: true, size: true, color: true },
+        })
+      : [];
 
   const vmap = new Map(variants.map((v) => [v.id, v]));
 
@@ -111,7 +112,6 @@ export default async function AdminOrderPage(props: {
         <div className="grid gap-6">
           <OrderStatusForm orderId={order.id} initialStatus={order.status} />
 
-          {/* Блок печати */}
           <div className="rounded-2xl border p-4">
             <Link
               href={`/admin/orders/${order.id}/label`}
