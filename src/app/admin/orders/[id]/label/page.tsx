@@ -9,6 +9,13 @@ export default async function LabelPage(props: {
 
   const order = await prisma.order.findUnique({
     where: { id },
+    include: {
+      items: {
+        include: {
+          variant: true,
+        },
+      },
+    },
   });
 
   if (!order) notFound();

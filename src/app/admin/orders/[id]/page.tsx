@@ -21,7 +21,11 @@ export default async function AdminOrderPage(props: {
     where: { id },
     include: {
       user: { select: { email: true } },
-      items: true,
+      items: {
+        include: {
+          variant: true,
+        },
+      },
     },
   });
 
@@ -65,6 +69,10 @@ export default async function AdminOrderPage(props: {
                       <div className="text-[12px] text-black/50">
                         productId: {it.productId}
                         {it.variantId ? ` · variantId: ${it.variantId}` : ""}
+
+                        {/* (не обязательно, но полезно видеть в админке) */}
+                        {it.variant?.size ? ` · size: ${it.variant.size}` : ""}
+                        {it.variant?.color ? ` · color: ${it.variant.color}` : ""}
                       </div>
                     </td>
                     <td className="whitespace-nowrap">{rub(it.price)}</td>

@@ -18,29 +18,18 @@ export default function LabelClient({ order }: any) {
 
   const productTitle = val(firstItem?.title);
 
-  // Размер берём из variant (если include сделан правильно)
+  // ✅ Размер берем из variant (variant должен быть включён на сервере)
   const size = val(firstItem?.variant?.size);
 
-  const pvz = val(
-    order?.pvz ??
-      order?.pvzName ??
-      order?.pickupPoint ??
-      order?.deliveryPoint ??
-      order?.deliveryPvz
-  );
+  // ✅ У тебя в Order есть address — используем его как ПВЗ/адрес доставки
+  const pvz = val(order?.address);
 
-  // Трек пока не реализован — будет "—"
-  const track = val(
-    order?.track ??
-      order?.trackingNumber ??
-      order?.trackNumber ??
-      order?.tracking ??
-      order?.trackId
-  );
+  // ✅ Трека пока нет
+  const track = val(order?.track ?? order?.trackingNumber ?? order?.trackNumber ?? order?.tracking ?? order?.trackId);
 
   useEffect(() => {
     if (ref.current) {
-      JsBarcode(ref.current, String(order.id), {
+      JsBarcode(ref.current, String(order?.id ?? ""), {
         format: "CODE128",
         width: 2,
         height: 70,
@@ -76,23 +65,19 @@ export default function LabelClient({ order }: any) {
         {/* FIELDS */}
         <div className="mt-6 space-y-3 text-[18px] leading-[1.2]">
           <div>
-            <span className="font-bold">Товар:</span>{" "}
-            <span>{productTitle}</span>
+            <span className="font-bold">Товар:</span> <span>{productTitle}</span>
           </div>
 
           <div>
-            <span className="font-bold">Размер:</span>{" "}
-            <span>{size}</span>
+            <span className="font-bold">Размер:</span> <span>{size}</span>
           </div>
 
           <div>
-            <span className="font-bold">ПВЗ:</span>{" "}
-            <span>{pvz}</span>
+            <span className="font-bold">ПВЗ:</span> <span>{pvz}</span>
           </div>
 
           <div>
-            <span className="font-bold">Трек:</span>{" "}
-            <span>{track}</span>
+            <span className="font-bold">Трек:</span> <span>{track}</span>
           </div>
 
           <div>
