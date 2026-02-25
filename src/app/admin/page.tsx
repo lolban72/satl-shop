@@ -107,7 +107,7 @@ export default async function AdminDashboard() {
     {
       title: "Маркетинг",
       desc: "Баннер на главной (текст, кнопка, фон, включение).",
-      links: [{ href: "/admin/marketing/hero", label: "Hero баннер" }],
+      links: [{ href: "/admin/marketing/hero", label: "Баннер" }],
     },
     {
       title: "Бегущая строка",

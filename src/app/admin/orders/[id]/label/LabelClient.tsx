@@ -18,17 +18,9 @@ export default function LabelClient({ order }: any) {
 
   const productTitle = val(firstItem?.title);
 
-  const color =
-    val(firstItem?.color) !== "—"
-      ? val(firstItem?.color)
-      : val(firstItem?.variant?.color);
+  // Размер берём из variant (если include сделан правильно)
+  const size = val(firstItem?.variant?.size);
 
-  const size =
-    val(firstItem?.size) !== "—"
-      ? val(firstItem?.size)
-      : val(firstItem?.variant?.size);
-
-  // ПВЗ/Трек — подстрахуемся разными названиями
   const pvz = val(
     order?.pvz ??
       order?.pvzName ??
@@ -37,6 +29,7 @@ export default function LabelClient({ order }: any) {
       order?.deliveryPvz
   );
 
+  // Трек пока не реализован — будет "—"
   const track = val(
     order?.track ??
       order?.trackingNumber ??
@@ -51,7 +44,7 @@ export default function LabelClient({ order }: any) {
         format: "CODE128",
         width: 2,
         height: 70,
-        displayValue: false, // как на эталоне — без текста внутри штрихкода
+        displayValue: false,
         margin: 0,
       });
     }
@@ -88,19 +81,18 @@ export default function LabelClient({ order }: any) {
           </div>
 
           <div>
-            <span className="font-bold">Цвет:</span> <span>{color}</span>
+            <span className="font-bold">Размер:</span>{" "}
+            <span>{size}</span>
           </div>
 
           <div>
-            <span className="font-bold">Размер:</span> <span>{size}</span>
+            <span className="font-bold">ПВЗ:</span>{" "}
+            <span>{pvz}</span>
           </div>
 
           <div>
-            <span className="font-bold">ПВЗ:</span> <span>{pvz}</span>
-          </div>
-
-          <div>
-            <span className="font-bold">Трек:</span> <span>{track}</span>
+            <span className="font-bold">Трек:</span>{" "}
+            <span>{track}</span>
           </div>
 
           <div>
