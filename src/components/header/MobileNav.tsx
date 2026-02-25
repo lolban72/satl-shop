@@ -17,6 +17,7 @@ export default function MobileNav(props: {
   const [open, setOpen] = useState(false);
   const [catsOpen, setCatsOpen] = useState(true);
   const [infoOpen, setInfoOpen] = useState(true);
+  const [contactsOpen, setContactsOpen] = useState(true); // ✅ ДОБАВИЛИ
   const [profileOpen, setProfileOpen] = useState(true);
 
   const cats = useMemo(() => categories ?? [], [categories]);
@@ -80,7 +81,6 @@ export default function MobileNav(props: {
             "shadow-[0_18px_55px_rgba(0,0,0,0.18)]",
             "transition-transform duration-200",
             open ? "translate-x-0" : "translate-x-full",
-            // ✅ важно: делаем колонку, чтобы body мог скроллиться отдельно
             "flex flex-col",
           ].join(" ")}
         >
@@ -97,7 +97,7 @@ export default function MobileNav(props: {
             </button>
           </div>
 
-          {/* ✅ Body (скроллится) */}
+          {/* Body (скроллится) */}
           <div
             className="
               px-[18px] py-[6px]
@@ -198,6 +198,68 @@ export default function MobileNav(props: {
 
             <div className="h-[1px] bg-black/10" />
 
+            {/* ✅ Accordion: Contacts */}
+            <button
+              type="button"
+              onClick={() => setContactsOpen((v) => !v)}
+              className="w-full flex items-center justify-between py-[12px] text-left"
+            >
+              <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-black/100">
+                Контакты
+              </span>
+              <ChevronDown
+                size={18}
+                strokeWidth={2}
+                className={[
+                  "transition-transform",
+                  contactsOpen ? "rotate-180" : "rotate-0",
+                ].join(" ")}
+              />
+            </button>
+
+            <div
+              className={[
+                "overflow-hidden transition-[max-height,opacity] duration-200",
+                contactsOpen ? "max-h-[280px] opacity-100" : "max-h-0 opacity-0",
+              ].join(" ")}
+            >
+              <div className="pb-[10px]">
+                <div className="grid border-t border-black/10 px-[10px] py-[12px]">
+                  <div className="font-bold italic text-[20px] leading-none tracking-[-0.05em]">
+                    Контакты
+                  </div>
+
+                  <div className="mt-[10px] flex gap-x-[48px]">
+                    <div className="flex flex-col gap-y-[6px] text-[9px] leading-[1.2] uppercase tracking-[0.02em] text-black/80">
+                      <a
+                        href="https://web.telegram.org/k/#@MANAGER_SATL_SHOP"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="hover:text-black transition"
+                      >
+                        телеграм
+                      </a>
+                      <a
+                        href="mailto:Satl.Shop.ru@gmail.com"
+                        className="hover:text-black transition"
+                      >
+                        почта
+                      </a>
+                      <a href="#" className="hover:text-black transition">
+                        тикток
+                      </a>
+                    </div>
+
+                    <div className="flex flex-col gap-y-[6px] text-[9px] leading-[1.2] uppercase tracking-[0.02em] text-black/80">
+                      {/* второй столбец оставлен пустым как в твоём примере */}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="h-[1px] bg-black/10" />
+
             {/* Accordion: Profile */}
             <button
               type="button"
@@ -259,7 +321,11 @@ export default function MobileNav(props: {
                         Подписки
                       </Link>
 
-                      <form action="/auth/logout" method="POST" className="border-t border-black/10">
+                      <form
+                        action="/auth/logout"
+                        method="POST"
+                        className="border-t border-black/10"
+                      >
                         <button
                           type="submit"
                           onClick={close}
@@ -282,7 +348,6 @@ export default function MobileNav(props: {
               </div>
             </div>
 
-            {/* небольшой нижний отступ, чтобы последние пункты не прилипали */}
             <div className="h-[18px]" />
           </div>
         </aside>
