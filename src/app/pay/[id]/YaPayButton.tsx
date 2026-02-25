@@ -16,7 +16,7 @@ export default function YaPayButton({ draftId }: { draftId: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    let session: any = null;
+    let paymentSession: any = null;
 
     const loadSdk = () =>
       new Promise<void>((resolve, reject) => {
@@ -39,56 +39,69 @@ export default function YaPayButton({ draftId }: { draftId: string }) {
         const YaPay = window.YaPay;
         if (!YaPay) throw new Error("YaPay недоступен");
 
-        // Мы используем orderId = draftId.
-        // Важно: в Merchant Console ты задашь Callback URL prefix, например:
-        // https://your-domain.ru/yandex-pay
-        // Тогда Yandex Pay будет дергать:
-        // /yandex-pay/v1/order/render, /yandex-pay/v1/order/create, /yandex-pay/v1/webhook :contentReference[oaicite:2]{index=2}
+        const merchantId = process.env.NEXT_PUBLIC_YAPAY_MERCHANT_ID;
+        if (!merchantId) {
+          throw new Error(
+            "Не задан NEXT_PUBLIC_YAPAY_MERCHANT_ID (env переменная не попала в build)"
+          );
+        }
+
+        // Берём итоговую сумму с бэка по draftId (чтобы totalAmount был реальным)
+        const sumRes = await fetch(`/api/pay/status?draftId=${encodeURIComponent(draftId)}`);
+        const sumData = await sumRes.json().catch(() => ({}));
+        if (!sumRes.ok) throw new Error(sumData?.error || "Не удалось получить сумму заказа");
+
+        const totalAmount = String(sumData?.totalAmount ?? "").trim();
+        if (!totalAmount) throw new Error("totalAmount пустой");
 
         const paymentData = {
-          // версия 3 — “оплата в форме Yandex Pay, результат возвращается мерчанту”
-          // (пример в доках по Web SDK guide) :contentReference[oaicite:3]{index=3}
           env:
             process.env.NEXT_PUBLIC_YAPAY_ENV === "PRODUCTION"
               ? YaPay.PaymentEnv.Production
               : YaPay.PaymentEnv.Sandbox,
-          version: 3,
+
+          // ✅ актуальный сценарий "оплата на форме Yandex Pay"
+          version: 4,
+
+          countryCode: YaPay.CountryCode.Ru,
           currencyCode: YaPay.CurrencyCode.Rub,
 
-          merchantId: process.env.NEXT_PUBLIC_YAPAY_MERCHANT_ID,
+          merchantId,
+          totalAmount,
 
-          // “оплачиваемый orderId” — у нас это draftId
+          // внешний вид кнопки/доступные способы
+          availablePaymentMethods: ["CARD", "SPLIT"],
+
+          // если используешь API flow с /order/render по orderId — можно передать orderId
           orderId: draftId,
-
-          // можно передать метадату (короткую)
-          metadata: "satl",
         };
 
-        function onSuccess(e: any) {
-          // оплата успешна по мнению SDK → показываем экран успеха,
-          // а реальное создание Order сделает webhook.
-          router.push("/pay/success/" + draftId);
+        // В этом сценарии по клику мы просто открываем форму.
+        // Если Яндекс не сможет открыть форму — вызовется onFormOpenError.
+        async function onPayButtonClick() {
+          // Вариант "link generation" тут не используем.
+          return;
         }
 
-        function onError(e: any) {
-          setErr("Оплата сейчас недоступна. Попробуйте позже.");
-          console.log("YaPay error:", e?.reason);
+        function onFormOpenError(e: any) {
+          console.log("YaPay onFormOpenError:", e);
+          setErr("Что-то пошло не так при открытии формы оплаты. Попробуйте ещё раз.");
         }
 
-        function onAbort() {
-          // пользователь закрыл форму
-        }
-
-        session = await YaPay.createSession(paymentData, { onSuccess, onError, onAbort });
+        paymentSession = await YaPay.createSession(paymentData, {
+          onPayButtonClick,
+          onFormOpenError,
+        });
 
         if (ref.current) {
-          session.mountButton(ref.current, {
-            type: YaPay.ButtonType.Checkout,
+          paymentSession.mountButton(ref.current, {
+            type: YaPay.ButtonType.Pay,
             theme: YaPay.ButtonTheme.Black,
             width: YaPay.ButtonWidth.Auto,
           });
         }
       } catch (e: any) {
+        console.log("YaPay init error:", e);
         setErr(e?.message || "Ошибка инициализации Yandex Pay");
       }
     }
@@ -98,15 +111,15 @@ export default function YaPayButton({ draftId }: { draftId: string }) {
     return () => {
       cancelled = true;
       try {
-        if (session?.destroy) session.destroy();
+        paymentSession?.destroy?.();
       } catch {}
       if (ref.current) ref.current.innerHTML = "";
     };
-  }, [draftId, router]);
+  }, [draftId]);
 
   return (
     <div>
-      <div ref={ref} id="button_container" />
+      <div ref={ref} />
       {err ? <div className="mt-3 text-[12px] text-[#B60404]">{err}</div> : null}
     </div>
   );
