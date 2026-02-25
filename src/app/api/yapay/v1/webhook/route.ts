@@ -10,33 +10,57 @@ function b64urlDecodeToString(s: string) {
 export async function POST(req: Request) {
   try {
     const jwt = (await req.text()).trim();
-
-    console.log("✅ YAPAY WEBHOOK HIT");
-    console.log("headers:", Object.fromEntries(req.headers.entries()));
-    console.log("raw body:", jwt);
-
     const parts = jwt.split(".");
-    if (parts.length !== 3) {
-      console.log("❌ Bad JWT format");
-      return Response.json({ ok: true });
-    }
+    if (parts.length !== 3) return Response.json({ ok: true });
 
     const payloadStr = b64urlDecodeToString(parts[1]);
     const payload = JSON.parse(payloadStr);
 
-    const event = String(payload?.event || "");
     const orderId = String(payload?.order?.orderId || "");
     const paymentStatus = String(payload?.order?.paymentStatus || "");
 
-    console.log("✅ YAPAY WEBHOOK PAYLOAD:", { event, orderId, paymentStatus });
+    if (!orderId) return Response.json({ ok: true });
 
-    if (orderId && paymentStatus === "CAPTURED") {
-      await prisma.paymentDraft.updateMany({
+    if (paymentStatus === "CAPTURED") {
+      const draft = await prisma.paymentDraft.findUnique({
+        where: { id: orderId },
+      });
+
+      if (!draft) return Response.json({ ok: true });
+
+      await prisma.paymentDraft.update({
         where: { id: orderId },
         data: { status: "PAID" },
       });
 
-      console.log("✅ PaymentDraft marked as PAID:", orderId);
+      // ✅ Проверяем, не создан ли уже заказ
+      const existing = await prisma.order.findUnique({
+        where: { paymentDraftId: orderId },
+      });
+
+      if (!existing) {
+        await prisma.order.create({
+          data: {
+            paymentDraftId: orderId,
+            name: draft.customerName,
+            phone: draft.customerPhone,
+            address: draft.customerAddress,
+            total: draft.totalCents,
+            status: "NEW",
+            items: {
+              create: draft.itemsJson.map((it: any) => ({
+                productId: it.productId,
+                variantId: it.variantId,
+                quantity: it.qty,
+                price: it.price,
+                title: it.title,
+              })),
+            },
+          },
+        });
+
+        console.log("✅ Order created from draft:", orderId);
+      }
     }
 
     return Response.json({ ok: true });

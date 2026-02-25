@@ -169,12 +169,13 @@ model MarqueeSettings {
 }
 
 model Order {
-  id        String      @id @default(cuid())
-  userId    String?
-  user      User?       @relation(fields: [userId], references: [id])
-  status    OrderStatus @default(NEW)
-  total     Int
-  createdAt DateTime    @default(now())
+  id             String      @id @default(cuid())
+  paymentDraftId String      @unique
+  userId         String?
+  user           User?       @relation(fields: [userId], references: [id])
+  status         OrderStatus @default(NEW)
+  total          Int
+  createdAt      DateTime    @default(now())
 
   name    String
   phone   String
@@ -198,18 +199,18 @@ model OrderItem {
 }
 
 model PaymentDraft {
-  id        String   @id @default(cuid())
+  id String @id @default(cuid())
 
-  userId    String?
-  email     String?
-  name      String
-  phone     String
-  address   String
+  userId  String?
+  email   String?
+  name    String
+  phone   String
+  address String
 
   itemsJson Json
-  total     Int      // в копейках
+  total     Int // в копейках
 
-  status    String   @default("PENDING") // PENDING | PAID | FAILED | CANCELED
+  status String @default("PENDING") // PENDING | PAID | FAILED | CANCELED
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
