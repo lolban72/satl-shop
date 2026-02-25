@@ -83,10 +83,7 @@ export default async function AdminOrderPage(props: {
                     <td>
                       <div className="font-semibold">{it.title}</div>
                       <div className="text-[12px] text-black/50">
-                        productId: {it.productId}
-                        {it.variantId ? ` · variantId: ${it.variantId}` : ""}
-                        {it.variant?.size ? ` · size: ${it.variant.size}` : ""}
-                        {it.variant?.color ? ` · color: ${it.variant.color}` : ""}
+                        {it.variant?.size ? ` · раземр: ${it.variant.size}` : ""}
                       </div>
                     </td>
                     <td className="whitespace-nowrap">{rub(it.price)}</td>
