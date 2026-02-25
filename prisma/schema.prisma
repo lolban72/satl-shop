@@ -197,6 +197,26 @@ model OrderItem {
   quantity Int
 }
 
+model PaymentDraft {
+  id        String   @id @default(cuid())
+
+  userId    String?
+  email     String?
+  name      String
+  phone     String
+  address   String
+
+  itemsJson Json
+  total     Int      // в копейках
+
+  status    String   @default("PENDING") // PENDING | PAID | FAILED | CANCELED
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
 enum OrderStatus {
   NEW
   PROCESSING

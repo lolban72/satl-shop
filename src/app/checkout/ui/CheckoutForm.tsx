@@ -64,23 +64,37 @@ export default function CheckoutForm(props: {
 
     setLoading(true);
     try {
-      const res = await fetch("/api/orders", {
+      // ✅ ВАЖНО: теперь мы НЕ создаём заказ.
+      // Создаём только PaymentDraft и отправляем на страницу оплаты.
+      const res = await fetch("/api/pay/draft", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          customer: { name: name.trim(), phone: phone.trim(), address: address.trim() },
-          items: items.map((i) => ({
+          name: name.trim(),
+          phone: phone.trim(),
+          address: address.trim(),
+          // email можешь добавить, если хочешь прокидывать с сервера
+          items: items.map((i: any) => ({
             productId: i.productId,
-            variantId: i.variantId,
+            variantId: i.variantId ?? null,
+            title: i.title,
+            price: i.price, // ✅ в копейках
             qty: i.qty,
           })),
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Не удалось создать заказ");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Не удалось начать оплату");
 
-      router.push(`/order-success?orderId=${encodeURIComponent(data.orderId)}`);
+      const draftId = String(data?.draftId || "");
+      if (!draftId) throw new Error("Не удалось получить draftId");
+
+      // ⚠️ корзину лучше чистить ПОСЛЕ подтверждения оплаты (webhook),
+      // иначе если человек закрыл оплату, корзина пропадёт.
+      // clear();
+
+      router.push(`/pay/${encodeURIComponent(draftId)}`);
     } catch (e: any) {
       setErr(e?.message || "Ошибка");
     } finally {
@@ -137,7 +151,7 @@ export default function CheckoutForm(props: {
                 </div>
 
                 <div className="text-[12px] text-black/75">
-                  Перейдите в профиль и нажмите «Привязать телеграм. Это займёт 10–20 секунд.
+                  Перейдите в профиль и нажмите «Привязать телеграм». Это займёт 10–20 секунд.
                 </div>
 
                 <button
@@ -238,7 +252,7 @@ export default function CheckoutForm(props: {
                   onClick={submit}
                   type="button"
                 >
-                  {loading ? "Оформляем..." : "Оформить заказ"}
+                  {loading ? "Переходим к оплате..." : "Перейти к оплате"}
                 </button>
 
                 <div className="text-[11px] italic leading-[1.25] text-black/45 mt-[6px]">
@@ -275,7 +289,7 @@ export default function CheckoutForm(props: {
                 В корзине нет товаров.
               </div>
             ) : (
-              items.map((i) => (
+              items.map((i: any) => (
                 <div
                   key={`${i.productId}-${i.variantId ?? "na"}`}
                   className="flex gap-[12px]"
@@ -305,8 +319,7 @@ export default function CheckoutForm(props: {
                       <span>Кол-во: {i.qty}</span>
                       <span aria-hidden="true">•</span>
                       <span>
-                        Размер:{" "}
-                        {i.size ? String(i.size).toUpperCase() : "—"}
+                        Размер: {i.size ? String(i.size).toUpperCase() : "—"}
                       </span>
                     </div>
                   </div>
