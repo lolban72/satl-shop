@@ -114,25 +114,26 @@ export async function POST(req: Request) {
     }
 
     const order = await prisma.$transaction(async (tx) => {
-      const created = await tx.order.create({
+      const draft = await prisma.paymentDraft.create({
         data: {
-          total,
+          userId: userId ?? null,
+          email: body.customer?.email ?? null, // если есть
           name: body.customer.name,
           phone: body.customer.phone,
           address: body.customer.address,
-          userId,
-          items: {
-            create: detailedItems.map((i) => ({
-              productId: i.productId,
-              variantId: i.variantId,
-              title: i.title,
-              price: i.price,
-              quantity: i.quantity,
-            })),
-          },
+          itemsJson: items.map((i: any) => ({
+            productId: i.productId,
+            variantId: i.variantId ?? null,
+            title: i.title ?? "",     // если у тебя есть title на сервере — подставь
+            price: i.price ?? 0,      // если цена считается на сервере — подставь
+            qty: i.qty,
+          })),
+          total,
+          status: "PENDING",
         },
-        select: { id: true },
       });
+
+return Response.json({ draftId: draft.id });
 
       // ✅ сохраняем данные пользователя
       await tx.user.update({
