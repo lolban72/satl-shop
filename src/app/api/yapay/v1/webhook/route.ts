@@ -1,54 +1,47 @@
-// src/app/api/yapay/v1/webhook/route.ts
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: Request) {
-  const body = await req.json().catch(() => null);
+  try {
+    const raw = await req.text();
+    console.log("✅ YAPAY WEBHOOK HIT");
+    console.log("headers:", Object.fromEntries(req.headers.entries()));
+    console.log("body:", raw);
 
-  const orderId = String(body?.orderId || "");
-  const status = String(body?.status || ""); // например SUCCESS/FAILED — зависит от формата, см. доки
+    const json = raw ? JSON.parse(raw) : null;
 
-  if (!orderId) return Response.json({ ok: true });
+    // ⚠️ ниже мы делаем максимально универсально:
+    const orderId =
+      json?.orderId ||
+      json?.data?.orderId ||
+      json?.data?.order?.orderId ||
+      json?.data?.merchantOrderId;
 
-  if (status === "SUCCESS") {
-    const draft = await prisma.paymentDraft.findUnique({ where: { id: orderId } });
-    if (!draft || draft.status !== "PENDING") return Response.json({ ok: true });
+    const status =
+      json?.status ||
+      json?.data?.status ||
+      json?.event ||
+      json?.type;
 
-    const items = Array.isArray(draft.itemsJson) ? draft.itemsJson : [];
-    const total = draft.total;
+    if (orderId) {
+      // Пример: если событие означает успешную оплату — ставим PAID
+      // (подстроим под реальный payload после 1 webhook)
+      const paid =
+        String(status || "").toUpperCase().includes("SUCCESS") ||
+        String(status || "").toUpperCase().includes("PAID") ||
+        String(status || "").toUpperCase().includes("CAPTURE");
 
-    await prisma.$transaction(async (tx) => {
-      // создаём заказ
-      await tx.order.create({
-        data: {
-          status: "NEW",
-          total,
-          name: draft.name,
-          phone: draft.phone,
-          address: draft.address,
-          // userId опционально, если есть логика пользователя — можно проставить
-          items: {
-            create: items.map((it: any) => ({
-              productId: String(it.productId),
-              variantId: it.variantId ? String(it.variantId) : null,
-              title: String(it.title),
-              price: Number(it.price) || 0,
-              quantity: Number(it.qty) || 1,
-            })),
-          },
-        },
-      });
+      if (paid) {
+        await prisma.paymentDraft.updateMany({
+          where: { id: String(orderId) },
+          data: { status: "PAID" },
+        });
+      }
+    }
 
-      await tx.paymentDraft.update({
-        where: { id: draft.id },
-        data: { status: "PAID" },
-      });
-    });
-  } else if (status === "FAILED") {
-    await prisma.paymentDraft.update({
-      where: { id: orderId },
-      data: { status: "CANCELED" },
-    }).catch(() => {});
+    return Response.json({ ok: true });
+  } catch (e: any) {
+    console.log("❌ YAPAY WEBHOOK ERROR:", e?.message || e);
+    // Всегда отвечаем 200, чтобы Яндекс не долбил ретраи бесконечно
+    return Response.json({ ok: true });
   }
-
-  return Response.json({ ok: true });
 }
