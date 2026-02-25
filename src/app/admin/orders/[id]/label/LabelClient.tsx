@@ -63,7 +63,7 @@ export default function LabelClient({ order }: any) {
         </div>
 
         {/* FIELDS */}
-        <div className="mt-6 space-y-3 text-[18px] leading-[1.2]" style={{ fontFamily: "Yeast" }}>
+        <div className="mt-6 space-y-3 text-[18px] leading-[1.2]" style={{ fontFamily: "Brygada" }}>
           <div>
             <span className="font-bold">Товар:</span> <span>{productTitle}</span>
           </div>
