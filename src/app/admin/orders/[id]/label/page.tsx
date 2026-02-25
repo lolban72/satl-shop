@@ -9,16 +9,30 @@ export default async function LabelPage(props: {
 
   const order = await prisma.order.findUnique({
     where: { id },
-    include: {
-      items: {
-        include: {
-          variant: true,
-        },
-      },
-    },
+    include: { items: true }, // только items (без variant include)
   });
 
   if (!order) notFound();
 
-  return <LabelClient order={order} />;
+  // ✅ подтягиваем variant для каждого item вручную
+  const variantIds = Array.from(
+    new Set(order.items.map((it) => it.variantId).filter(Boolean) as string[])
+  );
+
+  const variants = await prisma.variant.findMany({
+    where: { id: { in: variantIds } },
+    select: { id: true, size: true, color: true },
+  });
+
+  const vmap = new Map(variants.map((v) => [v.id, v]));
+
+  const orderWithVariant = {
+    ...order,
+    items: order.items.map((it) => ({
+      ...it,
+      variant: it.variantId ? vmap.get(it.variantId) ?? null : null,
+    })),
+  };
+
+  return <LabelClient order={orderWithVariant} />;
 }

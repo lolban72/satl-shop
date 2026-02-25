@@ -13,9 +13,9 @@ function rub(cents: number) {
 }
 
 export default async function AdminOrderPage(props: {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }) {
-  const { id } = await props.params;
+  const { id } = props.params;
 
   const order = await prisma.order.findUnique({
     where: { id },
@@ -23,7 +23,7 @@ export default async function AdminOrderPage(props: {
       user: { select: { email: true } },
       items: {
         include: {
-          variant: true,
+          variant: true, // ✅ теперь возможно (после добавления relation в schema)
         },
       },
     },
@@ -66,17 +66,20 @@ export default async function AdminOrderPage(props: {
                   <tr key={it.id} className="[&>td]:px-3 [&>td]:py-2">
                     <td>
                       <div className="font-semibold">{it.title}</div>
+
                       <div className="text-[12px] text-black/50">
                         productId: {it.productId}
                         {it.variantId ? ` · variantId: ${it.variantId}` : ""}
 
-                        {/* (не обязательно, но полезно видеть в админке) */}
+                        {/* ✅ variant подтянется, если variantId был указан */}
                         {it.variant?.size ? ` · size: ${it.variant.size}` : ""}
                         {it.variant?.color ? ` · color: ${it.variant.color}` : ""}
                       </div>
                     </td>
+
                     <td className="whitespace-nowrap">{rub(it.price)}</td>
                     <td>{it.quantity}</td>
+
                     <td className="whitespace-nowrap font-semibold">
                       {rub(it.price * it.quantity)}
                     </td>
