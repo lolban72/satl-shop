@@ -17,6 +17,7 @@ export async function POST(req: Request) {
     await prisma.$transaction(async (tx) => {
       await tx.order.create({
         data: {
+          paymentDraftId: draft.id,
           userId: draft.userId ?? null,
           status: "NEW",
           total: draft.total,
