@@ -21,15 +21,30 @@ export default async function AdminOrderPage(props: {
     where: { id },
     include: {
       user: { select: { email: true } },
-      items: {
-        include: {
-          variant: true, // ✅ теперь возможно (после добавления relation в schema)
-        },
-      },
+      items: true, // ✅ без include.variant
     },
   });
 
   if (!order) notFound();
+
+  // ✅ Подтягиваем варианты отдельно
+  const variantIds = Array.from(
+    new Set(order.items.map((it) => it.variantId).filter(Boolean) as string[])
+  );
+
+  const variants = variantIds.length
+    ? await prisma.variant.findMany({
+        where: { id: { in: variantIds } },
+        select: { id: true, size: true, color: true },
+      })
+    : [];
+
+  const vmap = new Map(variants.map((v) => [v.id, v]));
+
+  const items = order.items.map((it) => ({
+    ...it,
+    variant: it.variantId ? vmap.get(it.variantId) ?? null : null,
+  }));
 
   return (
     <div className="min-w-0">
@@ -62,24 +77,19 @@ export default async function AdminOrderPage(props: {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {order.items.map((it) => (
+                {items.map((it) => (
                   <tr key={it.id} className="[&>td]:px-3 [&>td]:py-2">
                     <td>
                       <div className="font-semibold">{it.title}</div>
-
                       <div className="text-[12px] text-black/50">
                         productId: {it.productId}
                         {it.variantId ? ` · variantId: ${it.variantId}` : ""}
-
-                        {/* ✅ variant подтянется, если variantId был указан */}
                         {it.variant?.size ? ` · size: ${it.variant.size}` : ""}
                         {it.variant?.color ? ` · color: ${it.variant.color}` : ""}
                       </div>
                     </td>
-
                     <td className="whitespace-nowrap">{rub(it.price)}</td>
                     <td>{it.quantity}</td>
-
                     <td className="whitespace-nowrap font-semibold">
                       {rub(it.price * it.quantity)}
                     </td>
