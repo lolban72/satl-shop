@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Step = "request" | "reset";
 
 export default function ForgotPasswordPage() {
+  const router = useRouter();
+
   const [step, setStep] = useState<Step>("request");
 
   const [email, setEmail] = useState("");
@@ -97,7 +100,11 @@ export default function ForgotPasswordPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Не удалось подтвердить код");
 
-      setOk("Пароль изменён ✅ Теперь войди в аккаунт.");
+      setOk("Пароль изменён ✅ Через 5 секунд вы будете перенаправлены на страницу входа.");
+
+      setTimeout(() => {
+        router.push("/auth/login");
+      }, 5000);
     } catch (e: any) {
       setErr(e?.message || "Ошибка");
     } finally {

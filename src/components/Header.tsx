@@ -102,6 +102,7 @@ export default async function Header({ className = "" }: { className?: string })
               width={150}
               height={30}
               priority
+              className="h-[20px] w-auto"
             />
           </Link>
 
