@@ -78,6 +78,13 @@ export default function ProfileClient({
             <input
               type="email"
               value={email}
+              className="
+                h-[35px] w-full
+                border border-black/15 px-[10px]
+                font-semibold text-[12px]
+                outline-none
+                bg-black/0 text-black/100
+              "
             />
           </label>
 
