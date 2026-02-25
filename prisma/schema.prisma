@@ -207,6 +207,8 @@ model PaymentDraft {
   phone   String
   address String
 
+  order Order? @relation(fields: [id], references: [paymentDraftId])
+  
   itemsJson Json
   total     Int // в копейках
 

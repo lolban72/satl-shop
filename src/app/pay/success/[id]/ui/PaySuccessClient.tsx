@@ -7,13 +7,15 @@ import { useCart } from "@/lib/cart-store";
 
 export default function PaySuccessClient({ draftId }: { draftId: string }) {
   const [status, setStatus] = useState<string>("PENDING");
+  const [orderId, setOrderId] = useState<string | null>(null);
+
   const router = useRouter();
   const clear = useCart((s) => s.clear);
 
   useEffect(() => {
     let alive = true;
     let attempts = 0;
-    const MAX_ATTEMPTS = 60; // ~2 минуты (60 * 2сек)
+    const MAX_ATTEMPTS = 90; // ~3 минуты (90 * 2сек)
 
     async function tick() {
       try {
@@ -26,27 +28,23 @@ export default function PaySuccessClient({ draftId }: { draftId: string }) {
         if (!alive) return;
 
         const newStatus = String(data?.status || "PENDING");
+        const newOrderId = data?.orderId ? String(data.orderId) : null;
+
         setStatus(newStatus);
+        setOrderId(newOrderId);
 
-        if (newStatus === "PAID") {
-          // ✅ останавливаем polling
+        // ✅ редиректим только когда реально есть заказ
+        if (newStatus === "PAID" && newOrderId) {
           alive = false;
-
-          // очищаем корзину
           clear();
-
-          // редиректим (можно поменять маршрут)
           router.replace("/account/orders");
           return;
         }
 
         attempts++;
-        if (attempts >= MAX_ATTEMPTS) {
-          // если слишком долго ждём — прекращаем
-          alive = false;
-        }
+        if (attempts >= MAX_ATTEMPTS) alive = false;
       } catch {
-        // просто пробуем снова
+        // молча пробуем снова
       }
     }
 
@@ -62,20 +60,27 @@ export default function PaySuccessClient({ draftId }: { draftId: string }) {
   return (
     <div className="mx-auto max-w-[520px] px-4 py-10">
       <div className="text-[22px] font-semibold">Оплата принята</div>
-      <div className="mt-2 text-[12px] text-black/60 font-mono">
-        {draftId}
-      </div>
+      <div className="mt-2 text-[12px] text-black/60 font-mono">{draftId}</div>
 
       <div className="mt-6 rounded-2xl border p-4 text-[14px]">
-        {status === "PAID"
+        {status === "PAID" && orderId
           ? "Заказ создан ✅"
           : "Создаём заказ… (ожидаем подтверждение)"}
       </div>
 
-      <div className="mt-6">
+      <div className="mt-6 flex items-center gap-4">
         <Link href="/account/orders" className="text-[12px] underline">
           Перейти к заказам
         </Link>
+
+        {orderId ? (
+          <Link
+            href={`/admin/orders/${orderId}`}
+            className="text-[12px] underline text-black/60 hover:text-black transition"
+          >
+            Открыть заказ (админ)
+          </Link>
+        ) : null}
       </div>
     </div>
   );
