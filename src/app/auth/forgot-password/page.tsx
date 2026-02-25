@@ -45,7 +45,7 @@ export default function ForgotPasswordPage() {
       if (!res.ok) throw new Error(data?.error || "Не удалось отправить код");
 
       setStep("reset");
-      setOk("Если аккаунт существует и Telegram привязан — код отправлен в Telegram.");
+      setOk("Если аккаунт существует и телеграм привязан — код отправлен в телеграм.");
     } catch (e: any) {
       setErr(e?.message || "Ошибка");
     } finally {
@@ -70,7 +70,7 @@ export default function ForgotPasswordPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Не удалось отправить код");
 
-      setOk("Код отправлен повторно (если Telegram привязан).");
+      setOk("Код отправлен повторно.");
     } catch (e: any) {
       setErr(e?.message || "Ошибка");
     } finally {
@@ -100,7 +100,7 @@ export default function ForgotPasswordPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Не удалось подтвердить код");
 
-      setOk("Пароль изменён ✅ Через 5 секунд вы будете перенаправлены на страницу входа.");
+      setOk("Пароль успешно изменён. Через 5 секунд вы будете перенаправлены на страницу входа.");
 
       setTimeout(() => {
         router.push("/auth/login");

@@ -95,14 +95,11 @@ export default async function Header({ className = "" }: { className?: string })
         {/* LEFT GROUP */}
         <div className="flex items-center gap-[14px] md:gap-[100px]">
           {/* LOGO */}
-          <Link href="/" className="inline-block">
-            <Image
+          <Link href="/" className="inline-flex items-center">
+            <img
               src="/logo.svg"
               alt="SATL"
-              width={150}
-              height={30}
-              priority
-              className="h-[20px] w-auto"
+              className="h-[60px] w-auto"
             />
           </Link>
 
