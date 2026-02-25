@@ -79,8 +79,19 @@ export default function YaPayButton({ draftId }: { draftId: string }) {
         // В этом сценарии по клику мы просто открываем форму.
         // Если Яндекс не сможет открыть форму — вызовется onFormOpenError.
         async function onPayButtonClick() {
-          // Вариант "link generation" тут не используем.
-          return;
+          const res = await fetch("/api/pay/yapay/link", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ draftId }),
+          });
+
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            console.log("YaPay link error:", data);
+            throw new Error(data?.error || "Не удалось получить ссылку оплаты");
+          }
+
+          return data.paymentUrl; // ✅ критично
         }
 
         function onFormOpenError(e: any) {
