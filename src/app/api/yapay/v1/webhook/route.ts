@@ -124,31 +124,30 @@ export async function POST(req: Request) {
     // ✅ TG уведомления (после успешного создания заказа)
     const adminChatIds = parseChatIds(process.env.TG_ADMIN_CHAT_IDS);
 
-    const adminText =
-      `<b>Новый заказ ✅ (оплачен)</b>\n` +
-      `ID: <code>${createdOrder.id}</code>\n` +
-      `Имя: ${draft.name}\n` +
-      `Телефон: ${draft.phone}\n` +
-      `Адрес: ${draft.address}\n` +
-      `Пользователь: ${draft.email || "Не указан (клиент не авторизован)"}\n\n` +
-      `<b>Состав заказа:</b>\n` +
-      items
-        .map((i) => {
-          const title = String(i.title ?? "—");
-          const q = Number(i.qty ?? i.quantity ?? 1);
-          const price = Number(i.price ?? 0);
-          return `• ${title} × ${q} = ${rubFromCents(price * q)}`;
-        })
-        .join("\n") +
-      `\n\n<b>Итого:</b> ${rubFromCents(draft.total)}\n` +
-      `Статус оплаты: <b>Оплачено ✅</b>\n` +
-      `Трек номер: <code>${draft.trackNumber ?? "Не назначен"}</code>\n` +  // Добавили поле "Трек номер"
-      `Ссылка на заказ в админке: <a href="https://satl.shop/admin/orders/${createdOrder.id}" target="_blank">Перейти к заказу</a>\n` +
-      `\n\n<b>Внимание!</b> Проверьте остатки товара и своевременно отправьте заказ клиенту.`;
+  const adminText =
+    `<b>Новый заказ ✅ (оплачен)</b>\n` +
+    `ID: <code>${createdOrder.id}</code>\n` +
+    `Имя: ${draft.name}\n` +
+    `Телефон: ${draft.phone}\n` +
+    `Адрес: ${draft.address}\n` +
+    `Пользователь: ${draft.email || "Не указан (клиент не авторизован)"}\n\n` +
+    `<b>Состав заказа:</b>\n` +
+    items
+      .map((i) => {
+        const title = String(i.title ?? "—");
+        const q = Number(i.qty ?? i.quantity ?? 1);
+        const price = Number(i.price ?? 0);
+        return `• ${title} × ${q} = ${rubFromCents(price * q)}`;
+      })
+      .join("\n") +
+    `\n\n<b>Итого:</b> ${rubFromCents(draft.total)}\n` +
+    `Статус оплаты: <b>Оплачено ✅</b>\n` +
+    `Ссылка на заказ в админке: <a href="https://satl.shop/admin/orders/${createdOrder.id}" target="_blank">Перейти к заказу</a>\n` +
+    `\n\n<b>Внимание!</b> Проверьте остатки товара и своевременно отправьте заказ клиенту.`;
 
-    for (const chatId of adminChatIds) {
-      tgSendMessage(chatId, adminText).catch(() => {});
-    }
+  for (const chatId of adminChatIds) {
+    tgSendMessage(chatId, adminText).catch(() => {});
+  }
 
     // пользователю
     if (draft.userId) {
@@ -159,19 +158,12 @@ export async function POST(req: Request) {
 
       if (u?.tgChatId) {
         const userText =
-          `<b>Заказ успешно оплачен ✅</b>\n` +
-          `Номер заказа: <code>${createdOrder.id}</code>\n` +
+          `<b>Заказ оплачен ✅</b>\n` +
+          `Номер: <code>${createdOrder.id}</code>\n` +
           `Сумма: ${rubFromCents(draft.total)}\n\n` +
-          `<b>Спасибо за покупку! 🎉</b>\n` +
-          `Ваш заказ находится в обработке. Ожидайте уведомлений о доставке.\n\n` +
-          `<b>Трек номер:</b> <code>${draft.trackNumber ?? "Не назначен"}</code>\n` +  // Добавили поле "Трек номер"
-          `Если у вас есть вопросы, напишите нам в <a href="https://web.telegram.org/k/#@MANAGER_SATL_SHOP">Телеграм</a> или отправьте email на <a href="mailto:Satl.Shop.ru@gmail.com">Satl.Shop.ru@gmail.com</a>.\n` +
-          `\n\n` +
-          `Вы можете также отслеживать статус заказа в вашем личном кабинете на сайте <a href="https://satl.shop/account/orders" target="_blank">Мои заказы</a>.`;
+          `Спасибо за покупку!`;
 
-        if (draft.userId) {
-          tgSendMessage(u.tgChatId, userText).catch(() => {});
-        }
+        tgSendMessage(u.tgChatId, userText).catch(() => {});
       }
     }
 
