@@ -1,11 +1,12 @@
-import Document, { Html, Head, Main, NextScript } from "next/document";
+// pages/_document.js
+import Document, { Html, Head, Main, NextScript } from 'next/document';
 
 class MyDocument extends Document {
   render() {
     return (
       <Html lang="ru">
         <Head>
-          {/* Яндекс.Метрика */}
+          {/* Вставка кода Яндекс.Метрики */}
           <script type="text/javascript">
             {`
               (function(m,e,t,r,i,k,a){
@@ -15,17 +16,17 @@ class MyDocument extends Document {
                       if (document.scripts[j].src === r) { return; }
                   }
                   k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
-              })(window, document,'script','https://mc.yandex.ru/metrika/tag.js?id=107021293', 'ym');
+              })(window, document,'script','https://mc.yandex.ru/metrika/tag.js?id=YOUR_COUNTER_ID', 'ym');
 
-              ym(107021293, 'init', {
-                ssr:true, 
-                webvisor:true, 
-                clickmap:true, 
-                ecommerce:"dataLayer", 
-                referrer: document.referrer, 
-                url: location.href, 
-                accurateTrackBounce:true, 
-                trackLinks:true
+              ym(YOUR_COUNTER_ID, 'init', {
+                  ssr:true,
+                  webvisor:true, 
+                  clickmap:true, 
+                  ecommerce:"dataLayer", 
+                  referrer: document.referrer, 
+                  url: location.href, 
+                  accurateTrackBounce:true, 
+                  trackLinks:true
               });
             `}
           </script>
@@ -33,11 +34,6 @@ class MyDocument extends Document {
         <body>
           <Main />
           <NextScript />
-          <noscript>
-            <div>
-              <img src="https://mc.yandex.ru/watch/107021293" style={{ position: "absolute", left: "-9999px" }} alt="" />
-            </div>
-          </noscript>
         </body>
       </Html>
     );
