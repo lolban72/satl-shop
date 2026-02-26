@@ -1,4 +1,6 @@
 // src/app/layout.tsx
+"use client"; // Добавьте эту директиву в начале файла
+
 import "../styles/globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
