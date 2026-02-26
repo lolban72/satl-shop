@@ -1,15 +1,13 @@
 // src/app/layout.tsx
-"use client"; // Добавьте эту директиву в начале файла
+"use client";
 
-import "../styles/globals.css";
+import { useEffect, useState } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import TopMarquee from "@/components/TopMarquee";
-import CookieBanner from "@/components/CookieBanner"; // ✅ добавили
+import CookieBanner from "@/components/CookieBanner";
 import { Kanit, Brygada_1918 } from "next/font/google";
-import { prisma } from "@/lib/prisma";
 import Head from "next/head";  // Подключаем Head
-import { useEffect } from "react"; // Импортируем useEffect для работы с клиентским кодом
 
 export const dynamic = "force-dynamic";
 
@@ -26,18 +24,22 @@ const brygada = Brygada_1918({
   display: "swap",
 });
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const marquee = await prisma.marqueeSettings.findFirst();
-
-  const enabled = marquee?.enabled ?? true;
-  const text = marquee?.text ?? "СКИДКИ 20%";
-  const speedSeconds = marquee?.speedSeconds ?? 100;
+  const [marquee, setMarquee] = useState<any>(null);
 
   useEffect(() => {
+    const fetchMarquee = async () => {
+      const res = await fetch("/api/marquee");
+      const data = await res.json();
+      setMarquee(data);
+    };
+    fetchMarquee();
+
+    // Яндекс.Метрика (добавление скрипта через useEffect)
     if (typeof window !== "undefined") {
       const script = document.createElement("script");
       script.type = "text/javascript";
@@ -65,6 +67,10 @@ export default async function RootLayout({
       document.head.appendChild(script);
     }
   }, []); // Пустой массив зависимостей для выполнения только на клиенте
+
+  const enabled = marquee?.enabled ?? true;
+  const text = marquee?.text ?? "СКИДКИ 20%";
+  const speedSeconds = marquee?.speedSeconds ?? 100;
 
   return (
     <html lang="ru" className="h-full">
