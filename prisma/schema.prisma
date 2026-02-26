@@ -176,6 +176,7 @@ model Order {
   status         OrderStatus @default(NEW)
   total          Int
   createdAt      DateTime    @default(now())
+  trackNumber    String?
 
   name    String
   phone   String
