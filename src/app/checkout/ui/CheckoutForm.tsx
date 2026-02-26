@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useCart } from "@/lib/cart-store";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import YaPayButton from "@/app/pay/[id]/YaPayButton";
 
 export const metadata = {
   title: "Оформление заказа | SATL",
@@ -22,7 +23,7 @@ export default function CheckoutForm(props: {
   };
 }) {
   const router = useRouter();
-  const { items, clear } = useCart();
+  const { items } = useCart();
 
   const total = useMemo(
     () => items.reduce((s, i) => s + i.price * i.qty, 0),
@@ -40,13 +41,16 @@ export default function CheckoutForm(props: {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // ✅ draftId -> показываем Яндекс Pay кнопку прямо тут
+  const [draftId, setDraftId] = useState<string | null>(null);
+
   // ✅ если адрес в ЛК не заполнен — запрещаем оформление и просим заполнить
   const isProfileAddressEmpty = !props.initial.address?.trim();
 
   // ✅ если Telegram не привязан — показываем блок и запрещаем оформление
   const isTelegramNotLinked = !String(props.initial.tgChatId ?? "").trim();
 
-  async function submit() {
+  async function createDraft() {
     setErr(null);
 
     if (isTelegramNotLinked) {
@@ -64,8 +68,7 @@ export default function CheckoutForm(props: {
 
     setLoading(true);
     try {
-      // ✅ ВАЖНО: теперь мы НЕ создаём заказ.
-      // Создаём только PaymentDraft и отправляем на страницу оплаты.
+      // ✅ создаём только PaymentDraft
       const res = await fetch("/api/pay/draft", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -73,7 +76,6 @@ export default function CheckoutForm(props: {
           name: name.trim(),
           phone: phone.trim(),
           address: address.trim(),
-          // email можешь добавить, если хочешь прокидывать с сервера
           items: items.map((i: any) => ({
             productId: i.productId,
             variantId: i.variantId ?? null,
@@ -87,14 +89,11 @@ export default function CheckoutForm(props: {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Не удалось начать оплату");
 
-      const draftId = String(data?.draftId || "");
-      if (!draftId) throw new Error("Не удалось получить draftId");
+      const id = String(data?.draftId || "");
+      if (!id) throw new Error("Не удалось получить draftId");
 
-      // ⚠️ корзину лучше чистить ПОСЛЕ подтверждения оплаты (webhook),
-      // иначе если человек закрыл оплату, корзина пропадёт.
-      // clear();
-
-      router.push(`/pay/${encodeURIComponent(draftId)}`);
+      // ✅ показываем кнопку Яндекс Pay прямо на checkout
+      setDraftId(id);
     } catch (e: any) {
       setErr(e?.message || "Ошибка");
     } finally {
@@ -142,7 +141,8 @@ export default function CheckoutForm(props: {
           {isTelegramNotLinked ? (
             <>
               <div className="mt-[12px] text-[12px] text-black/55 leading-[1.5]">
-                Для оформления заказа нужно привязать телеграм — туда будут приходить уведомления о заказе и восстановление пароля.
+                Для оформления заказа нужно привязать телеграм — туда будут
+                приходить уведомления о заказе и восстановление пароля.
               </div>
 
               <div className="mt-[18px] border border-black/20 p-[16px]">
@@ -151,7 +151,8 @@ export default function CheckoutForm(props: {
                 </div>
 
                 <div className="text-[12px] text-black/75">
-                  Перейдите в профиль и нажмите «Привязать телеграм». Это займёт 10–20 секунд.
+                  Перейдите в профиль и нажмите «Привязать телеграм». Это займёт
+                  10–20 секунд.
                 </div>
 
                 <button
@@ -168,7 +169,8 @@ export default function CheckoutForm(props: {
           ) : isProfileAddressEmpty ? (
             <>
               <div className="mt-[12px] text-[12px] text-black/55 leading-[1.5]">
-                Для оформления заказа необходимо заполнить адрес доставки в личном кабинете.
+                Для оформления заказа необходимо заполнить адрес доставки в
+                личном кабинете.
               </div>
 
               <div className="mt-[18px] border border-black/20 p-[16px]">
@@ -208,7 +210,10 @@ export default function CheckoutForm(props: {
                                focus:border-black transition bg-white"
                     value={name}
                     style={{ fontFamily: "Brygada" }}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => {
+                      setName(e.target.value);
+                      if (draftId) setDraftId(null);
+                    }}
                     placeholder="Ваше имя"
                   />
                 </label>
@@ -223,7 +228,10 @@ export default function CheckoutForm(props: {
                                focus:border-black transition bg-white"
                     value={phone}
                     style={{ fontFamily: "Brygada" }}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => {
+                      setPhone(e.target.value);
+                      if (draftId) setDraftId(null);
+                    }}
                     placeholder="+7 (___) ___-__-__"
                   />
                 </label>
@@ -238,33 +246,83 @@ export default function CheckoutForm(props: {
                                focus:border-black transition bg-white"
                     value={address}
                     style={{ fontFamily: "Brygada" }}
-                    onChange={(e) => setAddress(e.target.value)}
+                    onChange={(e) => {
+                      setAddress(e.target.value);
+                      if (draftId) setDraftId(null);
+                    }}
                     placeholder="Город, улица, дом, квартира"
                   />
                 </label>
 
                 {/* CTA */}
-                <button
-                  className="mt-[6px] flex h-[46px] w-full items-center justify-center bg-black text-white
-                            text-[10px] font-bold uppercase tracking-[0.12em] hover:bg-black/85 transition
-                            disabled:opacity-50 disabled:hover:bg-black"
-                  disabled={loading || items.length === 0}
-                  onClick={submit}
-                  type="button"
-                >
-                  {loading ? "Переходим к оплате..." : "Перейти к оплате"}
-                </button>
+                {draftId ? (
+                  <div className="mt-[6px]">
+                    <div className="text-[9px] uppercase tracking-[0.12em] text-black/55 mb-[8px]">
+                      Оплата
+                    </div>
 
-                <div className="text-[11px] italic leading-[1.25] text-black/45 mt-[6px]">
-                  Нажимая кнопку, вы соглашаетесь с{" "}
-                  <Link
-                    href="https://satl.shop/docs/public-offer"
-                    target="_blank"
-                    className="underline hover:text-black transition"
-                  >
-                    публичной офертой
-                  </Link>
-                </div>
+                    <div className="border border-black/15 p-[12px]">
+                      <YaPayButton draftId={draftId} />
+                    </div>
+
+                    <button
+                      type="button"
+                      className="mt-[10px] h-[42px] w-full border border-black/20 text-[10px] font-bold uppercase tracking-[0.12em]
+                                 hover:bg-black hover:text-white transition"
+                      onClick={() => setDraftId(null)}
+                      disabled={loading}
+                    >
+                      Изменить данные / создать оплату заново
+                    </button>
+
+                    <div className="mt-[8px] text-[11px] italic leading-[1.25] text-black/45">
+                      После оплаты заказ создастся автоматически. Статус
+                      появится в{" "}
+                      <Link
+                        href="/account/orders"
+                        className="underline hover:text-black transition"
+                      >
+                        «Мои заказы»
+                      </Link>
+                      .
+                    </div>
+
+                    {/* fallback ссылка (на всякий) */}
+                    <div className="mt-[6px] text-[11px] text-black/45">
+                      Если что-то пошло не так, можно открыть оплату отдельно:{" "}
+                      <Link
+                        href={`/pay/${encodeURIComponent(draftId)}`}
+                        className="underline hover:text-black transition"
+                      >
+                        /pay/{draftId}
+                      </Link>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      className="mt-[6px] flex h-[46px] w-full items-center justify-center bg-black text-white
+                                text-[10px] font-bold uppercase tracking-[0.12em] hover:bg-black/85 transition
+                                disabled:opacity-50 disabled:hover:bg-black"
+                      disabled={loading || items.length === 0}
+                      onClick={createDraft}
+                      type="button"
+                    >
+                      {loading ? "Подготовка оплаты..." : "Перейти к оплате"}
+                    </button>
+
+                    <div className="text-[11px] italic leading-[1.25] text-black/45 mt-[6px]">
+                      Нажимая кнопку, вы соглашаетесь с{" "}
+                      <Link
+                        href="https://satl.shop/docs/public-offer"
+                        target="_blank"
+                        className="underline hover:text-black transition"
+                      >
+                        публичной офертой
+                      </Link>
+                    </div>
+                  </>
+                )}
               </div>
             </>
           )}
