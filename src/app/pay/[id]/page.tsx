@@ -12,11 +12,10 @@ export default async function PayPage(props: { params: Promise<{ id: string }> }
   if (draft.status === "PAID") redirect("/pay/success/" + draft.id);
 
   return (
-    <div className="mx-auto max-w-[520px] px-4 py-10">
+    <div className="mx-auto max-w-[520px] px-4 py-10 mt-[40px]">
       <div className="text-[22px] font-semibold">Оплата</div>
-      <div className="mt-2 text-[12px] text-black/60 font-mono">{draft.id}</div>
 
-      <div className="mt-6 rounded-2xl border p-4">
+      <div className="mt-6">
         <YaPayButton draftId={draft.id} />
       </div>
 
