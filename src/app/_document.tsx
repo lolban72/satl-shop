@@ -22,6 +22,7 @@ class MyDocument extends Document {
         <body>
           <Main />
           <NextScript />
+          {/* Noscript для пользователей с отключённым JavaScript */}
           <noscript>
             <div>
               <img src="https://mc.yandex.ru/watch/107021293" style={{ position: "absolute", left: "-9999px" }} alt="" />
