@@ -5,6 +5,7 @@ import TopMarquee from "@/components/TopMarquee";
 import CookieBanner from "@/components/CookieBanner"; // ✅ добавили
 import { Kanit, Brygada_1918 } from "next/font/google";
 import { prisma } from "@/lib/prisma";
+import YandexMetrika from "@/components/YandexMetrika";
 
 
 export const dynamic = "force-dynamic";
@@ -38,6 +39,7 @@ export default async function RootLayout({
       <body
         className={`min-h-screen flex flex-col bg-white text-black ${kanitBold.className}`}
       >
+        <YandexMetrika />
         {enabled && (
           <TopMarquee
             text={text}
