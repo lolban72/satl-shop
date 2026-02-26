@@ -16,7 +16,7 @@ class MyDocument extends Document {
                       if (document.scripts[j].src === r) { return; }
                   }
                   k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
-              })(window, document,'script','https://mc.yandex.ru/metrika/tag.js?id=YOUR_COUNTER_ID', 'ym');
+              })(window, document,'script','https://mc.yandex.ru/metrika/tag.js?id=107021293', 'ym');
 
               ym(YOUR_COUNTER_ID, 'init', {
                   ssr:true,
