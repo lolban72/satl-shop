@@ -212,6 +212,7 @@ model PaymentDraft {
   total     Int // в копейках
 
   status String @default("PENDING") // PENDING | PAID | FAILED | CANCELED
+  trackNumber  String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
