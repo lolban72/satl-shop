@@ -18,7 +18,7 @@ class MyDocument extends Document {
                   k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
               })(window, document,'script','https://mc.yandex.ru/metrika/tag.js?id=107021293', 'ym');
 
-              ym(YOUR_COUNTER_ID, 'init', {
+              ym(107021293, 'init', {
                   ssr:true,
                   webvisor:true, 
                   clickmap:true, 
