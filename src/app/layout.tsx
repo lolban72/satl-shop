@@ -64,7 +64,7 @@ export default async function RootLayout({
               });
             `}
           </script>
-          <noscript><div><img src="https://mc.yandex.ru/watch/107021293" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
+          <noscript><div><img src="https://mc.yandex.ru/watch/107021293" alt="" /></div></noscript>
         </Head>
 
         {enabled && (
