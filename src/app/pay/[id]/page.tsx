@@ -15,7 +15,7 @@ export default async function PayPage(props: { params: Promise<{ id: string }> }
     <div className="mx-auto max-w-[520px] px-4 py-10 mt-[40px]">
       <div className="text-[22px] font-semibold">Оплата</div>
 
-      <div className="mt-6">
+      <div className="mt-4">
         <YaPayButton draftId={draft.id} />
       </div>
 
