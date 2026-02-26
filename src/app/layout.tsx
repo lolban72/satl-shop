@@ -5,6 +5,7 @@ import TopMarquee from "@/components/TopMarquee";
 import CookieBanner from "@/components/CookieBanner"; // ✅ добавили
 import { Kanit, Brygada_1918 } from "next/font/google";
 import { prisma } from "@/lib/prisma";
+import YandexMetrika from "@/components/YandexMetrika";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,7 @@ export default async function RootLayout({
             fontClass={brygada.className}
           />
         )}
-
+        <YandexMetrika />
         <Header />
         <main className="flex-1">{children}</main>
         <Footer />
