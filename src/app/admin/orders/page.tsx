@@ -1,7 +1,7 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { STATUS_META, STATUS_ORDER } from "@/lib/order-status";
-import type { OrderStatus } from "@/lib/order-status";
+import { STATUS_META, STATUS_ORDER, type OrderStatus } from "@/lib/order-status";
 
 export const metadata = {
   title: "Заказы | SATL-админ",
@@ -21,17 +21,63 @@ function isOrderStatus(v?: string): v is OrderStatus {
   return (STATUS_ORDER as readonly string[]).includes(v);
 }
 
+// day: "today" | "yesterday" | "YYYY-MM-DD"
+function isIsoDate(s: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
+
+/**
+ * ✅ FIX: dayRaw может быть undefined — нормализуем в строку.
+ * Диапазон [start,end) для выбранного дня в UTC.
+ */
+function getDayRangeUTC(dayRaw?: string) {
+  const day = (dayRaw ?? "today").trim(); // ✅ теперь всегда string
+
+  const now = new Date();
+  const todayUTC = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0)
+  );
+
+  let start = todayUTC;
+
+  if (day === "yesterday") {
+    start = new Date(todayUTC.getTime() - 24 * 60 * 60 * 1000);
+  } else if (isIsoDate(day)) {
+    const [y, m, d] = day.split("-").map(Number);
+    start = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
+  } else {
+    start = todayUTC; // today по умолчанию
+  }
+
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  return { start, end, day };
+}
+
+function todayIsoUTC() {
+  const n = new Date();
+  const y = n.getUTCFullYear();
+  const m = String(n.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(n.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 export default async function AdminOrdersPage(props: {
   searchParams?: Promise<{
     q?: string;
     status?: string;
+    day?: string; // "today" | "yesterday" | "YYYY-MM-DD"
   }>;
 }) {
   const sp = (await props.searchParams) ?? {};
   const q = sp.q?.trim() ?? "";
   const statusRaw = sp.status?.trim().toUpperCase();
 
-  const where: any = {};
+  // ✅ FIX: нормализуем day через getDayRangeUTC, чтобы всегда был string
+  const { start, end, day } = getDayRangeUTC(sp.day);
+
+  const where: any = {
+    createdAt: { gte: start, lt: end },
+  };
 
   if (q) {
     where.OR = [
@@ -51,18 +97,72 @@ export default async function AdminOrdersPage(props: {
       items: { select: { id: true } },
       user: { select: { email: true } },
     },
-    take: 200,
+    take: 500,
   });
+
+  async function printLabelsAction(formData: FormData) {
+    "use server";
+
+    const dayFromForm = String(formData.get("day") || "today");
+    const { start, end, day } = getDayRangeUTC(dayFromForm);
+
+    // ✅ После нажатия "печать" — переводим заказы дня в PROCESSING
+    // Обновляем только NEW (чтобы не трогать уже обработанные/доставленные)
+    await prisma.order.updateMany({
+      where: {
+        createdAt: { gte: start, lt: end },
+        status: "NEW",
+      },
+      data: {
+        status: "PROCESSING",
+      },
+    });
+
+    redirect(`/admin/orders/labels?day=${encodeURIComponent(day)}`);
+  }
+
+  const isoToday = todayIsoUTC();
+  const isCustomDay = isIsoDate(day);
 
   return (
     <div className="min-w-0">
-      <div className="mb-4">
-        <div className="text-xl font-semibold">Заказы</div>
-        <div className="text-sm text-black/55">Поиск и фильтрация</div>
+      <div className="mb-4 flex items-end justify-between gap-4">
+        <div>
+          <div className="text-xl font-semibold">Заказы</div>
+          <div className="text-sm text-black/55">
+            Показаны заказы за выбранный день
+          </div>
+        </div>
+
+        <form action={printLabelsAction}>
+          <input type="hidden" name="day" value={day} />
+          <button className="h-9 rounded-xl bg-black px-4 text-sm font-semibold text-white">
+            Печать этикеток
+          </button>
+        </form>
       </div>
 
-      {/* Поиск + фильтр */}
-      <form className="mb-6 flex flex-wrap gap-3">
+      {/* Поиск + фильтры */}
+      <form className="mb-6 flex flex-wrap gap-3" method="GET">
+        {/* День */}
+        <select
+          name="day"
+          defaultValue={isCustomDay ? "today" : day}
+          className="h-9 rounded-xl border px-3 text-sm"
+        >
+          <option value="today">Сегодня</option>
+          <option value="yesterday">Вчера</option>
+        </select>
+
+        {/* Конкретная дата (YYYY-MM-DD) */}
+        <input
+          name="day"
+          defaultValue={isCustomDay ? day : ""}
+          placeholder={isoToday}
+          className="h-9 w-[150px] rounded-xl border px-3 text-sm"
+          title="Дата в формате YYYY-MM-DD"
+        />
+
         <input
           name="q"
           defaultValue={q}
@@ -104,15 +204,11 @@ export default async function AdminOrdersPage(props: {
 
           <tbody className="divide-y">
             {orders.map((o) => {
-              // Prisma отдаёт enum, но TS иногда видит как string — приводим безопасно:
               const os = o.status as OrderStatus;
-
-              const meta =
-                STATUS_META[os] ??
-                {
-                  label: String(o.status),
-                  badgeClass: "border-black/15 bg-gray-50 text-black/70",
-                };
+              const meta = STATUS_META[os] ?? {
+                label: String(o.status),
+                badgeClass: "border-black/15 bg-gray-50 text-black/70",
+              };
 
               return (
                 <tr key={o.id} className="[&>td]:px-4 [&>td]:py-3">
@@ -125,14 +221,7 @@ export default async function AdminOrdersPage(props: {
                   </td>
 
                   <td>
-                    <span
-                      className={[
-                        "inline-flex items-center rounded-full border px-2 py-1 text-[12px] font-semibold",
-                        meta.badgeClass,
-                      ].join(" ")}
-                    >
-                      {meta.label}
-                    </span>
+                    <span className={meta.badgeClass}>{meta.label}</span>
                   </td>
 
                   <td className="font-semibold">{rub(o.total)}</td>
