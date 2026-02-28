@@ -36,10 +36,10 @@ export default async function RootLayout({
 
   return (
     <html lang="ru" className="h-full">
+      <YandexMetrika />
       <body
         className={`min-h-screen flex flex-col bg-white text-black ${kanitBold.className}`}
-      >
-        <YandexMetrika />
+      > 
         {enabled && (
           <TopMarquee
             text={text}
