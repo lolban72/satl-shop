@@ -28,17 +28,16 @@ function OneLabelHTML({
     return items[0] ?? null;
   }, [order?.items]);
 
-  // На 58×40 не влезает много текста — оставим самое полезное
   const size = val(firstItem?.variant?.size);
 
   useEffect(() => {
     if (!barcodeRef.current) return;
 
-    // ✅ Под 58mm: компактный штрих-код
+    // 🔥 компактный штрих-код под 58мм
     JsBarcode(barcodeRef.current, String(order?.id ?? ""), {
       format: "CODE128",
-      width: 1.2,     // толщина линий
-      height: 22,     // высота штрихкода (в px, но под нашу область ок)
+      width: 0.9,     // тонкие линии
+      height: 18,     // ниже
       displayValue: false,
       margin: 0,
     });
@@ -47,6 +46,7 @@ function OneLabelHTML({
   return (
     <div ref={htmlRef} className="label-58x40">
       <svg ref={barcodeRef} className="barcode" />
+
       <div className="meta">
         <div className="row">
           <span className="k">ID:</span>
@@ -69,8 +69,8 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
     let cancelled = false;
 
     async function run() {
-      // ждём, пока DOM и баркоды отрисуются
-      await new Promise((r) => setTimeout(r, 450));
+      // ждём отрисовки DOM и штрих-кода
+      await new Promise((r) => setTimeout(r, 400));
 
       const urls: string[] = [];
 
@@ -80,7 +80,7 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
 
         const url = await toPng(node, {
           cacheBust: true,
-          pixelRatio: 3, // ✅ качество выше
+          pixelRatio: 3, // качество выше
           backgroundColor: "#ffffff",
         });
 
@@ -91,8 +91,8 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
 
       setImages(urls);
 
-      // печать один раз, когда PNG готовы
-      setTimeout(() => window.print(), 250);
+      // печать один раз
+      setTimeout(() => window.print(), 200);
     }
 
     run();
@@ -110,24 +110,24 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
           margin: 0;
         }
 
-        /* Скрытый HTML-рендер для генерации PNG */
+        /* Скрытый HTML для генерации PNG */
         .hidden-render {
           position: absolute;
           left: -99999px;
           top: 0;
         }
 
-        /* Точная геометрия этикетки 58×40 */
+        /* Точная геометрия 58×40 */
         .label-58x40 {
           width: 58mm;
           height: 40mm;
           box-sizing: border-box;
-          padding: 2mm 2mm 1.5mm 2mm;
+          padding: 1.5mm;
           display: flex;
           flex-direction: column;
-          gap: 1.5mm;
-          color: #000;
+          gap: 1mm;
           background: #fff;
+          color: #000;
           font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
         }
 
@@ -137,8 +137,8 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
         }
 
         .meta {
-          font-size: 9px;
-          line-height: 1.15;
+          font-size: 7px;
+          line-height: 1.05;
         }
 
         .row {
@@ -148,12 +148,12 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
         }
 
         .k { font-weight: 800; }
+
         .mono {
-          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
         }
 
         @media print {
-          /* ✅ печатаем ТОЛЬКО область label-root */
           body * { visibility: hidden !important; }
           .label-root, .label-root * { visibility: visible !important; }
 
@@ -168,17 +168,29 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
             top: 0 !important;
           }
 
-          /* ✅ каждая картинка = отдельная наклейка */
-          .img-page { width: 58mm; height: 40mm; }
-          .img-page { break-after: page; page-break-after: always; }
-          .img-page:last-child { break-after: auto; page-break-after: auto; }
+          /* каждая картинка = отдельная наклейка */
+          .img-page {
+            width: 58mm;
+            height: 40mm;
+            break-after: page;
+            page-break-after: always;
+          }
 
-          /* убираем любые авто-поля */
-          img { display: block; width: 58mm; height: 40mm; object-fit: contain; }
+          .img-page:last-child {
+            break-after: auto;
+            page-break-after: auto;
+          }
+
+          img {
+            display: block;
+            width: 58mm;
+            height: 40mm;
+            object-fit: contain;
+          }
         }
       `}</style>
 
-      {/* 1) Скрытый источник (HTML) */}
+      {/* HTML-источник */}
       <div className="hidden-render">
         {orders.map((o, i) => (
           <OneLabelHTML
@@ -189,7 +201,7 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
         ))}
       </div>
 
-      {/* 2) Печать PNG */}
+      {/* Печатаем PNG */}
       {images.map((src, i) => (
         <div key={i} className="img-page">
           <img src={src} alt="" />
