@@ -21,17 +21,13 @@ function isOrderStatus(v?: string): v is OrderStatus {
   return (STATUS_ORDER as readonly string[]).includes(v);
 }
 
-// day: "today" | "yesterday" | "YYYY-MM-DD"
 function isIsoDate(s: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 
-/**
- * ✅ FIX: dayRaw может быть undefined — нормализуем в строку.
- * Диапазон [start,end) для выбранного дня в UTC.
- */
+/** day: "today" | "yesterday" | "YYYY-MM-DD" */
 function getDayRangeUTC(dayRaw?: string) {
-  const day = (dayRaw ?? "today").trim(); // ✅ теперь всегда string
+  const day = (dayRaw ?? "today").trim();
 
   const now = new Date();
   const todayUTC = new Date(
@@ -46,7 +42,7 @@ function getDayRangeUTC(dayRaw?: string) {
     const [y, m, d] = day.split("-").map(Number);
     start = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
   } else {
-    start = todayUTC; // today по умолчанию
+    start = todayUTC;
   }
 
   const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
@@ -65,15 +61,20 @@ export default async function AdminOrdersPage(props: {
   searchParams?: Promise<{
     q?: string;
     status?: string;
-    day?: string; // "today" | "yesterday" | "YYYY-MM-DD"
+    day?: string;   // today/yesterday
+    date?: string;  // YYYY-MM-DD
   }>;
 }) {
   const sp = (await props.searchParams) ?? {};
-  const q = sp.q?.trim() ?? "";
-  const statusRaw = sp.status?.trim().toUpperCase();
 
-  // ✅ FIX: нормализуем day через getDayRangeUTC, чтобы всегда был string
-  const { start, end, day } = getDayRangeUTC(sp.day);
+  const q = (sp.q ?? "").trim();
+
+  // ✅ FIX: никогда не падаем
+  const statusRaw = (sp.status ?? "").trim().toUpperCase();
+
+  // ✅ date имеет приоритет над day
+  const dayInput = (sp.date ?? "").trim() || (sp.day ?? "today");
+  const { start, end, day } = getDayRangeUTC(dayInput);
 
   const where: any = {
     createdAt: { gte: start, lt: end },
@@ -103,11 +104,12 @@ export default async function AdminOrdersPage(props: {
   async function printLabelsAction(formData: FormData) {
     "use server";
 
-    const dayFromForm = String(formData.get("day") || "today");
-    const { start, end, day } = getDayRangeUTC(dayFromForm);
+    const day = String(formData.get("day") || "today");
+    const date = String(formData.get("date") || "").trim();
+    const dayInput = date || day;
 
-    // ✅ После нажатия "печать" — переводим заказы дня в PROCESSING
-    // Обновляем только NEW (чтобы не трогать уже обработанные/доставленные)
+    const { start, end, day: normalized } = getDayRangeUTC(dayInput);
+
     await prisma.order.updateMany({
       where: {
         createdAt: { gte: start, lt: end },
@@ -118,7 +120,7 @@ export default async function AdminOrdersPage(props: {
       },
     });
 
-    redirect(`/admin/orders/labels?day=${encodeURIComponent(day)}`);
+    redirect(`/admin/orders/labels?day=${encodeURIComponent(normalized)}`);
   }
 
   const isoToday = todayIsoUTC();
@@ -129,13 +131,12 @@ export default async function AdminOrdersPage(props: {
       <div className="mb-4 flex items-end justify-between gap-4">
         <div>
           <div className="text-xl font-semibold">Заказы</div>
-          <div className="text-sm text-black/55">
-            Показаны заказы за выбранный день
-          </div>
+          <div className="text-sm text-black/55">Показаны заказы за выбранный день</div>
         </div>
 
-        <form action={printLabelsAction}>
-          <input type="hidden" name="day" value={day} />
+        <form action={printLabelsAction} className="flex items-center gap-2">
+          <input type="hidden" name="day" value={isCustomDay ? "today" : day} />
+          <input type="hidden" name="date" value={isCustomDay ? day : ""} />
           <button className="h-9 rounded-xl bg-black px-4 text-sm font-semibold text-white">
             Печать этикеток
           </button>
@@ -154,9 +155,9 @@ export default async function AdminOrdersPage(props: {
           <option value="yesterday">Вчера</option>
         </select>
 
-        {/* Конкретная дата (YYYY-MM-DD) */}
+        {/* Конкретная дата */}
         <input
-          name="day"
+          name="date"
           defaultValue={isCustomDay ? day : ""}
           placeholder={isoToday}
           className="h-9 w-[150px] rounded-xl border px-3 text-sm"
@@ -216,9 +217,7 @@ export default async function AdminOrdersPage(props: {
                     {new Date(o.createdAt).toLocaleString("ru-RU")}
                   </td>
 
-                  <td className="font-mono text-[12px] text-black/70">
-                    {o.id.slice(0, 10)}…
-                  </td>
+                  <td className="font-mono text-[12px] text-black/70">{o.id.slice(0, 10)}…</td>
 
                   <td>
                     <span className={meta.badgeClass}>{meta.label}</span>
