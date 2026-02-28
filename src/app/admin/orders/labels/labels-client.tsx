@@ -41,10 +41,12 @@ function OneLabel({ order }: any) {
   return (
     <div className="label-page">
       <div className="print-area w-[180mm] p-4 text-black">
+        {/* BARCODE */}
         <div className="w-full flex justify-center">
           <svg ref={ref} className="w-full" />
         </div>
 
+        {/* FIELDS */}
         <div
           className="mt-6 space-y-3 text-[18px] leading-[1.2]"
           style={{ fontFamily: "Brygada" }}
@@ -72,7 +74,7 @@ function OneLabel({ order }: any) {
         </div>
       </div>
 
-      {/* разрыв страницы между этикетками */}
+      {/* разрыв страницы */}
       <div className="page-break" />
     </div>
   );
@@ -85,12 +87,26 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
   }, []);
 
   return (
-    <div>
+    <div className="label-root">
       <style>{`
         @media print {
-          body { margin: 0; }
+          /* ✅ скрываем вообще всё на странице */
+          body * { visibility: hidden; }
+
+          /* ✅ показываем только этикетки */
+          .label-root, .label-root * { visibility: visible; }
+
+          /* убираем отступы */
+          body { margin: 0 !important; padding: 0 !important; }
+
+          /* печатная область — в левом верхнем углу */
+          .label-root { position: absolute; left: 0; top: 0; width: 100%; }
+
+          /* разрыв страницы между этикетками */
           .page-break { page-break-after: always; }
         }
+
+        /* На экране можно оставить как есть */
       `}</style>
 
       {orders.map((o) => (

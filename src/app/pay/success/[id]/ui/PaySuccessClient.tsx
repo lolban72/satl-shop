@@ -65,7 +65,7 @@ export default function PaySuccessClient({ draftId }: { draftId: string }) {
       <div className="mt-6 rounded-2xl border p-4 text-[14px]">
         {status === "PAID" && orderId
           ? "Заказ создан ✅"
-          : "Создаём заказ… (ожидаем подтверждение)"}
+          : "Ожидаем подтверждения..."}
       </div>
 
       <div className="mt-6 flex items-center gap-4">
