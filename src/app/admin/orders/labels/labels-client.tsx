@@ -9,7 +9,18 @@ function val(v: any) {
   return s ? s : "—";
 }
 
-function OneLabelHTML({ order, htmlRef }: any) {
+function shortId(id: any) {
+  const s = String(id ?? "");
+  return s.length > 10 ? s.slice(0, 10) + "…" : s;
+}
+
+function OneLabelHTML({
+  order,
+  htmlRef,
+}: {
+  order: any;
+  htmlRef: (el: HTMLDivElement | null) => void;
+}) {
   const barcodeRef = useRef<SVGSVGElement | null>(null);
 
   const firstItem = useMemo(() => {
@@ -17,54 +28,33 @@ function OneLabelHTML({ order, htmlRef }: any) {
     return items[0] ?? null;
   }, [order?.items]);
 
-  const productTitle = val(firstItem?.title);
+  // На 58×40 не влезает много текста — оставим самое полезное
   const size = val(firstItem?.variant?.size);
-  const pvz = val(order?.address);
-  const track = val(
-    order?.track ??
-      order?.trackingNumber ??
-      order?.trackNumber ??
-      order?.tracking ??
-      order?.trackId
-  );
 
   useEffect(() => {
     if (!barcodeRef.current) return;
+
+    // ✅ Под 58mm: компактный штрих-код
     JsBarcode(barcodeRef.current, String(order?.id ?? ""), {
       format: "CODE128",
-      width: 2,
-      height: 70,
+      width: 1.2,     // толщина линий
+      height: 22,     // высота штрихкода (в px, но под нашу область ок)
       displayValue: false,
       margin: 0,
     });
   }, [order?.id]);
 
   return (
-    <div
-      ref={htmlRef}
-      className="print-area w-[180mm] p-4 text-black bg-white"
-      style={{ fontFamily: "Brygada" }}
-    >
-      <div className="w-full flex justify-center">
-        <svg ref={barcodeRef} className="w-full" />
-      </div>
-
-      <div className="mt-6 space-y-3 text-[18px] leading-[1.2]">
-        <div>
-          <span className="font-bold">Товар:</span> <span>{productTitle}</span>
+    <div ref={htmlRef} className="label-58x40">
+      <svg ref={barcodeRef} className="barcode" />
+      <div className="meta">
+        <div className="row">
+          <span className="k">ID:</span>
+          <span className="v mono">{shortId(order?.id)}</span>
         </div>
-        <div>
-          <span className="font-bold">Размер:</span> <span>{size}</span>
-        </div>
-        <div>
-          <span className="font-bold">ПВЗ:</span> <span>{pvz}</span>
-        </div>
-        <div>
-          <span className="font-bold">Трек номер:</span> <span>{track}</span>
-        </div>
-        <div>
-          <span className="font-bold">Номер заказа:</span>{" "}
-          <span className="font-mono">{val(order?.id)}</span>
+        <div className="row">
+          <span className="k">SIZE:</span>
+          <span className="v">{size}</span>
         </div>
       </div>
     </div>
@@ -79,30 +69,30 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
     let cancelled = false;
 
     async function run() {
-      // даём DOM отрисоваться + штрих-коду проставиться
-      await new Promise((r) => setTimeout(r, 300));
+      // ждём, пока DOM и баркоды отрисуются
+      await new Promise((r) => setTimeout(r, 450));
 
       const urls: string[] = [];
+
       for (let i = 0; i < orders.length; i++) {
         const node = refs.current[i];
         if (!node) continue;
 
-        // scale ↑ = качество ↑
         const url = await toPng(node, {
           cacheBust: true,
-          pixelRatio: 2,
+          pixelRatio: 3, // ✅ качество выше
           backgroundColor: "#ffffff",
         });
 
         urls.push(url);
       }
 
-      if (!cancelled) {
-        setImages(urls);
+      if (cancelled) return;
 
-        // печать один раз, когда картинки готовы
-        setTimeout(() => window.print(), 300);
-      }
+      setImages(urls);
+
+      // печать один раз, когда PNG готовы
+      setTimeout(() => window.print(), 250);
     }
 
     run();
@@ -114,33 +104,95 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
   return (
     <div className="label-root">
       <style>{`
+        /* ✅ Размер страницы = размер наклейки */
+        @page {
+          size: 58mm 40mm;
+          margin: 0;
+        }
+
+        /* Скрытый HTML-рендер для генерации PNG */
+        .hidden-render {
+          position: absolute;
+          left: -99999px;
+          top: 0;
+        }
+
+        /* Точная геометрия этикетки 58×40 */
+        .label-58x40 {
+          width: 58mm;
+          height: 40mm;
+          box-sizing: border-box;
+          padding: 2mm 2mm 1.5mm 2mm;
+          display: flex;
+          flex-direction: column;
+          gap: 1.5mm;
+          color: #000;
+          background: #fff;
+          font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        }
+
+        .barcode {
+          width: 100%;
+          height: auto;
+        }
+
+        .meta {
+          font-size: 9px;
+          line-height: 1.15;
+        }
+
+        .row {
+          display: flex;
+          gap: 2mm;
+          align-items: baseline;
+        }
+
+        .k { font-weight: 800; }
+        .mono {
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+
         @media print {
+          /* ✅ печатаем ТОЛЬКО область label-root */
           body * { visibility: hidden !important; }
           .label-root, .label-root * { visibility: visible !important; }
-          body { margin: 0 !important; padding: 0 !important; }
-          .label-root { position: absolute; left: 0; top: 0; width: 100%; }
 
-          /* печатаем картинки постранично */
-          .img-page { page-break-after: always; }
-          .img-page:last-child { page-break-after: auto; }
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          .label-root {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+          }
+
+          /* ✅ каждая картинка = отдельная наклейка */
+          .img-page { width: 58mm; height: 40mm; }
+          .img-page { break-after: page; page-break-after: always; }
+          .img-page:last-child { break-after: auto; page-break-after: auto; }
+
+          /* убираем любые авто-поля */
+          img { display: block; width: 58mm; height: 40mm; object-fit: contain; }
         }
       `}</style>
 
-      {/* Скрытый рендер HTML (источник для PNG) */}
-      <div style={{ position: "absolute", left: "-99999px", top: 0 }}>
+      {/* 1) Скрытый источник (HTML) */}
+      <div className="hidden-render">
         {orders.map((o, i) => (
           <OneLabelHTML
             key={o.id}
             order={o}
-            htmlRef={(el: HTMLDivElement | null) => (refs.current[i] = el)}
+            htmlRef={(el) => (refs.current[i] = el)}
           />
         ))}
       </div>
 
-      {/* Печатаем уже PNG */}
+      {/* 2) Печать PNG */}
       {images.map((src, i) => (
         <div key={i} className="img-page">
-          <img src={src} alt="" style={{ width: "180mm" }} />
+          <img src={src} alt="" />
         </div>
       ))}
     </div>
