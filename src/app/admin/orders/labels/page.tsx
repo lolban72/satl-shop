@@ -30,16 +30,15 @@ export default async function LabelsPage(props: {
   searchParams?: Promise<{ day?: string }>;
 }) {
   const sp = (await props.searchParams) ?? {};
-  const { start, end, day } = getDayRangeUTC(sp.day);
+  const { start, end } = getDayRangeUTC(sp.day);
 
-  // ✅ важно: чтобы size работал, нужно включить variant у item
   const orders = await prisma.order.findMany({
     where: { createdAt: { gte: start, lt: end } },
     orderBy: { createdAt: "asc" },
     include: {
       items: {
         include: {
-          variant: true, // ✅ чтобы firstItem.variant.size существовал
+          variant: true, // ✅ размер
         },
       },
     },

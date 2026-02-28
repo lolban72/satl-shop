@@ -8,6 +8,11 @@ function val(v: any) {
   return s ? s : "—";
 }
 
+function shortId(id: any) {
+  const s = String(id ?? "");
+  return s.length > 10 ? s.slice(0, 10) + "…" : s;
+}
+
 function OneLabel({ order }: any) {
   const ref = useRef<SVGSVGElement | null>(null);
 
@@ -16,23 +21,16 @@ function OneLabel({ order }: any) {
     return items[0] ?? null;
   }, [order?.items]);
 
-  const productTitle = val(firstItem?.title);
   const size = val(firstItem?.variant?.size);
-  const pvz = val(order?.address);
-  const track = val(
-    order?.track ??
-      order?.trackingNumber ??
-      order?.trackNumber ??
-      order?.tracking ??
-      order?.trackId
-  );
 
   useEffect(() => {
     if (!ref.current) return;
+
+    // ✅ Под 58mm ширину: тоньше линии и ниже высота
     JsBarcode(ref.current, String(order?.id ?? ""), {
       format: "CODE128",
-      width: 2,
-      height: 70,
+      width: 1.2,      // толщина линии
+      height: 22,      // высота штрих-кода (мм-наклейка маленькая)
       displayValue: false,
       margin: 0,
     });
@@ -40,73 +38,69 @@ function OneLabel({ order }: any) {
 
   return (
     <div className="label-page">
-      <div className="print-area w-[180mm] p-4 text-black">
-        {/* BARCODE */}
-        <div className="w-full flex justify-center">
-          <svg ref={ref} className="w-full" />
-        </div>
-
-        {/* FIELDS */}
-        <div
-          className="mt-6 space-y-3 text-[18px] leading-[1.2]"
-          style={{ fontFamily: "Brygada" }}
-        >
-          <div>
-            <span className="font-bold">Товар:</span> <span>{productTitle}</span>
+      <div className="label">
+        <svg ref={ref} className="barcode" />
+        <div className="meta">
+          <div className="row">
+            <span className="k">ID:</span> <span className="v mono">{shortId(order?.id)}</span>
           </div>
-
-          <div>
-            <span className="font-bold">Размер:</span> <span>{size}</span>
-          </div>
-
-          <div>
-            <span className="font-bold">ПВЗ:</span> <span>{pvz}</span>
-          </div>
-
-          <div>
-            <span className="font-bold">Трек номер:</span> <span>{track}</span>
-          </div>
-
-          <div>
-            <span className="font-bold">Номер заказа:</span>{" "}
-            <span className="font-mono">{val(order?.id)}</span>
+          <div className="row">
+            <span className="k">SIZE:</span> <span className="v">{size}</span>
           </div>
         </div>
       </div>
-
-      {/* разрыв страницы */}
-      <div className="page-break" />
     </div>
   );
 }
 
 export default function LabelsClient({ orders }: { orders: any[] }) {
   useEffect(() => {
-    const t = setTimeout(() => window.print(), 300);
+    const t = setTimeout(() => window.print(), 250);
     return () => clearTimeout(t);
   }, []);
 
   return (
     <div className="label-root">
       <style>{`
-        @media print {
-          /* ✅ скрываем вообще всё на странице */
-          body * { visibility: hidden; }
-
-          /* ✅ показываем только этикетки */
-          .label-root, .label-root * { visibility: visible; }
-
-          /* убираем отступы */
-          body { margin: 0 !important; padding: 0 !important; }
-
-          /* печатная область — в левом верхнем углу */
-          .label-root { position: absolute; left: 0; top: 0; width: 100%; }
-
-          /* разрыв страницы между этикетками */
-          .page-break { page-break-after: always; }
+        /* ✅ ВАЖНО: размер страницы = размер наклейки */
+        @page {
+          size: 58mm 40mm;
+          margin: 0;
         }
 
-        /* На экране можно оставить как есть */
+        /* Базовая разметка на экране */
+        .label-root { padding: 0; margin: 0; }
+        .label-page { width: 58mm; height: 40mm; }
+        .label {
+          width: 58mm;
+          height: 40mm;
+          box-sizing: border-box;
+          padding: 2mm 2mm 1.5mm 2mm;
+          display: flex;
+          flex-direction: column;
+          justify-content: flex-start;
+          gap: 1.5mm;
+          color: #000;
+          font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        }
+        .barcode { width: 100%; height: auto; }
+        .meta { font-size: 9px; line-height: 1.15; }
+        .row { display: flex; gap: 2mm; }
+        .k { font-weight: 700; }
+        .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+        @media print {
+          /* ✅ Печатаем ТОЛЬКО наклейки */
+          body * { visibility: hidden !important; }
+          .label-root, .label-root * { visibility: visible !important; }
+
+          html, body { margin: 0 !important; padding: 0 !important; }
+          .label-root { position: absolute !important; left: 0 !important; top: 0 !important; }
+
+          /* ✅ Каждая наклейка = отдельная страница/стикер */
+          .label-page { break-after: page; page-break-after: always; }
+          .label-page:last-child { break-after: auto; page-break-after: auto; }
+        }
       `}</style>
 
       {orders.map((o) => (
