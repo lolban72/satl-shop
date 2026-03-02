@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
-import path from "path";
 import fs from "fs/promises";
+import path from "path";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
 
 export const runtime = "nodejs";
+
+const UPLOAD_DIR = "/var/www/satl-uploads";
 
 export async function POST(req: Request) {
   try {
@@ -16,7 +18,10 @@ export async function POST(req: Request) {
     }
 
     if (!file.type.startsWith("image/")) {
-      return NextResponse.json({ error: "Можно загружать только изображения" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Можно загружать только изображения" },
+        { status: 400 }
+      );
     }
 
     // GIF/SVG лучше не пережимать sharp-ом таким способом
@@ -32,10 +37,10 @@ export async function POST(req: Request) {
 
     const filename = `${randomUUID()}.webp`;
 
-    const uploadDir = path.join(process.cwd(), "public", "uploads");
-    await fs.mkdir(uploadDir, { recursive: true });
+    // ✅ пишем не в public/, а в постоянную папку вне репо
+    await fs.mkdir(UPLOAD_DIR, { recursive: true });
 
-    const outPath = path.join(uploadDir, filename);
+    const outPath = path.join(UPLOAD_DIR, filename);
 
     // ✅ конвертация в WebP + уменьшение до разумного размера
     const webpBuffer = await sharp(input)
@@ -51,8 +56,12 @@ export async function POST(req: Request) {
 
     await fs.writeFile(outPath, webpBuffer);
 
+    // URL остаётся прежним — nginx будет раздавать /uploads/*
     return NextResponse.json({ url: `/uploads/${filename}` });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "Ошибка загрузки" }, { status: 500 });
+    return NextResponse.json(
+      { error: e?.message ?? "Ошибка загрузки" },
+      { status: 500 }
+    );
   }
 }
