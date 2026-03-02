@@ -185,7 +185,19 @@ export default function Footer() {
 
       {/* ===== НИЖНИЙ SATL ===== */}
       {/* ===== НИЖНИЙ SATL ===== */}
-
+      <div className="mt-auto w-full overflow-hidden">
+        <div
+          className={`
+            ${akonyBold.className}
+            whitespace-nowrap uppercase leading-none
+            text-[60px] md:text-[100px]   // 👈 меньше на телефоне
+            tracking-[-0.30em]
+            translate-y-[14px] md:translate-y-[22px]
+          `}
+        >
+          {line}
+        </div>
+      </div>
 
     </footer>
   );
