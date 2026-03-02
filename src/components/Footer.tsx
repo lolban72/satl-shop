@@ -113,7 +113,7 @@ export default function Footer() {
           {/* Подписка */}
           <div className="col-span-4">
             <div className="font-bold italic text-[20px] leading-none tracking-[-0.05em]">
-              Подписаться на рассылку
+              Подписаться
             </div>
 
             <div className="mt-[12px] flex items-center gap-[16px]">
