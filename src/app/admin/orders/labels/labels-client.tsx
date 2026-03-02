@@ -17,9 +17,6 @@ function shortId(id: any) {
 /**
  * ✅ Короткое значение для штрих-кода (для тестов печати)
  * ВАЖНО: это не меняет реальный order.id, только то, что кодируется в barcode.
- * Для макета этикетки — идеально: всегда помещается в 58×40.
- *
- * Если хочешь — поменяй 10 на 8/12.
  */
 function barcodeValueFromOrderId(id: any) {
   const s = String(id ?? "");
@@ -49,12 +46,10 @@ function OneLabelHTML({
   useEffect(() => {
     if (!barcodeRef.current) return;
 
-    // 🔥 компактный штрих-код под 58мм
-    // ✅ кодируем НЕ полный order.id, а короткое значение
     JsBarcode(barcodeRef.current, barcodeValue, {
       format: "CODE128",
-      width: 0.9, // тонкие линии
-      height: 18, // ниже
+      width: 0.9,
+      height: 18,
       displayValue: false,
       margin: 0,
     });
@@ -67,7 +62,6 @@ function OneLabelHTML({
       <div className="meta">
         <div className="row">
           <span className="k">ID:</span>
-          {/* ✅ можно показывать короткий "человеческий" код, который закодирован в штрих-код */}
           <span className="v mono">{barcodeValue || shortId(order?.id)}</span>
         </div>
         <div className="row">
@@ -98,7 +92,7 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
 
         const url = await toPng(node, {
           cacheBust: true,
-          pixelRatio: 3, // качество выше
+          pixelRatio: 3,
           backgroundColor: "#ffffff",
         });
 
@@ -107,10 +101,17 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
 
       if (cancelled) return;
 
-      setImages(urls);
+      // ✅ на всякий: убираем пустые
+      const clean = urls.filter(Boolean);
 
-      // печать один раз
-      setTimeout(() => window.print(), 200);
+      setImages(clean);
+
+      // ✅ печатаем строго после того, как React отрендерил картинки
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          window.print();
+        });
+      });
     }
 
     run();
@@ -172,6 +173,7 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
         }
 
         @media print {
+          /* ✅ Скрываем всё, кроме картинок-страниц */
           body * { visibility: hidden !important; }
           .label-root, .label-root * { visibility: visible !important; }
 
@@ -186,17 +188,24 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
             top: 0 !important;
           }
 
+          /* ✅ КРИТИЧНО: НЕ печатать hidden-render (он и давал пустые листы) */
+          .hidden-render {
+            display: none !important;
+            visibility: hidden !important;
+          }
+
           /* каждая картинка = отдельная наклейка */
           .img-page {
             width: 58mm;
             height: 40mm;
-            break-after: page;
-            page-break-after: always;
+            page-break-inside: avoid;
+            break-inside: avoid;
           }
 
-          .img-page:last-child {
-            break-after: auto;
-            page-break-after: auto;
+          /* ✅ разрыв страницы ТОЛЬКО между реальными страницами */
+          .img-page:not(:last-child) {
+            page-break-after: always;
+            break-after: page;
           }
 
           img {
@@ -208,7 +217,7 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
         }
       `}</style>
 
-      {/* HTML-источник */}
+      {/* HTML-источник (нужен только чтобы собрать PNG) */}
       <div className="hidden-render">
         {orders.map((o, i) => (
           <OneLabelHTML
@@ -219,7 +228,7 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
         ))}
       </div>
 
-      {/* Печатаем PNG */}
+      {/* Печатаем PNG (строго столько, сколько images) */}
       {images.map((src, i) => (
         <div key={i} className="img-page">
           <img src={src} alt="" />
