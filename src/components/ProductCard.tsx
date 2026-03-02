@@ -10,7 +10,7 @@ export default function ProductCard({
 }: {
   slug: string;
   title: string;
-  price: number;
+  price: number; // цена в копейках/центах (как у тебя: /100)
   imageUrl?: string | null;
   isSoon?: boolean;
   discountPercent?: number;
@@ -19,6 +19,14 @@ export default function ProductCard({
   const wrapperProps = isSoon ? {} : { href: `/product/${slug}` };
 
   const showDiscount = !isSoon && (discountPercent ?? 0) > 0;
+
+  const oldPrice = price; // исходная цена (до скидки) в копейках
+  const finalPrice = showDiscount
+    ? Math.max(
+        0,
+        Math.round(oldPrice * (1 - Number(discountPercent) / 100))
+      )
+    : oldPrice;
 
   return (
     <Wrapper
@@ -127,25 +135,45 @@ export default function ProductCard({
         )}
       </div>
 
-    {/* НАЗВАНИЕ + ЦЕНА показываются только если НЕ "скоро" */}
-    {!isSoon && (
-      <div className="mt-[-5px] md:mt-5">
-        <div
-          className="text-[18px] sm:text-[20px] md:text-[30px] leading-none"
-          style={{ fontFamily: "Yeast" }}
-        >
-          {title}
-        </div>
+      {/* НАЗВАНИЕ + ЦЕНА показываются только если НЕ "скоро" */}
+      {!isSoon && (
+        <div className="mt-[-5px] md:mt-5">
+          <div
+            className="text-[18px] sm:text-[20px] md:text-[30px] leading-none"
+            style={{ fontFamily: "Yeast" }}
+          >
+            {title}
+          </div>
 
-        <div
-          className="mt-2 text-[18px] sm:text-[16px] md:text-[25px] leading-none"
-          style={{ fontFamily: "Yeast" }}
-        >
-          {(price / 100).toFixed(0)}р
-        </div>
-      </div>
-    )}
+          {/* ЦЕНЫ */}
+          {showDiscount ? (
+            <div className="mt-2 flex items-baseline justify-center gap-2 md:gap-3">
+              {/* старая зачеркнутая */}
+              <div
+                className="text-[14px] sm:text-[14px] md:text-[18px] leading-none opacity-70 line-through"
+                style={{ fontFamily: "Yeast" }}
+              >
+                {(oldPrice / 100).toFixed(0)}р
+              </div>
 
+              {/* новая (со скидкой) */}
+              <div
+                className="text-[18px] sm:text-[16px] md:text-[25px] leading-none"
+                style={{ fontFamily: "Yeast" }}
+              >
+                {(finalPrice / 100).toFixed(0)}р
+              </div>
+            </div>
+          ) : (
+            <div
+              className="mt-2 text-[18px] sm:text-[16px] md:text-[25px] leading-none"
+              style={{ fontFamily: "Yeast" }}
+            >
+              {(price / 100).toFixed(0)}р
+            </div>
+          )}
+        </div>
+      )}
     </Wrapper>
   );
 }

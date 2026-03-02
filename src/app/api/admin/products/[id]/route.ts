@@ -98,3 +98,37 @@ export async function PATCH(
 
   return NextResponse.json({ ok: true });
 }
+
+export async function DELETE(
+  _req: Request,
+  ctx: { params: Promise<{ id: string }> }
+) {
+  // ✅ защита админского API
+  const session = await auth();
+  if (!session?.user || !isAdminEmail(session.user.email)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { id } = await ctx.params;
+
+  try {
+    const deleted = await prisma.$transaction(async (tx) => {
+      // ✅ сначала удаляем варианты (иначе FK может не дать удалить продукт)
+      await tx.variant.deleteMany({ where: { productId: id } });
+
+      // ✅ удаляем сам продукт
+      return tx.product.delete({ where: { id } });
+    });
+
+    revalidatePath("/");
+    revalidatePath(`/product/${deleted.slug}`);
+    revalidatePath("/admin/products");
+
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: "Delete failed", details: String(e?.message ?? e) },
+      { status: 500 }
+    );
+  }
+}
