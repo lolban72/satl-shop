@@ -8,14 +8,28 @@ export const metadata = {
     "Интернет-магазин одежды SATL. Новые коллекции, лимитированные релизы.",
 };
 
-// ✅ цена к оплате: если discountPrice задана — используем её, иначе обычная price
-// ❗ discountPercent НЕ используется для расчёта цены
-function calcPayPrice(basePrice: number, discountPrice?: number | null) {
+// ✅ безопасная проверка discountPrice
+function isValidDiscount(basePrice: number, discountPrice?: number | null) {
   const base = Number(basePrice ?? 0);
   const disc = discountPrice == null ? null : Number(discountPrice);
+  return Boolean(base && disc && disc > 0 && disc < base);
+}
 
-  if (disc != null && disc > 0 && disc < base) return disc;
-  return base;
+// ✅ пересчитываем % скидки так, чтобы карточка дала ровно discountPrice (в копейках)
+function calcPercentFromPrices(basePrice: number, discountPrice: number) {
+  const base = Number(basePrice ?? 0);
+  const disc = Number(discountPrice ?? 0);
+  if (!base || !disc || disc <= 0 || disc >= base) return 0;
+
+  // хотим percent такой, чтобы base - base*percent/100 ≈ disc
+  // округляем до целого процента
+  const raw = ((base - disc) * 100) / base;
+  const pct = Math.round(raw);
+
+  // ограничим адекватным диапазоном
+  if (pct < 1) return 0;
+  if (pct > 99) return 99;
+  return pct;
 }
 
 export default async function HomePage() {
@@ -35,10 +49,6 @@ export default async function HomePage() {
       title: true,
       products: {
         orderBy: { createdAt: "desc" },
-
-        // ✅ ВАЖНО:
-        // НЕ делаем select полей продукта (иначе TS ругнётся на discountPrice, если Prisma Client не обновлён)
-        // Берём продукт целиком + variants (нужны тебе по логике)
         include: {
           variants: {
             select: { id: true, stock: true },
@@ -84,17 +94,21 @@ export default async function HomePage() {
                         | null
                         | undefined;
 
-                      const payPrice = calcPayPrice(p.price, discountPrice);
+                      // ✅ если discountPrice валиден — пересчитываем процент из цен
+                      // чтобы ProductCard (если он считает цену по percent) показал ровно discountPrice
+                      const percent = isValidDiscount(p.price, discountPrice)
+                        ? calcPercentFromPrices(p.price, Number(discountPrice))
+                        : (p.discountPercent ?? 0);
 
                       return (
                         <ProductCard
                           key={p.id}
                           slug={p.slug}
                           title={p.title}
-                          price={payPrice} // ✅ цена к оплате
+                          price={p.price} // ✅ базовая цена (как ожидает ProductCard)
                           imageUrl={p.images?.[0] ?? null}
                           isSoon={p.isSoon}
-                          discountPercent={p.discountPercent ?? 0} // ✅ только для плашки, на цену не влияет
+                          discountPercent={percent} // ✅ процент подогнан под discountPrice
                         />
                       );
                     })}
