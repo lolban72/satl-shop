@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import JsBarcode from "jsbarcode";
-import { toPng } from "html-to-image";
 
 function val(v: any) {
   const s = String(v ?? "").trim();
@@ -15,13 +14,7 @@ function barcodeValueFromOrderId(id: any) {
   return s.length > 10 ? s.slice(0, 10) : s;
 }
 
-function OneLabelHTML({
-  order,
-  htmlRef,
-}: {
-  order: any;
-  htmlRef: (el: HTMLDivElement | null) => void;
-}) {
+function OneLabelHTML({ order }: { order: any }) {
   const barcodeRef = useRef<SVGSVGElement | null>(null);
 
   const firstItem = useMemo(() => {
@@ -41,24 +34,21 @@ function OneLabelHTML({
   useEffect(() => {
     if (!barcodeRef.current) return;
 
-    // ✅ штрих-код больше + выше
     JsBarcode(barcodeRef.current, barcodeValue, {
       format: "CODE128",
-      width: 1.25,   // толще линии (больше сам barcode)
-      height: 26,    // выше
+      width: 1.25,
+      height: 26,
       displayValue: false,
       margin: 0,
     });
   }, [barcodeValue]);
 
   return (
-    <div ref={htmlRef} className="label-58x40">
-      {/* ✅ по центру сверху */}
+    <div className="label-58x40">
       <div className="barcode-wrap">
         <svg ref={barcodeRef} className="barcode" />
       </div>
 
-      {/* ✅ весь текст слева */}
       <div className="meta">
         <div className="row">
           <span className="k">Товар:</span>
@@ -90,46 +80,14 @@ function OneLabelHTML({
 }
 
 export default function LabelsClient({ orders }: { orders: any[] }) {
-  const [images, setImages] = useState<string[]>([]);
-  const refs = useRef<(HTMLDivElement | null)[]>([]);
-
   useEffect(() => {
-    let cancelled = false;
+    // даём время браузеру отрисовать и JsBarcode вставить штрихкоды
+    const t = setTimeout(() => {
+      window.print();
+    }, 600);
 
-    async function run() {
-      await new Promise((r) => setTimeout(r, 450));
-
-      const urls: string[] = [];
-
-      for (let i = 0; i < orders.length; i++) {
-        const node = refs.current[i];
-        if (!node) continue;
-
-        const url = await toPng(node, {
-          cacheBust: true,
-          pixelRatio: 3,
-          backgroundColor: "#ffffff",
-        });
-
-        urls.push(url);
-      }
-
-      if (cancelled) return;
-
-      setImages(urls.filter(Boolean));
-
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          window.print();
-        });
-      });
-    }
-
-    run();
-    return () => {
-      cancelled = true;
-    };
-  }, [orders]);
+    return () => clearTimeout(t);
+  }, [orders?.length]);
 
   return (
     <div className="label-root">
@@ -137,12 +95,6 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
         @page {
           size: 58mm 40mm;
           margin: 0;
-        }
-
-        .hidden-render {
-          position: absolute;
-          left: -99999px;
-          top: 0;
         }
 
         .label-58x40 {
@@ -158,7 +110,6 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
           font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
         }
 
-        /* ✅ штрих-код по центру сверху */
         .barcode-wrap {
           width: 100%;
           display: flex;
@@ -168,11 +119,10 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
         }
 
         .barcode {
-          width: 54mm; /* ✅ делаем шире, но с отступами */
+          width: 54mm;
           height: auto;
         }
 
-        /* ✅ весь текст слева */
         .meta {
           font-size: 7px;
           line-height: 1.1;
@@ -186,7 +136,7 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
           display: flex;
           gap: 2mm;
           align-items: baseline;
-          justify-content: flex-start; /* ✅ не раздвигаем */
+          justify-content: flex-start;
         }
 
         .k {
@@ -198,7 +148,7 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
         .v {
           flex: 1 1 auto;
           min-width: 0;
-          text-align: left; /* ✅ значения тоже слева */
+          text-align: left;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
@@ -210,13 +160,14 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
         }
 
         @media print {
-          body * { visibility: hidden !important; }
-          .label-root, .label-root * { visibility: visible !important; }
-
           html, body {
             margin: 0 !important;
             padding: 0 !important;
           }
+
+          /* печатаем только наши этикетки */
+          body * { visibility: hidden !important; }
+          .label-root, .label-root * { visibility: visible !important; }
 
           .label-root {
             position: absolute !important;
@@ -224,38 +175,20 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
             top: 0 !important;
           }
 
-          .hidden-render {
-            display: none !important;
-          }
-
-          .img-page:not(:last-child) {
+          /* каждая этикетка — отдельная страница */
+          .label-58x40 {
             page-break-after: always;
             break-after: page;
           }
-
-          img {
-            display: block;
-            width: 58mm;
-            height: 40mm;
-            object-fit: contain;
+          .label-58x40:last-child {
+            page-break-after: auto;
+            break-after: auto;
           }
         }
       `}</style>
 
-      <div className="hidden-render">
-        {orders.map((o, i) => (
-          <OneLabelHTML
-            key={o.id}
-            order={o}
-            htmlRef={(el) => (refs.current[i] = el)}
-          />
-        ))}
-      </div>
-
-      {images.map((src, i) => (
-        <div key={i} className="img-page">
-          <img src={src} alt="" />
-        </div>
+      {orders.map((o) => (
+        <OneLabelHTML key={o.id} order={o} />
       ))}
     </div>
   );
