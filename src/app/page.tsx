@@ -4,24 +4,8 @@ import ProductCard from "@/components/ProductCard";
 
 export const metadata = {
   title: "SATL | официальный интернет-магазин",
-  description:
-    "Интернет-магазин одежды SATL. Новые коллекции, лимитированные релизы.",
+  description: "Интернет-магазин одежды SATL. Новые коллекции, лимитированные релизы.",
 };
-
-// ✅ цена со скидкой (админ хранит цену БЕЗ скидки)
-// округляем до целых рублей
-function calcDiscountedPrice(price: number, discountPercent?: number | null) {
-  const p = Number(price ?? 0);
-  const d = Number(discountPercent ?? 0);
-
-  if (!p || !d || d <= 0 || d >= 100) return p;
-
-  const discounted = p * (1 - d / 100);
-
-  // округление до целых рублей
-  const rub = Math.round(discounted / 100);
-  return rub * 100;
-}
 
 export default async function HomePage() {
   const banner = await prisma.heroBanner.findFirst({
@@ -62,9 +46,7 @@ export default async function HomePage() {
 
       <section id="catalog" className="mx-auto max-w-6xl px-4 md:px-6 py-6">
         {categories.length === 0 ? (
-          <p className="mt-4 text-gray-600">
-            Пока нет категорий с товарами.
-          </p>
+          <p className="mt-4 text-gray-600">Пока нет категорий с товарами.</p>
         ) : (
           <div className="mt-6 grid gap-10">
             {categories.map((cat) => (
@@ -73,6 +55,8 @@ export default async function HomePage() {
                 id={`cat-${cat.slug}`}
                 className="scroll-mt-24"
               >
+                {/* (Если у тебя есть заголовок категории — оставляй как было) */}
+
                 {cat.products.length === 0 ? (
                   <p className="mt-3 text-sm text-gray-600">
                     В этой категории пока нет товаров.
@@ -88,24 +72,17 @@ export default async function HomePage() {
                       md:gap-x-[300px] md:gap-y-[80px]
                     "
                   >
-                    {cat.products.map((p) => {
-                      const discountedPrice = calcDiscountedPrice(
-                        p.price,
-                        p.discountPercent
-                      );
-
-                      return (
-                        <ProductCard
-                          key={p.id}
-                          slug={p.slug}
-                          title={p.title}
-                          price={discountedPrice} // ✅ цена со скидкой
-                          imageUrl={p.images?.[0] ?? null}
-                          isSoon={p.isSoon}
-                          discountPercent={p.discountPercent ?? 0}
-                        />
-                      );
-                    })}
+                    {cat.products.map((p) => (
+                      <ProductCard
+                        key={p.id}
+                        slug={p.slug}
+                        title={p.title}
+                        price={p.price}
+                        imageUrl={p.images?.[0] ?? null}
+                        isSoon={p.isSoon}
+                        discountPercent={p.discountPercent ?? 0}
+                      />
+                    ))}
                   </div>
                 )}
               </section>
