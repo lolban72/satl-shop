@@ -21,6 +21,10 @@ const DEFAULT_CONTACTS_RIGHT: ContactItem[] = [
   { label: "вк", href: "#" },
 ];
 
+function isHttp(href: string) {
+  return /^https?:\/\//i.test(String(href ?? ""));
+}
+
 export default function MobileNav(props: {
   categories: NavCategory[];
   infoLinks: InfoLink[];
@@ -34,6 +38,9 @@ export default function MobileNav(props: {
   const [contactsOpen, setContactsOpen] = useState(true);
   const [profileOpen, setProfileOpen] = useState(true);
 
+  const cats = useMemo(() => categories ?? [], [categories]);
+
+  // ✅ контакты из админки (как в футере), но выводим в мобильном стиле
   const [contactsLeft, setContactsLeft] = useState<ContactItem[]>(
     DEFAULT_CONTACTS_LEFT
   );
@@ -41,7 +48,12 @@ export default function MobileNav(props: {
     DEFAULT_CONTACTS_RIGHT
   );
 
-  const cats = useMemo(() => categories ?? [], [categories]);
+  const contacts = useMemo(() => {
+    // мобильно: один список, слева потом справа (как “пункты”)
+    return [...(contactsLeft ?? []), ...(contactsRight ?? [])].filter(
+      (x) => x && typeof x.label === "string" && typeof x.href === "string"
+    );
+  }, [contactsLeft, contactsRight]);
 
   function close() {
     setOpen(false);
@@ -57,8 +69,9 @@ export default function MobileNav(props: {
     const scrollBarWidth =
       window.innerWidth - document.documentElement.clientWidth;
     document.body.style.overflow = "hidden";
-    if (scrollBarWidth > 0)
+    if (scrollBarWidth > 0) {
       document.body.style.paddingRight = `${scrollBarWidth}px`;
+    }
 
     return () => {
       document.body.style.overflow = prevOverflow;
@@ -66,7 +79,7 @@ export default function MobileNav(props: {
     };
   }, [open]);
 
-  // ✅ load contacts once (как в футере)
+  // ✅ load contacts once (тот же эндпоинт, что и в футере)
   useEffect(() => {
     let cancelled = false;
 
@@ -91,9 +104,6 @@ export default function MobileNav(props: {
       cancelled = true;
     };
   }, []);
-
-  const isHttp = (href: string) =>
-    /^https?:\/\//i.test(String(href ?? ""));
 
   return (
     <>
@@ -249,7 +259,7 @@ export default function MobileNav(props: {
 
             <div className="h-[1px] bg-black/10" />
 
-            {/* Contacts (как в футере: 2 колонки) */}
+            {/* Contacts (данные как в футере, отображение как в mobile menu) */}
             <button
               type="button"
               onClick={() => setContactsOpen((v) => !v)}
@@ -275,10 +285,13 @@ export default function MobileNav(props: {
               ].join(" ")}
             >
               <div className="pb-[10px]">
-                <div className="grid grid-cols-2 gap-x-[10px]">
-                  {/* Left column */}
-                  <div className="flex flex-col">
-                    {contactsLeft.map((it, idx) => (
+                {contacts.length === 0 ? (
+                  <div className="py-[10px] text-[11px] uppercase tracking-[0.08em] text-black/45">
+                    Нет контактов
+                  </div>
+                ) : (
+                  <div className="grid">
+                    {contacts.map((it, idx) => (
                       <a
                         key={`${it.label}-${idx}`}
                         href={it.href}
@@ -291,23 +304,7 @@ export default function MobileNav(props: {
                       </a>
                     ))}
                   </div>
-
-                  {/* Right column */}
-                  <div className="flex flex-col">
-                    {contactsRight.map((it, idx) => (
-                      <a
-                        key={`${it.label}-${idx}`}
-                        href={it.href}
-                        target={isHttp(it.href) ? "_blank" : undefined}
-                        rel={isHttp(it.href) ? "noreferrer" : undefined}
-                        onClick={close}
-                        className="py-[12px] border-t border-black/10 text-[12px] font-semibold uppercase tracking-[0.06em] text-black/75 hover:text-black hover:bg-black/5 px-[10px] transition"
-                      >
-                        {it.label}
-                      </a>
-                    ))}
-                  </div>
-                </div>
+                )}
               </div>
             </div>
 
