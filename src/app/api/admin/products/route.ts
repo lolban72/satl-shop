@@ -22,6 +22,21 @@ const VariantSchema = z.object({
   stock: z.number().int().min(0),
 });
 
+// аккуратно переводим "рубли строкой" -> "копейки int"
+function rubToCentsOrNull(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  if (!s) return null;
+
+  const n = Number(s.replace(",", "."));
+  if (!Number.isFinite(n)) return null;
+
+  const cents = Math.round(n * 100);
+  if (!Number.isFinite(cents) || cents < 0) return null;
+
+  return cents;
+}
+
 const BaseSchema = z.object({
   title: z.string().min(2),
   slug: z.string().min(2),
@@ -31,7 +46,13 @@ const BaseSchema = z.object({
   homeImage: z.string().optional(),
   images: z.array(z.string()).optional(),
 
+  // цена без скидки (обязательна для НЕ soon)
   priceRub: z.string().optional(),
+
+  // ✅ НОВОЕ: цена со скидкой (если есть)
+  // админка будет отправлять строку рублей, мы на сервере сконвертим в Int копеек
+  discountPriceRub: z.string().optional(),
+
   isSoon: z.boolean().optional(),
   discountPercent: z.number().int().min(0).max(99).optional(),
   categoryId: z.string().nullable().optional(),
@@ -84,11 +105,18 @@ const Schema = BaseSchema.superRefine((body, ctx) => {
     });
   }
 
-  // variants опциональны — но если пришли, то минимум 1 вариант (по желанию)
-  // Если хочешь требовать варианты всегда для не-soon — раскомментируй:
-  // if (!body.variants || body.variants.length === 0) {
-  //   ctx.addIssue({ code: "custom", path: ["variants"], message: "Нужно добавить хотя бы 1 вариант" });
-  // }
+  // ✅ если указали цену со скидкой — она должна быть корректной
+  // (но не обязательна)
+  if (body.discountPriceRub != null && String(body.discountPriceRub).trim() !== "") {
+    const dp = rubToCentsOrNull(body.discountPriceRub);
+    if (dp === null) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["discountPriceRub"],
+        message: "Некорректная цена со скидкой",
+      });
+    }
+  }
 });
 
 function makeSku(slug: string, size: string, color: string) {
@@ -108,10 +136,27 @@ export async function POST(req: Request) {
     const body = Schema.parse(await req.json());
     const isSoon = Boolean(body.isSoon);
 
-    const price = isSoon ? 0 : Math.round(Number(body.priceRub ?? 0) * 100);
+    const price = isSoon ? 0 : (rubToCentsOrNull(body.priceRub) ?? 0);
 
     if (!isSoon && (!Number.isFinite(price) || price <= 0)) {
       return Response.json({ error: "Некорректная цена" }, { status: 400 });
+    }
+
+    // ✅ цена со скидкой: null если не задана
+    // + защитим от ситуации "скидочная цена больше или равна обычной" (по желанию)
+    let discountPrice: number | null = null;
+    if (!isSoon) {
+      const dp = rubToCentsOrNull(body.discountPriceRub);
+      discountPrice = dp && dp > 0 ? dp : null;
+
+      // необязательно, но логично:
+      // если ввели скидочную цену, она должна быть меньше обычной
+      if (discountPrice !== null && discountPrice >= price) {
+        return Response.json(
+          { error: "Цена со скидкой должна быть меньше обычной цены" },
+          { status: 400 }
+        );
+      }
     }
 
     const existing = await prisma.product.findUnique({
@@ -123,9 +168,7 @@ export async function POST(req: Request) {
     }
 
     // ✅ safe сборка массива картинок (не падает, если images undefined)
-    const imagesFinal = [body.homeImage, ...(body.images ?? [])].filter(
-      Boolean
-    ) as string[];
+    const imagesFinal = [body.homeImage, ...(body.images ?? [])].filter(Boolean) as string[];
 
     const created = await prisma.$transaction(async (tx) => {
       const p = await tx.product.create({
@@ -133,13 +176,18 @@ export async function POST(req: Request) {
           title: body.title,
           slug: body.slug,
           description: body.description ?? null,
+
+          // ✅ цена без скидки
           price,
+
+          // ✅ НОВОЕ: цена со скидкой (в копейках)
+          // Prisma field: Product.discountPrice Int?
+          discountPrice: isSoon ? null : discountPrice,
+
           images: imagesFinal,
           isSoon,
           discountPercent: isSoon ? 0 : body.discountPercent ?? 0,
-          category: body.categoryId
-            ? { connect: { id: body.categoryId } }
-            : undefined,
+          category: body.categoryId ? { connect: { id: body.categoryId } } : undefined,
 
           // ✅ размерная таблица
           sizeChartImage: body.sizeChartImage ?? null,

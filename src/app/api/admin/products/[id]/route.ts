@@ -23,6 +23,21 @@ function makeSku(slug: string, size: string, color: string) {
     .slice(2, 8)}`.toUpperCase();
 }
 
+// "1990" -> 199000 (копейки). ""/undefined/null -> null
+function rubToCentsOrNull(v: any): number | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  if (!s) return null;
+
+  const n = Number(s.replace(",", "."));
+  if (!Number.isFinite(n)) return null;
+
+  const cents = Math.round(n * 100);
+  if (!Number.isFinite(cents) || cents <= 0) return null;
+
+  return cents;
+}
+
 export async function PATCH(
   req: Request,
   ctx: { params: Promise<{ id: string }> }
@@ -42,9 +57,34 @@ export async function PATCH(
       : undefined;
 
   const price =
-    body.priceRub !== undefined
-      ? Math.round(Number(body.priceRub) * 100)
-      : undefined;
+    body.priceRub !== undefined ? Math.round(Number(body.priceRub) * 100) : undefined;
+
+  // ✅ NEW: discountPrice (копейки)
+  // - если discountPriceRub не прислали -> undefined (не трогаем)
+  // - если прислали "" -> null (очистить)
+  const discountPrice =
+    body.discountPriceRub === undefined
+      ? undefined
+      : rubToCentsOrNull(body.discountPriceRub);
+
+  // (необязательно, но полезно) проверим логику цен, если прислали обе
+  if (body.isSoon !== true) {
+    const nextPrice = body.priceRub !== undefined ? Math.round(Number(body.priceRub) * 100) : null;
+    const nextDiscountPrice = body.discountPriceRub === undefined ? null : rubToCentsOrNull(body.discountPriceRub);
+
+    if (
+      nextPrice != null &&
+      Number.isFinite(nextPrice) &&
+      nextPrice > 0 &&
+      nextDiscountPrice != null &&
+      nextDiscountPrice >= nextPrice
+    ) {
+      return NextResponse.json(
+        { error: "Цена со скидкой должна быть меньше обычной цены" },
+        { status: 400 }
+      );
+    }
+  }
 
   const updated = await prisma.$transaction(async (tx) => {
     const p = await tx.product.update({
@@ -61,12 +101,20 @@ export async function PATCH(
 
         price: body.isSoon === true ? 0 : price ?? undefined,
 
-        discountPercent:
-          body.isSoon === true ? 0 : body.discountPercent ?? undefined,
+        discountPercent: body.isSoon === true ? 0 : body.discountPercent ?? undefined,
 
-        // ✅ NEW: размерная таблица (картинка)
-        // Если поле не прислали — не трогаем (undefined)
-        // Если прислали null — очищаем
+        // ✅ NEW: цена со скидкой (Int? в копейках)
+        // если isSoon=true -> очищаем
+        // если поле не прислали -> undefined (не трогаем)
+        // если прислали "" -> null (очистить)
+        discountPrice:
+          body.isSoon === true
+            ? null
+            : discountPrice === undefined
+            ? undefined
+            : discountPrice,
+
+        // ✅ размерная таблица (картинка)
         sizeChartImage:
           body.sizeChartImage === undefined ? undefined : body.sizeChartImage,
       },
