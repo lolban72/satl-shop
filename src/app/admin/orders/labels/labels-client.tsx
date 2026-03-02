@@ -14,6 +14,18 @@ function shortId(id: any) {
   return s.length > 10 ? s.slice(0, 10) + "…" : s;
 }
 
+/**
+ * ✅ Короткое значение для штрих-кода (для тестов печати)
+ * ВАЖНО: это не меняет реальный order.id, только то, что кодируется в barcode.
+ * Для макета этикетки — идеально: всегда помещается в 58×40.
+ *
+ * Если хочешь — поменяй 10 на 8/12.
+ */
+function barcodeValueFromOrderId(id: any) {
+  const s = String(id ?? "");
+  return s.length > 10 ? s.slice(0, 10) : s;
+}
+
 function OneLabelHTML({
   order,
   htmlRef,
@@ -30,18 +42,23 @@ function OneLabelHTML({
 
   const size = val(firstItem?.variant?.size);
 
+  const barcodeValue = useMemo(() => {
+    return barcodeValueFromOrderId(order?.id);
+  }, [order?.id]);
+
   useEffect(() => {
     if (!barcodeRef.current) return;
 
     // 🔥 компактный штрих-код под 58мм
-    JsBarcode(barcodeRef.current, String(order?.id ?? ""), {
+    // ✅ кодируем НЕ полный order.id, а короткое значение
+    JsBarcode(barcodeRef.current, barcodeValue, {
       format: "CODE128",
-      width: 0.9,     // тонкие линии
-      height: 18,     // ниже
+      width: 0.9, // тонкие линии
+      height: 18, // ниже
       displayValue: false,
       margin: 0,
     });
-  }, [order?.id]);
+  }, [barcodeValue]);
 
   return (
     <div ref={htmlRef} className="label-58x40">
@@ -50,7 +67,8 @@ function OneLabelHTML({
       <div className="meta">
         <div className="row">
           <span className="k">ID:</span>
-          <span className="v mono">{shortId(order?.id)}</span>
+          {/* ✅ можно показывать короткий "человеческий" код, который закодирован в штрих-код */}
+          <span className="v mono">{barcodeValue || shortId(order?.id)}</span>
         </div>
         <div className="row">
           <span className="k">SIZE:</span>
