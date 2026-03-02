@@ -88,30 +88,29 @@ export default async function HomePage() {
                       md:gap-x-[300px] md:gap-y-[80px]
                     "
                   >
-                    {cat.products.map((p) => {
-                      const discountPrice = (p as any).discountPrice as
-                        | number
-                        | null
-                        | undefined;
+                  {cat.products.map((p) => {
+                    const discountPrice = (p as any).discountPrice as number | null | undefined;
 
-                      // ✅ если discountPrice валиден — пересчитываем процент из цен
-                      // чтобы ProductCard (если он считает цену по percent) показал ровно discountPrice
-                      const percent = isValidDiscount(p.price, discountPrice)
-                        ? calcPercentFromPrices(p.price, Number(discountPrice))
-                        : (p.discountPercent ?? 0);
+                    const base = Number(p.price ?? 0);
+                    const disc = discountPrice == null ? null : Number(discountPrice);
 
-                      return (
-                        <ProductCard
-                          key={p.id}
-                          slug={p.slug}
-                          title={p.title}
-                          price={p.price} // ✅ базовая цена (как ожидает ProductCard)
-                          imageUrl={p.images?.[0] ?? null}
-                          isSoon={p.isSoon}
-                          discountPercent={percent} // ✅ процент подогнан под discountPrice
-                        />
-                      );
-                    })}
+                    const payPrice =
+                      disc != null && disc > 0 && disc < base ? disc : base;
+
+                    const hasDiscount = disc != null && disc > 0 && disc < base;
+
+                    return (
+                      <ProductCard
+                        key={p.id}
+                        slug={p.slug}
+                        title={p.title}
+                        price={payPrice}               // ✅ точная цена к оплате, без округлений
+                        imageUrl={p.images?.[0] ?? null}
+                        isSoon={p.isSoon}
+                        discountPercent={hasDiscount ? 0 : (p.discountPercent ?? 0)} // ✅ чтобы карточка не пересчитывала цену
+                      />
+                    );
+                  })}
                   </div>
                 )}
               </section>
