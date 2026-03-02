@@ -182,7 +182,7 @@ export default function MobileNav(props: {
                 className={[
                   "transition-transform",
                   catsOpen ? "rotate-180" : "rotate-0",
-                ].join(" ")}
+                ].join(" ")} style={{ fontFamily: "Brygada" }}
               />
             </button>
 
@@ -239,7 +239,7 @@ export default function MobileNav(props: {
               className={[
                 "overflow-hidden transition-[max-height,opacity] duration-200",
                 infoOpen ? "max-h-[520px] opacity-100" : "max-h-0 opacity-0",
-              ].join(" ")}
+              ].join(" ")} style={{ fontFamily: "Brygada" }}
             >
               <div className="pb-[10px]">
                 <div className="grid">
@@ -282,7 +282,7 @@ export default function MobileNav(props: {
               className={[
                 "overflow-hidden transition-[max-height,opacity] duration-200",
                 contactsOpen ? "max-h-[520px] opacity-100" : "max-h-0 opacity-0",
-              ].join(" ")}
+              ].join(" ")} style={{ fontFamily: "Brygada" }}
             >
               <div className="pb-[10px]">
                 {contacts.length === 0 ? (
@@ -333,7 +333,7 @@ export default function MobileNav(props: {
               className={[
                 "overflow-hidden transition-[max-height,opacity] duration-200",
                 profileOpen ? "max-h-[520px] opacity-100" : "max-h-0 opacity-0",
-              ].join(" ")}
+              ].join(" ")} style={{ fontFamily: "Brygada" }}
             >
               <div className="pb-[10px]">
                 <div className="grid">
