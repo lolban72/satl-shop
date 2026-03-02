@@ -8,26 +8,30 @@ export const metadata = {
     "Интернет-магазин одежды SATL. Новые коллекции, лимитированные релизы.",
 };
 
-// ✅ безопасная проверка discountPrice
+// ✅ проверка валидности скидочной цены
 function isValidDiscount(basePrice: number, discountPrice?: number | null) {
   const base = Number(basePrice ?? 0);
   const disc = discountPrice == null ? null : Number(discountPrice);
   return Boolean(base && disc && disc > 0 && disc < base);
 }
 
-// ✅ пересчитываем % скидки так, чтобы карточка дала ровно discountPrice (в копейках)
-function calcPercentFromPrices(basePrice: number, discountPrice: number) {
+// ✅ процент скидки ТОЛЬКО для плашки (без округлений)
+// мы не пытаемся сделать его математически точным — просто показываем,
+// а цену берём из payPrice (discountPrice)
+function calcDisplayPercent(basePrice: number, discountPrice: number) {
   const base = Number(basePrice ?? 0);
   const disc = Number(discountPrice ?? 0);
   if (!base || !disc || disc <= 0 || disc >= base) return 0;
 
-  // хотим percent такой, чтобы base - base*percent/100 ≈ disc
-  // округляем до целого процента
+  // ВАЖНО: без округлений "вообще" целого процента не бывает,
+  // но для UI плашки берём "как есть" и отрезаем дробь,
+  // чтобы не было прыжков/round.
   const raw = ((base - disc) * 100) / base;
-  const pct = Math.round(raw);
 
-  // ограничим адекватным диапазоном
-  if (pct < 1) return 0;
+  // например 19.9% => 19%
+  const pct = Math.floor(raw);
+
+  if (pct < 1) return 1;
   if (pct > 99) return 99;
   return pct;
 }
@@ -88,29 +92,38 @@ export default async function HomePage() {
                       md:gap-x-[300px] md:gap-y-[80px]
                     "
                   >
-                  {cat.products.map((p) => {
-                    const discountPrice = (p as any).discountPrice as number | null | undefined;
+                    {cat.products.map((p) => {
+                      const discountPrice = (p as any).discountPrice as
+                        | number
+                        | null
+                        | undefined;
 
-                    const base = Number(p.price ?? 0);
-                    const disc = discountPrice == null ? null : Number(discountPrice);
+                      const base = Number(p.price ?? 0);
 
-                    const payPrice =
-                      disc != null && disc > 0 && disc < base ? disc : base;
+                      const hasDiscount = isValidDiscount(base, discountPrice);
+                      const disc = hasDiscount ? Number(discountPrice) : null;
 
-                    const hasDiscount = disc != null && disc > 0 && disc < base;
+                      // ✅ цена к оплате — строго discountPrice, если он валидный
+                      const payPrice = hasDiscount && disc != null ? disc : base;
 
-                    return (
-                      <ProductCard
-                        key={p.id}
-                        slug={p.slug}
-                        title={p.title}
-                        price={payPrice}               // ✅ точная цена к оплате, без округлений
-                        imageUrl={p.images?.[0] ?? null}
-                        isSoon={p.isSoon}
-                        discountPercent={hasDiscount ? 0 : (p.discountPercent ?? 0)} // ✅ чтобы карточка не пересчитывала цену
-                      />
-                    );
-                  })}
+                      // ✅ процент скидки — только чтобы карточка показала плашку/старую цену
+                      const displayPercent =
+                        hasDiscount && disc != null
+                          ? calcDisplayPercent(base, disc)
+                          : 0;
+
+                      return (
+                        <ProductCard
+                          key={p.id}
+                          slug={p.slug}
+                          title={p.title}
+                          price={payPrice} // ✅ итоговая цена (discountPrice) без пересчётов
+                          imageUrl={p.images?.[0] ?? null}
+                          isSoon={p.isSoon}
+                          discountPercent={displayPercent} // ✅ чтобы не пропадала плашка/старая цена
+                        />
+                      );
+                    })}
                   </div>
                 )}
               </section>
