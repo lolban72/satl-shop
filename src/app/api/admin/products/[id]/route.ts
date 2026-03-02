@@ -56,25 +56,39 @@ export async function PATCH(
       ? ([body.homeImage, ...(body.images ?? [])].filter(Boolean) as string[])
       : undefined;
 
-  const price =
-    body.priceRub !== undefined ? Math.round(Number(body.priceRub) * 100) : undefined;
+  // ✅ price (копейки)
+  // - если priceRub не прислали -> undefined (не трогаем)
+  // - если прислали мусор -> null (но ниже это приведёт к ошибке)
+  const priceCents =
+    body.priceRub === undefined ? undefined : rubToCentsOrNull(body.priceRub);
 
-  // ✅ NEW: discountPrice (копейки)
+  // ✅ discountPrice (копейки)
   // - если discountPriceRub не прислали -> undefined (не трогаем)
-  // - если прислали "" -> null (очистить)
-  const discountPrice =
+  // - если прислали ""/null -> null (очистить)
+  const discountPriceCents =
     body.discountPriceRub === undefined
       ? undefined
       : rubToCentsOrNull(body.discountPriceRub);
 
-  // (необязательно, но полезно) проверим логику цен, если прислали обе
+  // ✅ (необязательно, но полезно) проверка логики цен, если прислали обе
   if (body.isSoon !== true) {
-    const nextPrice = body.priceRub !== undefined ? Math.round(Number(body.priceRub) * 100) : null;
-    const nextDiscountPrice = body.discountPriceRub === undefined ? null : rubToCentsOrNull(body.discountPriceRub);
+    if (body.priceRub !== undefined && priceCents == null) {
+      return NextResponse.json(
+        { error: "Некорректная цена (без скидки)" },
+        { status: 400 }
+      );
+    }
+
+    const nextPrice =
+      body.priceRub === undefined ? null : (priceCents as number | null);
+
+    const nextDiscountPrice =
+      body.discountPriceRub === undefined
+        ? null
+        : (discountPriceCents as number | null);
 
     if (
       nextPrice != null &&
-      Number.isFinite(nextPrice) &&
       nextPrice > 0 &&
       nextDiscountPrice != null &&
       nextDiscountPrice >= nextPrice
@@ -99,22 +113,30 @@ export async function PATCH(
 
         isSoon: body.isSoon ?? undefined,
 
-        price: body.isSoon === true ? 0 : price ?? undefined,
+        // ✅ price: если isSoon=true -> 0, иначе обновляем если прислали
+        price:
+          body.isSoon === true
+            ? 0
+            : priceCents === undefined
+            ? undefined
+            : (priceCents ?? undefined),
 
-        discountPercent: body.isSoon === true ? 0 : body.discountPercent ?? undefined,
+        // ✅ discountPercent: если isSoon=true -> 0
+        discountPercent:
+          body.isSoon === true ? 0 : body.discountPercent ?? undefined,
 
-        // ✅ NEW: цена со скидкой (Int? в копейках)
-        // если isSoon=true -> очищаем
-        // если поле не прислали -> undefined (не трогаем)
-        // если прислали "" -> null (очистить)
+        // ✅ discountPrice (Int?):
+        // - isSoon=true -> null
+        // - не прислали -> undefined (не трогаем)
+        // - прислали ""/null -> null (очистить)
         discountPrice:
           body.isSoon === true
             ? null
-            : discountPrice === undefined
+            : discountPriceCents === undefined
             ? undefined
-            : discountPrice,
+            : discountPriceCents,
 
-        // ✅ размерная таблица (картинка)
+        // ✅ размерная таблица
         sizeChartImage:
           body.sizeChartImage === undefined ? undefined : body.sizeChartImage,
       },
@@ -131,7 +153,6 @@ export async function PATCH(
         stock: v.stock,
       }));
 
-      // на всякий случай — если пришёл пустой массив, просто не создаём
       if (variants.length) {
         await tx.variant.createMany({ data: variants });
       }
@@ -161,10 +182,7 @@ export async function DELETE(
 
   try {
     const deleted = await prisma.$transaction(async (tx) => {
-      // ✅ сначала удаляем варианты (иначе FK может не дать удалить продукт)
       await tx.variant.deleteMany({ where: { productId: id } });
-
-      // ✅ удаляем сам продукт
       return tx.product.delete({ where: { id } });
     });
 
