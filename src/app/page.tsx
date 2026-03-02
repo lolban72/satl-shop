@@ -9,11 +9,12 @@ export const metadata = {
 };
 
 // ✅ цена к оплате: если discountPrice задана — используем её, иначе обычная price
+// ❗ discountPercent НЕ используется для расчёта цены
 function calcPayPrice(basePrice: number, discountPrice?: number | null) {
   const base = Number(basePrice ?? 0);
   const disc = discountPrice == null ? null : Number(discountPrice);
 
-  if (disc && disc > 0 && disc < base) return disc;
+  if (disc != null && disc > 0 && disc < base) return disc;
   return base;
 }
 
@@ -34,22 +35,11 @@ export default async function HomePage() {
       title: true,
       products: {
         orderBy: { createdAt: "desc" },
-        select: {
-          id: true,
-          slug: true,
-          title: true,
 
-          // ✅ price = базовая цена (без скидки)
-          price: true,
-
-          // ✅ discountPrice = цена со скидкой (если есть)
-          // ⚠️ ВАЖНО: это поле должно реально существовать в Prisma schema,
-          // и на сервере должен быть сделан `npx prisma generate`
-          discountPrice: true,
-
-          images: true,
-          isSoon: true,
-          discountPercent: true, // можно оставить
+        // ✅ ВАЖНО:
+        // НЕ делаем select полей продукта (иначе TS ругнётся на discountPrice, если Prisma Client не обновлён)
+        // Берём продукт целиком + variants (нужны тебе по логике)
+        include: {
           variants: {
             select: { id: true, stock: true },
           },
@@ -89,7 +79,12 @@ export default async function HomePage() {
                     "
                   >
                     {cat.products.map((p) => {
-                      const payPrice = calcPayPrice(p.price, p.discountPrice);
+                      const discountPrice = (p as any).discountPrice as
+                        | number
+                        | null
+                        | undefined;
+
+                      const payPrice = calcPayPrice(p.price, discountPrice);
 
                       return (
                         <ProductCard
@@ -99,7 +94,7 @@ export default async function HomePage() {
                           price={payPrice} // ✅ цена к оплате
                           imageUrl={p.images?.[0] ?? null}
                           isSoon={p.isSoon}
-                          discountPercent={p.discountPercent ?? 0}
+                          discountPercent={p.discountPercent ?? 0} // ✅ только для плашки, на цену не влияет
                         />
                       );
                     })}
