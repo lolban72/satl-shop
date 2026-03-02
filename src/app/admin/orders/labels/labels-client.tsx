@@ -35,7 +35,7 @@ function OneLabelHTML({
 
   const productTitle = val(firstItem?.title);
   const size = val(firstItem?.variant?.size);
-  const pvz = val(order?.pvz || order?.pickupPoint || "—");
+  const pvz = val(order?.pvz || order?.pickupPoint || "СДЭК");
   const trackNumber = val(order?.trackNumber || "-");
 
   useEffect(() => {
