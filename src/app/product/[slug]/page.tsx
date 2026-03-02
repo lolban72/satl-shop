@@ -15,11 +15,19 @@ function calcDiscountedPrice(price: number, discountPercent?: number | null) {
 
   if (!p || !d || d <= 0 || d >= 100) return p;
 
+  // 1️⃣ цена со скидкой
   const discounted = p * (1 - d / 100);
 
-  // ✅ округляем до целых рублей
-  const rub = Math.round(discounted / 100);
-  return rub * 100;
+  // 2️⃣ переводим в рубли
+  const rub = discounted / 100;
+
+  // 3️⃣ округляем вверх до десятков
+  const roundedToTen = Math.ceil(rub / 10) * 10;
+
+  // 4️⃣ делаем окончание 90
+  const finalRub = roundedToTen - 10 + 90;
+
+  return finalRub * 100; // обратно в копейки
 }
 
 // ✅ старая цена (без скидки) — показываем только если скидка есть
