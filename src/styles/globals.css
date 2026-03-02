@@ -52,7 +52,6 @@ html, body {
   font-display: swap;
 }
 
-
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -65,7 +64,7 @@ html, body {
     --background: #ffffff;
     --foreground: #000000;
   }
-} 
+}
 
 body {
   background: var(--background);
@@ -74,7 +73,6 @@ body {
 }
 
 @layer components {
-
   .doc-h1 {
     @apply text-[35px] font-bold tracking-[-0.02em];
   }
@@ -90,5 +88,47 @@ body {
   .doc-text {
     @apply text-[13px] leading-[1.6] text-black/85;
   }
+}
 
+/* =========================
+   PRINT FIX (labels only)
+   ========================= */
+@media print {
+  /* убираем влияние 100% высоты и тёмной темы */
+  html, body {
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  /* вырубить весь UI (важно: display none, а не visibility) */
+  header, footer, nav, aside {
+    display: none !important;
+  }
+
+  /* на скрине у тебя обёртка .grid + aside + main */
+  .grid {
+    display: block !important;
+  }
+
+  main {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* оставить в main только блок с печатью */
+  main > *:not(.label-root) {
+    display: none !important;
+  }
+
+  .label-root {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #000 !important;
+  }
 }
