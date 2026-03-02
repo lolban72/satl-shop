@@ -35,16 +35,17 @@ function OneLabelHTML({
 
   const productTitle = val(firstItem?.title);
   const size = val(firstItem?.variant?.size);
-  const pvz = val(order?.pvz || order?.pickupPoint || "—"); // если позже добавишь поле
+  const pvz = val(order?.pvz || order?.pickupPoint || "—");
   const trackNumber = val(order?.trackNumber || "-");
 
   useEffect(() => {
     if (!barcodeRef.current) return;
 
+    // ✅ штрих-код больше + выше
     JsBarcode(barcodeRef.current, barcodeValue, {
       format: "CODE128",
-      width: 0.9,
-      height: 18,
+      width: 1.25,   // толще линии (больше сам barcode)
+      height: 26,    // выше
       displayValue: false,
       margin: 0,
     });
@@ -52,8 +53,12 @@ function OneLabelHTML({
 
   return (
     <div ref={htmlRef} className="label-58x40">
-      <svg ref={barcodeRef} className="barcode" />
+      {/* ✅ по центру сверху */}
+      <div className="barcode-wrap">
+        <svg ref={barcodeRef} className="barcode" />
+      </div>
 
+      {/* ✅ весь текст слева */}
       <div className="meta">
         <div className="row">
           <span className="k">Товар:</span>
@@ -92,7 +97,7 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
     let cancelled = false;
 
     async function run() {
-      await new Promise((r) => setTimeout(r, 400));
+      await new Promise((r) => setTimeout(r, 450));
 
       const urls: string[] = [];
 
@@ -147,45 +152,61 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
           padding: 1.5mm;
           display: flex;
           flex-direction: column;
-          gap: 1mm;
+          gap: 1.2mm;
           background: #fff;
           color: #000;
           font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
         }
 
-        .barcode {
+        /* ✅ штрих-код по центру сверху */
+        .barcode-wrap {
           width: 100%;
+          display: flex;
+          justify-content: center;
+          align-items: flex-start;
+          padding-top: 0.2mm;
         }
 
+        .barcode {
+          width: 54mm; /* ✅ делаем шире, но с отступами */
+          height: auto;
+        }
+
+        /* ✅ весь текст слева */
         .meta {
           font-size: 7px;
-          line-height: 1.05;
+          line-height: 1.1;
           display: flex;
           flex-direction: column;
-          gap: 0.8mm;
+          gap: 0.7mm;
+          text-align: left;
         }
 
         .row {
           display: flex;
-          justify-content: space-between;
           gap: 2mm;
+          align-items: baseline;
+          justify-content: flex-start; /* ✅ не раздвигаем */
         }
 
         .k {
           font-weight: 800;
           white-space: nowrap;
+          flex: 0 0 auto;
         }
 
         .v {
-          text-align: right;
+          flex: 1 1 auto;
+          min-width: 0;
+          text-align: left; /* ✅ значения тоже слева */
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
-          max-width: 32mm;
         }
 
         .mono {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
+          letter-spacing: 0.02em;
         }
 
         @media print {
