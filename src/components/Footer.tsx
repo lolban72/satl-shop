@@ -114,7 +114,7 @@ export default function Footer() {
               Покупателям
             </div>
 
-            <div className="mt-[10px] flex gap-x-[80px]" style={{ fontFamily: "Yeast" }}>
+            <div className="mt-[10px] flex gap-x-[80px]" style={{ fontFamily: "Brygada" }}>
               <div className="flex flex-col gap-y-[6px] text-[9px] leading-[1.2] uppercase tracking-[0.02em] text-black/80" >
                 <Link
                   href="/docs/user-agreement"
@@ -162,7 +162,7 @@ export default function Footer() {
               Контакты
             </div>
 
-            <div className="mt-[10px] flex gap-x-[48px]" style={{ fontFamily: "Yeast" }}>
+            <div className="mt-[10px] flex gap-x-[48px]" style={{ fontFamily: "Brygada" }}>
               {/* Левая колонка */}
               <div className="flex flex-col gap-y-[6px] text-[9px] leading-[1.2] uppercase tracking-[0.02em] text-black/80">
                 {contactsLeft.map((it, idx) => (
