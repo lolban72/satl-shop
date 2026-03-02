@@ -41,10 +41,11 @@ function OneLabelHTML({
   useEffect(() => {
     if (!barcodeRef.current) return;
 
+    // ✅ штрих-код больше + выше
     JsBarcode(barcodeRef.current, barcodeValue, {
       format: "CODE128",
-      width: 1.25,
-      height: 26,
+      width: 1.25,   // толще линии (больше сам barcode)
+      height: 26,    // выше
       displayValue: false,
       margin: 0,
     });
@@ -52,10 +53,12 @@ function OneLabelHTML({
 
   return (
     <div ref={htmlRef} className="label-58x40">
+      {/* ✅ по центру сверху */}
       <div className="barcode-wrap">
         <svg ref={barcodeRef} className="barcode" />
       </div>
 
+      {/* ✅ весь текст слева */}
       <div className="meta">
         <div className="row">
           <span className="k">Товар:</span>
@@ -93,15 +96,7 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
   useEffect(() => {
     let cancelled = false;
 
-    const onAfterPrint = () => {
-      document.body.classList.remove("print-labels");
-    };
-
     async function run() {
-      // включаем режим печати (globals.css будет работать ТОЛЬКО с этим классом)
-      document.body.classList.add("print-labels");
-      window.addEventListener("afterprint", onAfterPrint);
-
       await new Promise((r) => setTimeout(r, 450));
 
       const urls: string[] = [];
@@ -112,7 +107,7 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
 
         const url = await toPng(node, {
           cacheBust: true,
-          pixelRatio: 2, // ✅ меньше шанс “перелома” по высоте, чем 3
+          pixelRatio: 3,
           backgroundColor: "#ffffff",
         });
 
@@ -131,11 +126,8 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
     }
 
     run();
-
     return () => {
       cancelled = true;
-      window.removeEventListener("afterprint", onAfterPrint);
-      document.body.classList.remove("print-labels");
     };
   }, [orders]);
 
@@ -166,6 +158,7 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
           font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
         }
 
+        /* ✅ штрих-код по центру сверху */
         .barcode-wrap {
           width: 100%;
           display: flex;
@@ -175,10 +168,11 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
         }
 
         .barcode {
-          width: 54mm;
+          width: 54mm; /* ✅ делаем шире, но с отступами */
           height: auto;
         }
 
+        /* ✅ весь текст слева */
         .meta {
           font-size: 7px;
           line-height: 1.1;
@@ -192,7 +186,7 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
           display: flex;
           gap: 2mm;
           align-items: baseline;
-          justify-content: flex-start;
+          justify-content: flex-start; /* ✅ не раздвигаем */
         }
 
         .k {
@@ -204,7 +198,7 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
         .v {
           flex: 1 1 auto;
           min-width: 0;
-          text-align: left;
+          text-align: left; /* ✅ значения тоже слева */
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
@@ -216,7 +210,20 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
         }
 
         @media print {
-          /* важно: не visibility, а display управляется в globals.css по классу body.print-labels */
+          body * { visibility: hidden !important; }
+          .label-root, .label-root * { visibility: visible !important; }
+
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+
+          .label-root {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+          }
+
           .hidden-render {
             display: none !important;
           }

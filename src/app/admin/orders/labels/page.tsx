@@ -5,50 +5,32 @@ function isIsoDate(s: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 
-const MSK_OFFSET_MIN = 180; // UTC+3
-
-function getDayRangeMSK(dayRaw?: string) {
+function getDayRangeUTC(dayRaw?: string) {
   const day = (dayRaw ?? "today").trim();
 
-  // текущее время в МСК (через сдвиг от UTC)
-  const nowUtcMs = Date.now();
-  const nowMskMs = nowUtcMs + MSK_OFFSET_MIN * 60_000;
+  const now = new Date();
+  const todayUTC = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0)
+  );
 
-  const nowMsk = new Date(nowMskMs);
-  let y = nowMsk.getUTCFullYear();
-  let m = nowMsk.getUTCMonth();
-  let d = nowMsk.getUTCDate();
+  let start = todayUTC;
 
   if (day === "yesterday") {
-    const yestMsk = new Date(nowMskMs - 24 * 60 * 60 * 1000);
-    y = yestMsk.getUTCFullYear();
-    m = yestMsk.getUTCMonth();
-    d = yestMsk.getUTCDate();
+    start = new Date(todayUTC.getTime() - 24 * 60 * 60 * 1000);
   } else if (isIsoDate(day)) {
-    const parts = day.split("-").map(Number);
-    y = parts[0];
-    m = parts[1] - 1;
-    d = parts[2];
+    const [y, m, d] = day.split("-").map(Number);
+    start = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
   }
 
-  // 00:00 МСК этого дня в UTC
-  const startUtcMs =
-    Date.UTC(y, m, d, 0, 0, 0, 0) - MSK_OFFSET_MIN * 60_000;
-
-  const endUtcMs = startUtcMs + 24 * 60 * 60 * 1000;
-
-  return {
-    start: new Date(startUtcMs),
-    end: new Date(endUtcMs),
-    day,
-  };
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  return { start, end, day };
 }
 
 export default async function LabelsPage(props: {
   searchParams?: Promise<{ day?: string }>;
 }) {
   const sp = (await props.searchParams) ?? {};
-  const { start, end } = getDayRangeMSK(sp.day);
+  const { start, end } = getDayRangeUTC(sp.day);
 
   const orders = await prisma.order.findMany({
     where: { createdAt: { gte: start, lt: end } },
@@ -56,7 +38,7 @@ export default async function LabelsPage(props: {
     include: {
       items: {
         include: {
-          variant: true,
+          variant: true, // ✅ размер
         },
       },
     },
