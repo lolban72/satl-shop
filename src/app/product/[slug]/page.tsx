@@ -4,37 +4,34 @@ import ProductGallery from "./ui/ProductGallery";
 import AddToCart from "./ui/AddToCart";
 import ProductCard from "@/components/ProductCard";
 
-// ✅ чтобы generateMetadata работал с Prisma на сервере всегда
 export const dynamic = "force-dynamic";
 
-// ✅ показываем зачёркнутую "старую" цену только если есть discountPrice
+// ✅ зачёркнутая цена = БАЗОВАЯ (price)
 function calcOldPrice(basePrice: number, discountPrice?: number | null) {
   const base = Number(basePrice ?? 0);
   const disc = discountPrice == null ? null : Number(discountPrice);
 
-  if (!base || !disc || disc <= 0) return null;
+  if (!base || disc == null) return null;
+  if (disc <= 0) return null;
   if (disc >= base) return null;
 
   return base;
 }
 
-// ✅ цена к оплате: если discountPrice задана — используем её, иначе обычная
+// ✅ цена к оплате
 function calcPayPrice(basePrice: number, discountPrice?: number | null) {
   const base = Number(basePrice ?? 0);
   const disc = discountPrice == null ? null : Number(discountPrice);
 
-  if (disc && disc > 0 && disc < base) return disc;
+  if (disc != null && disc > 0 && disc < base) return disc;
   return base;
 }
 
-// ✅ Динамический title/description для каждой карточки товара
 export async function generateMetadata({
   params,
 }: {
-  // ✅ делаем как у тебя в page.tsx — params может приходить Promise
   params: Promise<{ slug: string }> | { slug: string };
 }): Promise<Metadata> {
-  // ✅ безопасно поддерживаем оба варианта
   const p =
     "then" in (params as any)
       ? await (params as Promise<{ slug: string }>)
@@ -94,14 +91,18 @@ export default async function ProductPage({
 
   if (!product) return <div className="p-6">Товар не найден</div>;
 
-  // ✅ ТЕПЕРЬ:
-  // price = цена БЕЗ скидки (из админки)
-  // discountPrice = цена СО скидкой (если есть)
-  const payPrice = calcPayPrice(product.price, (product as any).discountPrice);
-  const oldPrice = calcOldPrice(product.price, (product as any).discountPrice);
+  // ⚠️ Если Prisma уже обновлён — можно убрать as any
+  const discountPrice = (product as any).discountPrice as
+    | number
+    | null
+    | undefined;
 
-  // ✅ плашку скидки показываем только если есть discountPrice
-  const hasDiscount = Boolean(oldPrice);
+  const payPrice = calcPayPrice(product.price, discountPrice);
+  const oldPrice = calcOldPrice(product.price, discountPrice);
+
+  // ✅ плашка из discountPercent, но показываем только если есть реальная скидка
+  const showDiscountBadge =
+    Boolean(oldPrice) && (product.discountPercent ?? 0) > 0;
 
   const products = await prisma.product.findMany({
     where: { id: { not: product.id } },
@@ -110,30 +111,13 @@ export default async function ProductPage({
   });
 
   return (
-    <div
-      className="
-        mx-auto max-w-[1440px]
-        px-[14px] md:px-[65px]
-        pt-[22px] md:pt-[80px]
-        pb-[70px] md:pb-[120px]
-      "
-    >
-      {/* ====== БЛОК ТОВАРА ====== */}
-      <div
-        className="
-          flex flex-col md:flex-row
-          items-start
-          gap-[22px] md:gap-[90px]
-        "
-      >
-        {/* LEFT */}
+    <div className="mx-auto max-w-[1440px] px-[14px] md:px-[65px] pt-[22px] md:pt-[80px] pb-[70px] md:pb-[120px]">
+      <div className="flex flex-col md:flex-row items-start gap-[22px] md:gap-[90px]">
         <div className="w-full md:w-auto md:shrink-0">
           <ProductGallery images={product.images} title={product.title} />
         </div>
 
-        {/* RIGHT */}
         <div className="w-full md:w-[420px] pt-0 md:pt-[40px]">
-          {/* TITLE */}
           <h1
             className="text-[28px] md:text-[38px] leading-[1.05]"
             style={{ fontFamily: "Yeast" }}
@@ -160,8 +144,8 @@ export default async function ProductPage({
             ) : null}
           </div>
 
-          {/* DISCOUNT (плашка) */}
-          {product.discountPercent > 0 && (
+          {/* DISCOUNT BADGE */}
+          {showDiscountBadge ? (
             <div className="text-[14px] md:text-[20px] font-bold text-[#B60404] mt-[-5px]">
               <span
                 style={{ fontFamily: "Yeast" }}
@@ -176,21 +160,19 @@ export default async function ProductPage({
                 %
               </span>
             </div>
-          )}
+          ) : null}
 
-          {/* SIZES + BUTTON */}
           <div className="mt-[14px] md:mt-[18px]">
             <AddToCart
               productId={product.id}
               title={product.title}
-              price={payPrice} // ✅ цена к оплате
+              price={payPrice}
               image={product.images?.[0]}
               variants={product.variants}
               sizeChartImage={(product as any).sizeChartImage}
             />
           </div>
 
-          {/* DESCRIPTION */}
           {product.description && (
             <div
               className="mt-[16px] md:mt-[22px] text-[13px] md:text-[15px] leading-[1.6] text-black/55 whitespace-pre-wrap"
@@ -201,31 +183,6 @@ export default async function ProductPage({
           )}
         </div>
       </div>
-
-      {/* ====== КАТАЛОГ НИЖЕ ====== */}
-      <section className="mt-[70px] md:mt-[250px] mx-auto max-w-6xl">
-        <div
-          className="
-            grid justify-center justify-items-center
-            grid-cols-2 md:grid-cols-2 xl:grid-cols-3
-            gap-x-[12px] gap-y-[22px]
-            md:gap-x-[300px] md:gap-y-[80px]
-            md:grid-cols-2 xl:grid-cols-3
-          "
-        >
-          {products.map((p) => (
-            <ProductCard
-              key={p.id}
-              slug={p.slug}
-              title={p.title}
-              price={p.price} // ⚠️ карточку тоже нужно будет править (использовать discountPrice). Если пришлёшь ProductCard — вставлю.
-              imageUrl={p.images?.[0] ?? null}
-              isSoon={p.isSoon}
-              discountPercent={p.discountPercent ?? 0} // ⚠️ можно оставить, но лучше тоже перейти на discountPrice
-            />
-          ))}
-        </div>
-      </section>
     </div>
   );
 }
