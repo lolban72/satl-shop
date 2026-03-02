@@ -43,13 +43,13 @@ export default async function HomePage() {
           price: true,
 
           // ✅ discountPrice = цена со скидкой (если есть)
-          // (если Prisma типы ещё не обновлены — можно временно оставить,
-          // но лучше чтобы поле реально было в схеме Prisma)
-          discountPrice: true as any,
+          // ⚠️ ВАЖНО: это поле должно реально существовать в Prisma schema,
+          // и на сервере должен быть сделан `npx prisma generate`
+          discountPrice: true,
 
           images: true,
           isSoon: true,
-          discountPercent: true, // можно оставить пока
+          discountPercent: true, // можно оставить
           variants: {
             select: { id: true, stock: true },
           },
@@ -73,8 +73,6 @@ export default async function HomePage() {
                 id={`cat-${cat.slug}`}
                 className="scroll-mt-24"
               >
-                {/* (Если у тебя есть заголовок категории — оставляй как было) */}
-
                 {cat.products.length === 0 ? (
                   <p className="mt-3 text-sm text-gray-600">
                     В этой категории пока нет товаров.
@@ -91,17 +89,14 @@ export default async function HomePage() {
                     "
                   >
                     {cat.products.map((p) => {
-                      const payPrice = calcPayPrice(
-                        p.price,
-                        (p as any).discountPrice
-                      );
+                      const payPrice = calcPayPrice(p.price, p.discountPrice);
 
                       return (
                         <ProductCard
                           key={p.id}
                           slug={p.slug}
                           title={p.title}
-                          price={payPrice} // ✅ в карточку отдаём цену к оплате
+                          price={payPrice} // ✅ цена к оплате
                           imageUrl={p.images?.[0] ?? null}
                           isSoon={p.isSoon}
                           discountPercent={p.discountPercent ?? 0}
