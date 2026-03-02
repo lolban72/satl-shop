@@ -7,34 +7,24 @@ import ProductCard from "@/components/ProductCard";
 // ✅ чтобы generateMetadata работал с Prisma на сервере всегда
 export const dynamic = "force-dynamic";
 
-// ✅ цена со скидкой (админка хранит цену БЕЗ скидки)
-// округление: до целых рублей (в копейках это кратно 100)
-function calcDiscountedPrice(price: number, discountPercent?: number | null) {
-  const p = Number(price ?? 0);
-  const d = Number(discountPercent ?? 0);
+// ✅ показываем зачёркнутую "старую" цену только если есть discountPrice
+function calcOldPrice(basePrice: number, discountPrice?: number | null) {
+  const base = Number(basePrice ?? 0);
+  const disc = discountPrice == null ? null : Number(discountPrice);
 
-  if (!p || !d || d <= 0 || d >= 100) return p;
+  if (!base || !disc || disc <= 0) return null;
+  if (disc >= base) return null;
 
-  // 1️⃣ цена со скидкой
-  const discounted = p * (1 - d / 100);
-
-  // 2️⃣ переводим в рубли
-  const rub = discounted / 100;
-
-  // 3️⃣ округляем вверх до десятков
-  const roundedToTen = Math.ceil(rub / 10) * 10;
-
-  // 4️⃣ делаем окончание 90
-  const finalRub = roundedToTen - 10 + 90;
-
-  return finalRub * 100; // обратно в копейки
+  return base;
 }
 
-// ✅ старая цена (без скидки) — показываем только если скидка есть
-function calcOldPrice(price: number, discountPercent?: number | null) {
-  const d = Number(discountPercent ?? 0);
-  if (!d || d <= 0 || d >= 100) return null;
-  return Number(price ?? 0);
+// ✅ цена к оплате: если discountPrice задана — используем её, иначе обычная
+function calcPayPrice(basePrice: number, discountPrice?: number | null) {
+  const base = Number(basePrice ?? 0);
+  const disc = discountPrice == null ? null : Number(discountPrice);
+
+  if (disc && disc > 0 && disc < base) return disc;
+  return base;
 }
 
 // ✅ Динамический title/description для каждой карточки товара
@@ -104,12 +94,14 @@ export default async function ProductPage({
 
   if (!product) return <div className="p-6">Товар не найден</div>;
 
-  // ✅ админка хранит цену БЕЗ скидки
-  const discountedPrice = calcDiscountedPrice(
-    product.price,
-    product.discountPercent
-  );
-  const oldPrice = calcOldPrice(product.price, product.discountPercent);
+  // ✅ ТЕПЕРЬ:
+  // price = цена БЕЗ скидки (из админки)
+  // discountPrice = цена СО скидкой (если есть)
+  const payPrice = calcPayPrice(product.price, (product as any).discountPrice);
+  const oldPrice = calcOldPrice(product.price, (product as any).discountPrice);
+
+  // ✅ плашку скидки показываем только если есть discountPrice
+  const hasDiscount = Boolean(oldPrice);
 
   const products = await prisma.product.findMany({
     where: { id: { not: product.id } },
@@ -155,7 +147,7 @@ export default async function ProductPage({
               className="text-[18px] md:text-[30px]"
               style={{ fontFamily: "Yeast" }}
             >
-              {(discountedPrice / 100).toFixed(0)}р
+              {(payPrice / 100).toFixed(0)}р
             </div>
 
             {oldPrice ? (
@@ -168,33 +160,24 @@ export default async function ProductPage({
             ) : null}
           </div>
 
-          {/* DISCOUNT */}
-          {product.discountPercent > 0 && (
+          {/* DISCOUNT (плашка) */}
+          {hasDiscount ? (
             <div className="text-[14px] md:text-[20px] font-bold text-[#B60404] mt-[-5px]">
-              <span
-                style={{ fontFamily: "Yeast" }}
-                className="tracking-[0.02em]"
-              >
-                -{product.discountPercent}
-              </span>
-              <span
-                style={{ fontFamily: "YrsaBold" }}
-                className="text-[15px] md:text-[17px]"
-              >
-                %
+              <span style={{ fontFamily: "Yeast" }} className="tracking-[0.02em]">
+                скидка
               </span>
             </div>
-          )}
+          ) : null}
 
           {/* SIZES + BUTTON */}
           <div className="mt-[14px] md:mt-[18px]">
             <AddToCart
               productId={product.id}
               title={product.title}
-              price={discountedPrice} // ✅ цена к оплате (со скидкой)
+              price={payPrice} // ✅ цена к оплате
               image={product.images?.[0]}
               variants={product.variants}
-              sizeChartImage={product.sizeChartImage}
+              sizeChartImage={(product as any).sizeChartImage}
             />
           </div>
 
@@ -226,10 +209,10 @@ export default async function ProductPage({
               key={p.id}
               slug={p.slug}
               title={p.title}
-              price={p.price} // ⚠️ если хочешь, чтобы карточка тоже показывала цену со скидкой — покажи код ProductCard, и я вставлю расчёт туда
+              price={p.price} // ⚠️ карточку тоже нужно будет править (использовать discountPrice). Если пришлёшь ProductCard — вставлю.
               imageUrl={p.images?.[0] ?? null}
               isSoon={p.isSoon}
-              discountPercent={p.discountPercent ?? 0}
+              discountPercent={p.discountPercent ?? 0} // ⚠️ можно оставить, но лучше тоже перейти на discountPrice
             />
           ))}
         </div>

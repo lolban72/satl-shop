@@ -21,6 +21,9 @@ type ProductInput = {
   slug: string;
   price: number;
 
+  // ✅ NEW: цена со скидкой (в копейках) или null
+  discountPrice?: number | null;
+
   description: string;
 
   homeImage: string | null; // images[0]
@@ -79,6 +82,14 @@ export default function ProductEditForm({
 
   const [isSoon, setIsSoon] = useState(Boolean(product.isSoon));
   const [priceRub, setPriceRub] = useState(String((product.price / 100).toFixed(0)));
+
+  // ✅ NEW: цена со скидкой (р) — редактируемая
+  const [discountPriceRub, setDiscountPriceRub] = useState(
+    product.discountPrice != null && product.discountPrice > 0
+      ? String((product.discountPrice / 100).toFixed(0))
+      : ""
+  );
+
   const [categoryId, setCategoryId] = useState<string>(product.categoryId ?? "");
 
   const [discountPercent, setDiscountPercent] = useState(String(product.discountPercent ?? 0));
@@ -125,6 +136,7 @@ export default function ProductEditForm({
   useEffect(() => {
     if (isSoon) {
       setPriceRub("0");
+      setDiscountPriceRub(""); // ✅ NEW
       setDiscountPercent("0");
       setVariants([{ size: "ONE", stock: "0", color: "default" }]);
     }
@@ -240,9 +252,18 @@ export default function ProductEditForm({
     if (!hasGallery) return setErr("Добавь хотя бы одно фото в галерею");
 
     if (!isSoon) {
-      if (!isValidPositiveNumberString(priceRub)) return setErr("Некорректная цена");
+      if (!isValidPositiveNumberString(priceRub)) return setErr("Некорректная цена (без скидки)");
       const d = parseDiscount(discountPercent);
       if (d === null) return setErr("Некорректная скидка (0..99)");
+
+      // ✅ NEW: валидация цены со скидкой (если заполнена)
+      const dp = discountPriceRub.trim();
+      if (dp) {
+        if (!isValidPositiveNumberString(dp)) return setErr("Некорректная цена со скидкой");
+        const base = Number(String(priceRub).replace(",", "."));
+        const disc = Number(String(dp).replace(",", "."));
+        if (disc >= base) return setErr("Цена со скидкой должна быть меньше обычной цены");
+      }
 
       const vErr = validateVariants();
       if (vErr) return setErr(vErr);
@@ -278,6 +299,10 @@ export default function ProductEditForm({
 
       if (!isSoon) {
         payload.priceRub = priceRub;
+
+        // ✅ NEW: скидочная цена (строкой), если пусто — скидки нет
+        payload.discountPriceRub = discountPriceRub.trim() || undefined;
+
         payload.discountPercent = parseDiscount(discountPercent) ?? 0;
 
         payload.variants = variants
@@ -289,6 +314,7 @@ export default function ProductEditForm({
           .filter((v) => v.size.length > 0);
       } else {
         payload.discountPercent = 0;
+        payload.discountPriceRub = undefined;
         payload.variants = [{ size: "ONE", color: "default", stock: 0 }];
       }
 
@@ -392,9 +418,33 @@ export default function ProductEditForm({
       </label>
 
       <label className="grid gap-1">
-        <span className="text-sm font-medium">Цена (р)</span>
-        <input className="rounded-xl border p-2" value={priceRub} onChange={(e) => setPriceRub(e.target.value)} disabled={isSoon} />
+        <span className="text-sm font-medium">Цена (р) — без скидки</span>
+        <input
+          className="rounded-xl border p-2"
+          value={priceRub}
+          onChange={(e) => setPriceRub(e.target.value)}
+          disabled={isSoon}
+          inputMode="decimal"
+        />
         {isSoon ? <div className="text-xs text-gray-600">В режиме "Скоро" цена не нужна.</div> : null}
+      </label>
+
+      {/* ✅ NEW: Цена со скидкой */}
+      <label className="grid gap-1">
+        <span className="text-sm font-medium">Цена со скидкой (р) — если есть</span>
+        <input
+          className="rounded-xl border p-2"
+          value={discountPriceRub}
+          onChange={(e) => setDiscountPriceRub(e.target.value)}
+          disabled={isSoon}
+          placeholder="например 1490"
+          inputMode="decimal"
+        />
+        {isSoon ? (
+          <div className="text-xs text-gray-600">В режиме "Скоро" цена со скидкой не нужна.</div>
+        ) : (
+          <div className="text-xs text-gray-600">Оставь пустым — скидки нет. Если заполнено — должно быть меньше обычной цены.</div>
+        )}
       </label>
 
       <label className="grid gap-1">

@@ -8,26 +8,13 @@ export const metadata = {
     "Интернет-магазин одежды SATL. Новые коллекции, лимитированные релизы.",
 };
 
-// 🔥 Округление до ...90
-function calcDiscountedPrice(price: number, discountPercent?: number | null) {
-  const p = Number(price ?? 0);
-  const d = Number(discountPercent ?? 0);
+// ✅ цена к оплате: если discountPrice задана — используем её, иначе обычная price
+function calcPayPrice(basePrice: number, discountPrice?: number | null) {
+  const base = Number(basePrice ?? 0);
+  const disc = discountPrice == null ? null : Number(discountPrice);
 
-  if (!p || !d || d <= 0 || d >= 100) return p;
-
-  // 1️⃣ цена со скидкой
-  const discounted = p * (1 - d / 100);
-
-  // 2️⃣ в рубли
-  const rub = discounted / 100;
-
-  // 3️⃣ округляем вверх до десятков
-  const roundedToTen = Math.ceil(rub / 10) * 10;
-
-  // 4️⃣ делаем окончание 90
-  const finalRub = roundedToTen - 10 + 90;
-
-  return finalRub * 100; // обратно в копейки
+  if (disc && disc > 0 && disc < base) return disc;
+  return base;
 }
 
 export default async function HomePage() {
@@ -51,10 +38,18 @@ export default async function HomePage() {
           id: true,
           slug: true,
           title: true,
+
+          // ✅ price = базовая цена (без скидки)
           price: true,
+
+          // ✅ discountPrice = цена со скидкой (если есть)
+          // (если Prisma типы ещё не обновлены — можно временно оставить,
+          // но лучше чтобы поле реально было в схеме Prisma)
+          discountPrice: true as any,
+
           images: true,
           isSoon: true,
-          discountPercent: true,
+          discountPercent: true, // можно оставить пока
           variants: {
             select: { id: true, stock: true },
           },
@@ -69,9 +64,7 @@ export default async function HomePage() {
 
       <section id="catalog" className="mx-auto max-w-6xl px-4 md:px-6 py-6">
         {categories.length === 0 ? (
-          <p className="mt-4 text-gray-600">
-            Пока нет категорий с товарами.
-          </p>
+          <p className="mt-4 text-gray-600">Пока нет категорий с товарами.</p>
         ) : (
           <div className="mt-6 grid gap-10">
             {categories.map((cat) => (
@@ -80,6 +73,8 @@ export default async function HomePage() {
                 id={`cat-${cat.slug}`}
                 className="scroll-mt-24"
               >
+                {/* (Если у тебя есть заголовок категории — оставляй как было) */}
+
                 {cat.products.length === 0 ? (
                   <p className="mt-3 text-sm text-gray-600">
                     В этой категории пока нет товаров.
@@ -96,9 +91,9 @@ export default async function HomePage() {
                     "
                   >
                     {cat.products.map((p) => {
-                      const discountedPrice = calcDiscountedPrice(
+                      const payPrice = calcPayPrice(
                         p.price,
-                        p.discountPercent
+                        (p as any).discountPrice
                       );
 
                       return (
@@ -106,7 +101,7 @@ export default async function HomePage() {
                           key={p.id}
                           slug={p.slug}
                           title={p.title}
-                          price={discountedPrice} // ✅ цена со скидкой и округлением ...90
+                          price={payPrice} // ✅ в карточку отдаём цену к оплате
                           imageUrl={p.images?.[0] ?? null}
                           isSoon={p.isSoon}
                           discountPercent={p.discountPercent ?? 0}

@@ -148,6 +148,7 @@ model Product {
   title           String
   description     String?
   price           Int
+  discountPrice   Int?
   images          String[]
   createdAt       DateTime  @default(now())
   isSoon          Boolean   @default(false)

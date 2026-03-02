@@ -58,6 +58,10 @@ export default function ProductCreateForm() {
 
   // строки удобнее для инпутов
   const [priceRub, setPriceRub] = useState("1990");
+
+  // ✅ NEW: цена со скидкой (если есть) — вводишь руками
+  const [discountPriceRub, setDiscountPriceRub] = useState("");
+
   const [isSoon, setIsSoon] = useState(false);
   const [discountPercent, setDiscountPercent] = useState("0");
 
@@ -143,7 +147,10 @@ export default function ProductCreateForm() {
 
   // если включили "Скоро" — скидка/цена/размеры не нужны
   useEffect(() => {
-    if (isSoon) setDiscountPercent("0");
+    if (isSoon) {
+      setDiscountPercent("0");
+      setDiscountPriceRub("");
+    }
   }, [isSoon]);
 
   async function uploadOne(file: File): Promise<string> {
@@ -227,14 +234,23 @@ export default function ProductCreateForm() {
     // фото на главную — обязательно (и для soon, и для обычного товара)
     if (!homeFile) return setErr("Загрузи фото на главную (обложку)");
 
-    // галерея можно сделать обязательной — ты просил «фото на галерею», делаю минимум 1
+    // галерея можно сделать обязательной — минимум 1
     if (galleryFiles.length === 0) return setErr("Добавь хотя бы одно фото в галерею");
 
     if (!isSoon) {
-      if (!isValidPositiveNumberString(priceRub)) return setErr("Некорректная цена");
+      if (!isValidPositiveNumberString(priceRub)) return setErr("Некорректная цена (без скидки)");
+
+      // ✅ NEW: discountPriceRub (если введена) должна быть > 0 и < priceRub
+      const dpTrim = discountPriceRub.trim();
+      if (dpTrim) {
+        if (!isValidPositiveNumberString(dpTrim)) return setErr("Некорректная цена со скидкой");
+        const base = Number(String(priceRub).replace(",", "."));
+        const disc = Number(String(dpTrim).replace(",", "."));
+        if (disc >= base) return setErr("Цена со скидкой должна быть меньше обычной цены");
+      }
 
       const d = parseDiscount(discountPercent);
-      if (d === null) return setErr("Некорректная скидка (0..99)");
+      if (d === null) return setErr("Некорректная скидка (%) (0..99)");
 
       const sizesCheck = validateSizes();
       if (!sizesCheck.ok) return setErr(sizesCheck.message || "Некорректные размеры");
@@ -265,6 +281,11 @@ export default function ProductCreateForm() {
 
       if (!isSoon) {
         payload.priceRub = priceRub;
+
+        // ✅ NEW: цена со скидкой (опционально)
+        payload.discountPriceRub = discountPriceRub.trim() || undefined;
+
+        // оставляем percent, если используешь бейдж "-%"
         payload.discountPercent = parseDiscount(discountPercent) ?? 0;
 
         // ✅ variants по размерам
@@ -279,7 +300,8 @@ export default function ProductCreateForm() {
         }));
       } else {
         payload.discountPercent = 0;
-        payload.variants = []; // можно не отправлять вообще, но так безопаснее
+        payload.discountPriceRub = undefined;
+        payload.variants = [];
       }
 
       // 3) create
@@ -299,6 +321,7 @@ export default function ProductCreateForm() {
       setSlug("");
       setDescription("");
       setPriceRub("1990");
+      setDiscountPriceRub("");
       setIsSoon(false);
       setDiscountPercent("0");
 
@@ -384,15 +407,36 @@ export default function ProductCreateForm() {
       </label>
 
       <label className="grid gap-1">
-        <span className="text-sm font-medium">Цена (р)</span>
+        <span className="text-sm font-medium">Цена (р) — без скидки</span>
         <input
           className="rounded-xl border p-2"
           value={priceRub}
           onChange={(e) => setPriceRub(e.target.value)}
           disabled={isSoon}
           placeholder="0"
+          inputMode="decimal"
         />
         {isSoon ? <div className="text-xs text-gray-600">В режиме "Скоро" цена не нужна.</div> : null}
+      </label>
+
+      {/* ✅ NEW: цена со скидкой */}
+      <label className="grid gap-1">
+        <span className="text-sm font-medium">Цена со скидкой (р) — если есть</span>
+        <input
+          className="rounded-xl border p-2"
+          value={discountPriceRub}
+          onChange={(e) => setDiscountPriceRub(e.target.value)}
+          disabled={isSoon}
+          placeholder="например 1490"
+          inputMode="decimal"
+        />
+        {isSoon ? (
+          <div className="text-xs text-gray-600">В режиме "Скоро" цена со скидкой не нужна.</div>
+        ) : (
+          <div className="text-xs text-gray-600">
+            Оставь пустым — скидки нет. Если заполнено — должно быть меньше обычной цены.
+          </div>
+        )}
       </label>
 
       <label className="grid gap-1">
@@ -461,9 +505,7 @@ export default function ProductCreateForm() {
           className="rounded-xl border p-2"
           onChange={(e) => setSizeChartFile(e.target.files?.[0] ?? null)}
         />
-        <div className="text-xs text-gray-600">
-          Будет показываться на странице товара по кнопке «Таблица размеров».
-        </div>
+        <div className="text-xs text-gray-600">Будет показываться на странице товара по кнопке «Таблица размеров».</div>
       </label>
 
       {sizeChartPreview ? (
@@ -514,7 +556,11 @@ export default function ProductCreateForm() {
         </div>
       </div>
 
-      <button className="rounded-xl bg-black px-4 py-2 text-white disabled:opacity-50" disabled={disableSubmit} onClick={submit}>
+      <button
+        className="rounded-xl bg-black px-4 py-2 text-white disabled:opacity-50"
+        disabled={disableSubmit}
+        onClick={submit}
+      >
         {uploading ? "Загружаю фото..." : loading ? "Создаю..." : "Добавить"}
       </button>
 
