@@ -7,6 +7,20 @@ import { X, Menu, ChevronDown } from "lucide-react";
 type NavCategory = { id: string; title: string; slug: string };
 type InfoLink = { href: string; label: string };
 
+type ContactItem = { label: string; href: string };
+
+const DEFAULT_CONTACTS_LEFT: ContactItem[] = [
+  { label: "телеграм", href: "https://web.telegram.org/k/#@MANAGER_SATL_SHOP" },
+  { label: "почта", href: "mailto:Satl.Shop.ru@gmail.com" },
+  { label: "тикток", href: "#" },
+];
+
+const DEFAULT_CONTACTS_RIGHT: ContactItem[] = [
+  { label: "инстаграм", href: "#" },
+  { label: "телефон", href: "tel:+70000000000" },
+  { label: "вк", href: "#" },
+];
+
 export default function MobileNav(props: {
   categories: NavCategory[];
   infoLinks: InfoLink[];
@@ -17,8 +31,15 @@ export default function MobileNav(props: {
   const [open, setOpen] = useState(false);
   const [catsOpen, setCatsOpen] = useState(true);
   const [infoOpen, setInfoOpen] = useState(true);
-  const [contactsOpen, setContactsOpen] = useState(true); // ✅
+  const [contactsOpen, setContactsOpen] = useState(true);
   const [profileOpen, setProfileOpen] = useState(true);
+
+  const [contactsLeft, setContactsLeft] = useState<ContactItem[]>(
+    DEFAULT_CONTACTS_LEFT
+  );
+  const [contactsRight, setContactsRight] = useState<ContactItem[]>(
+    DEFAULT_CONTACTS_RIGHT
+  );
 
   const cats = useMemo(() => categories ?? [], [categories]);
 
@@ -33,15 +54,46 @@ export default function MobileNav(props: {
     const prevOverflow = document.body.style.overflow;
     const prevPaddingRight = document.body.style.paddingRight;
 
-    const scrollBarWidth = window.innerWidth - document.documentElement.clientWidth;
+    const scrollBarWidth =
+      window.innerWidth - document.documentElement.clientWidth;
     document.body.style.overflow = "hidden";
-    if (scrollBarWidth > 0) document.body.style.paddingRight = `${scrollBarWidth}px`;
+    if (scrollBarWidth > 0)
+      document.body.style.paddingRight = `${scrollBarWidth}px`;
 
     return () => {
       document.body.style.overflow = prevOverflow;
       document.body.style.paddingRight = prevPaddingRight;
     };
   }, [open]);
+
+  // ✅ load contacts once (как в футере)
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadContacts() {
+      try {
+        const res = await fetch("/api/site-settings/contacts", {
+          cache: "no-store",
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data) return;
+        if (cancelled) return;
+
+        if (Array.isArray(data.left)) setContactsLeft(data.left);
+        if (Array.isArray(data.right)) setContactsRight(data.right);
+      } catch {
+        // keep defaults
+      }
+    }
+
+    loadContacts();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const isHttp = (href: string) =>
+    /^https?:\/\//i.test(String(href ?? ""));
 
   return (
     <>
@@ -197,7 +249,7 @@ export default function MobileNav(props: {
 
             <div className="h-[1px] bg-black/10" />
 
-            {/* ✅ Contacts (как остальные пункты) */}
+            {/* Contacts (как в футере: 2 колонки) */}
             <button
               type="button"
               onClick={() => setContactsOpen((v) => !v)}
@@ -219,36 +271,42 @@ export default function MobileNav(props: {
             <div
               className={[
                 "overflow-hidden transition-[max-height,opacity] duration-200",
-                contactsOpen ? "max-h-[260px] opacity-100" : "max-h-0 opacity-0",
+                contactsOpen ? "max-h-[520px] opacity-100" : "max-h-0 opacity-0",
               ].join(" ")}
             >
               <div className="pb-[10px]">
-                <div className="grid">
-                  <a
-                    href="https://web.telegram.org/k/#@MANAGER_SATL_SHOP"
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={close}
-                    className="py-[12px] border-t border-black/10 text-[12px] font-semibold uppercase tracking-[0.06em] text-black/75 hover:text-black hover:bg-black/5 px-[10px] transition"
-                  >
-                    Телеграм
-                  </a>
+                <div className="grid grid-cols-2 gap-x-[10px]">
+                  {/* Left column */}
+                  <div className="flex flex-col">
+                    {contactsLeft.map((it, idx) => (
+                      <a
+                        key={`${it.label}-${idx}`}
+                        href={it.href}
+                        target={isHttp(it.href) ? "_blank" : undefined}
+                        rel={isHttp(it.href) ? "noreferrer" : undefined}
+                        onClick={close}
+                        className="py-[12px] border-t border-black/10 text-[12px] font-semibold uppercase tracking-[0.06em] text-black/75 hover:text-black hover:bg-black/5 px-[10px] transition"
+                      >
+                        {it.label}
+                      </a>
+                    ))}
+                  </div>
 
-                  <a
-                    href="mailto:Satl.Shop.ru@gmail.com"
-                    onClick={close}
-                    className="py-[12px] border-t border-black/10 text-[12px] font-semibold uppercase tracking-[0.06em] text-black/75 hover:text-black hover:bg-black/5 px-[10px] transition"
-                  >
-                    Почта
-                  </a>
-
-                  <a
-                    href="#"
-                    onClick={close}
-                    className="py-[12px] border-t border-black/10 text-[12px] font-semibold uppercase tracking-[0.06em] text-black/75 hover:text-black hover:bg-black/5 px-[10px] transition"
-                  >
-                    Тикток
-                  </a>
+                  {/* Right column */}
+                  <div className="flex flex-col">
+                    {contactsRight.map((it, idx) => (
+                      <a
+                        key={`${it.label}-${idx}`}
+                        href={it.href}
+                        target={isHttp(it.href) ? "_blank" : undefined}
+                        rel={isHttp(it.href) ? "noreferrer" : undefined}
+                        onClick={close}
+                        className="py-[12px] border-t border-black/10 text-[12px] font-semibold uppercase tracking-[0.06em] text-black/75 hover:text-black hover:bg-black/5 px-[10px] transition"
+                      >
+                        {it.label}
+                      </a>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
