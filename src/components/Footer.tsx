@@ -8,6 +8,20 @@ function buildSatlLine(count: number) {
   return Array.from({ length: count }, () => "SATL").join(" ");
 }
 
+type ContactItem = { label: string; href: string };
+
+const DEFAULT_CONTACTS_LEFT: ContactItem[] = [
+  { label: "телеграм", href: "https://web.telegram.org/k/#@MANAGER_SATL_SHOP" },
+  { label: "почта", href: "mailto:Satl.Shop.ru@gmail.com" },
+  { label: "тикток", href: "#" },
+];
+
+const DEFAULT_CONTACTS_RIGHT: ContactItem[] = [
+  { label: "инстаграм", href: "#" },
+  { label: "телефон", href: "tel:+70000000000" },
+  { label: "вк", href: "#" },
+];
+
 export default function Footer() {
   const [count, setCount] = useState(6);
 
@@ -16,6 +30,14 @@ export default function Footer() {
   const [submitting, setSubmitting] = useState(false);
   const [subOk, setSubOk] = useState<string | null>(null);
   const [subErr, setSubErr] = useState<string | null>(null);
+
+  // ✅ contacts state (from admin settings)
+  const [contactsLeft, setContactsLeft] = useState<ContactItem[]>(
+    DEFAULT_CONTACTS_LEFT
+  );
+  const [contactsRight, setContactsRight] = useState<ContactItem[]>(
+    DEFAULT_CONTACTS_RIGHT
+  );
 
   useEffect(() => {
     const recalc = () => {
@@ -26,6 +48,32 @@ export default function Footer() {
     recalc();
     window.addEventListener("resize", recalc);
     return () => window.removeEventListener("resize", recalc);
+  }, []);
+
+  // ✅ load contacts once
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadContacts() {
+      try {
+        const res = await fetch("/api/site-settings/contacts", {
+          cache: "no-store",
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data) return;
+        if (cancelled) return;
+
+        if (Array.isArray(data.left)) setContactsLeft(data.left);
+        if (Array.isArray(data.right)) setContactsRight(data.right);
+      } catch {
+        // keep defaults
+      }
+    }
+
+    loadContacts();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const line = useMemo(() => buildSatlLine(count), [count]);
@@ -68,25 +116,40 @@ export default function Footer() {
 
             <div className="mt-[10px] flex gap-x-[80px]">
               <div className="flex flex-col gap-y-[6px] text-[9px] leading-[1.2] uppercase tracking-[0.02em] text-black/80">
-                <Link href="/docs/user-agreement" className="hover:text-black transition">
+                <Link
+                  href="/docs/user-agreement"
+                  className="hover:text-black transition"
+                >
                   пользовательское соглашение
                 </Link>
-                <Link href="/docs/pd-policy" className="hover:text-black transition">
+                <Link
+                  href="/docs/pd-policy"
+                  className="hover:text-black transition"
+                >
                   политика обработки персональных данных
                 </Link>
-                <Link href="/docs/privacy-policy" className="hover:text-black transition">
+                <Link
+                  href="/docs/privacy-policy"
+                  className="hover:text-black transition"
+                >
                   политика конфиденциальности
                 </Link>
               </div>
 
               <div className="flex flex-col gap-y-[6px] text-[9px] leading-[1.2] uppercase tracking-[0.02em] text-black/80">
-                <Link href="/docs/delivery" className="hover:text-black transition">
+                <Link
+                  href="/docs/delivery"
+                  className="hover:text-black transition"
+                >
                   доставка и оплата
                 </Link>
                 <Link href="/docs/returns" className="hover:text-black transition">
                   обмен и возврат
                 </Link>
-                <Link href="/docs/public-offer" className="hover:text-black transition">
+                <Link
+                  href="/docs/public-offer"
+                  className="hover:text-black transition"
+                >
                   публичная оферта
                 </Link>
               </div>
@@ -100,12 +163,30 @@ export default function Footer() {
             </div>
 
             <div className="mt-[10px] flex gap-x-[48px]">
+              {/* Левая колонка */}
               <div className="flex flex-col gap-y-[6px] text-[9px] leading-[1.2] uppercase tracking-[0.02em] text-black/80">
-                <a href="https://web.telegram.org/k/#@MANAGER_SATL_SHOP" className="hover:text-black transition">телеграм</a>
-                <a href="mailto:Satl.Shop.ru@gmail.com" className="hover:text-black transition">почта</a>
-                <a href="#" className="hover:text-black transition">тикток</a>
+                {contactsLeft.map((it, idx) => (
+                  <a
+                    key={`${it.label}-${idx}`}
+                    href={it.href}
+                    className="hover:text-black transition"
+                  >
+                    {it.label}
+                  </a>
+                ))}
               </div>
+
+              {/* Правая колонка */}
               <div className="flex flex-col gap-y-[6px] text-[9px] leading-[1.2] uppercase tracking-[0.02em] text-black/80">
+                {contactsRight.map((it, idx) => (
+                  <a
+                    key={`${it.label}-${idx}`}
+                    href={it.href}
+                    className="hover:text-black transition"
+                  >
+                    {it.label}
+                  </a>
+                ))}
               </div>
             </div>
           </div>
@@ -184,13 +265,12 @@ export default function Footer() {
       </div>
 
       {/* ===== НИЖНИЙ SATL ===== */}
-      {/* ===== НИЖНИЙ SATL ===== */}
       <div className="mt-auto w-full overflow-hidden">
         <div
           className={`
             ${akonyBold.className}
             whitespace-nowrap uppercase leading-none
-            text-[60px] md:text-[100px]   // 👈 меньше на телефоне
+            text-[60px] md:text-[100px]
             tracking-[-0.30em]
             translate-y-[14px] md:translate-y-[22px]
           `}
@@ -198,7 +278,6 @@ export default function Footer() {
           {line}
         </div>
       </div>
-
     </footer>
   );
 }

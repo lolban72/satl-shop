@@ -27,13 +27,13 @@ const nav = [
   { href: "/admin/navigation/home", label: "Порядок на главной" },
   { href: "/admin/marketing/hero", label: "Баннер" },
   { href: "/admin/marquee", label: "Бегущая строка" },
+
+  // ✅ NEW: Контакты (футер)
+  { href: "/admin/settings/contacts", label: "Контакты" },
 ];
 
 // ✅ маленький компонент “та же кнопка, что в дизайне”
 function NavItem({ href, label }: { href: string; label: string }) {
-  // на сервере активный роут без usePathname недоступен,
-  // поэтому делаем стиль везде одинаковым (минимализм).
-  // Если хочешь активный пункт — скажи, я дам клиентский sidebar.
   return (
     <Link
       href={href}
@@ -45,7 +45,9 @@ function NavItem({ href, label }: { href: string; label: string }) {
       ].join(" ")}
     >
       <span>{label}</span>
-      <span className="text-black/30 group-hover:text-black/60 transition">→</span>
+      <span className="text-black/30 group-hover:text-black/60 transition">
+        →
+      </span>
     </Link>
   );
 }
@@ -69,7 +71,6 @@ export default async function AdminLayout({
         {/* Sidebar */}
         <aside className="lg:sticky lg:top-[18px] h-fit">
           <div className="rounded-3xl border border-black/15 p-4">
-
             <div className="mt-4 grid gap-2">
               {nav.map((i) => (
                 <NavItem key={i.href} href={i.href} label={i.label} />

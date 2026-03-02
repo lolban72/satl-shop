@@ -61,21 +61,19 @@ export default async function AdminOrdersPage(props: {
   searchParams?: Promise<{
     q?: string;
     status?: string;
-    day?: string; // today/yesterday
-    date?: string; // YYYY-MM-DD
+    day?: string;   // today/yesterday
+    date?: string;  // YYYY-MM-DD
   }>;
 }) {
   const sp = (await props.searchParams) ?? {};
 
   const q = (sp.q ?? "").trim();
 
+  // ✅ FIX: никогда не падаем
   const statusRaw = (sp.status ?? "").trim().toUpperCase();
 
-  // ✅ date имеет приоритет над day (оставляем)
-  const dateParam = (sp.date ?? "").trim();
-  const dayParam = (sp.day ?? "today").trim() || "today";
-  const dayInput = (dateParam && isIsoDate(dateParam)) ? dateParam : dayParam;
-
+  // ✅ date имеет приоритет над day
+  const dayInput = (sp.date ?? "").trim() || (sp.day ?? "today");
   const { start, end, day } = getDayRangeUTC(dayInput);
 
   const where: any = {
@@ -108,8 +106,7 @@ export default async function AdminOrdersPage(props: {
 
     const day = String(formData.get("day") || "today");
     const date = String(formData.get("date") || "").trim();
-
-    const dayInput = (date && isIsoDate(date)) ? date : day;
+    const dayInput = date || day;
 
     const { start, end, day: normalized } = getDayRangeUTC(dayInput);
 
@@ -123,10 +120,6 @@ export default async function AdminOrdersPage(props: {
       },
     });
 
-    // ✅ если выбрана конкретная дата — в redirect кладём именно её
-    if (isIsoDate(dayInput)) {
-      redirect(`/admin/orders/labels?date=${encodeURIComponent(dayInput)}`);
-    }
     redirect(`/admin/orders/labels?day=${encodeURIComponent(normalized)}`);
   }
 
@@ -157,20 +150,18 @@ export default async function AdminOrdersPage(props: {
           name="day"
           defaultValue={isCustomDay ? "today" : day}
           className="h-9 rounded-xl border px-3 text-sm"
-          title="Быстрый выбор: сегодня/вчера (если выбрана дата — игнорируется)"
         >
           <option value="today">Сегодня</option>
           <option value="yesterday">Вчера</option>
         </select>
 
-        {/* ✅ Конкретная дата (календарь) */}
+        {/* Конкретная дата */}
         <input
-          type="date"
           name="date"
           defaultValue={isCustomDay ? day : ""}
-          max={isoToday}
-          className="h-9 w-[170px] rounded-xl border px-3 text-sm"
-          title="Выбор конкретной даты (имеет приоритет над Сегодня/Вчера)"
+          placeholder={isoToday}
+          className="h-9 w-[150px] rounded-xl border px-3 text-sm"
+          title="Дата в формате YYYY-MM-DD"
         />
 
         <input
@@ -226,10 +217,7 @@ export default async function AdminOrdersPage(props: {
                     {new Date(o.createdAt).toLocaleString("ru-RU")}
                   </td>
 
-                  {/* если у тебя короткие order.id — можно убрать slice */}
-                  <td className="font-mono text-[12px] text-black/70">
-                    {o.id.length > 10 ? `${o.id.slice(0, 10)}…` : o.id}
-                  </td>
+                  <td className="font-mono text-[12px] text-black/70">{o.id.slice(0, 10)}…</td>
 
                   <td>
                     <span className={meta.badgeClass}>{meta.label}</span>
