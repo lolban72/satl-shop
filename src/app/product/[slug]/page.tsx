@@ -161,13 +161,22 @@ export default async function ProductPage({
           </div>
 
           {/* DISCOUNT (плашка) */}
-          {hasDiscount ? (
+          {product.discountPercent > 0 && (
             <div className="text-[14px] md:text-[20px] font-bold text-[#B60404] mt-[-5px]">
-              <span style={{ fontFamily: "Yeast" }} className="tracking-[0.02em]">
-                скидка
+              <span
+                style={{ fontFamily: "Yeast" }}
+                className="tracking-[0.02em]"
+              >
+                -{product.discountPercent}
+              </span>
+              <span
+                style={{ fontFamily: "YrsaBold" }}
+                className="text-[15px] md:text-[17px]"
+              >
+                %
               </span>
             </div>
-          ) : null}
+          )}
 
           {/* SIZES + BUTTON */}
           <div className="mt-[14px] md:mt-[18px]">
