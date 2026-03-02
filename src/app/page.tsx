@@ -8,34 +8,6 @@ export const metadata = {
     "Интернет-магазин одежды SATL. Новые коллекции, лимитированные релизы.",
 };
 
-// ✅ проверка валидности скидочной цены
-function isValidDiscount(basePrice: number, discountPrice?: number | null) {
-  const base = Number(basePrice ?? 0);
-  const disc = discountPrice == null ? null : Number(discountPrice);
-  return Boolean(base && disc && disc > 0 && disc < base);
-}
-
-// ✅ процент скидки ТОЛЬКО для плашки (без округлений)
-// мы не пытаемся сделать его математически точным — просто показываем,
-// а цену берём из payPrice (discountPrice)
-function calcDisplayPercent(basePrice: number, discountPrice: number) {
-  const base = Number(basePrice ?? 0);
-  const disc = Number(discountPrice ?? 0);
-  if (!base || !disc || disc <= 0 || disc >= base) return 0;
-
-  // ВАЖНО: без округлений "вообще" целого процента не бывает,
-  // но для UI плашки берём "как есть" и отрезаем дробь,
-  // чтобы не было прыжков/round.
-  const raw = ((base - disc) * 100) / base;
-
-  // например 19.9% => 19%
-  const pct = Math.floor(raw);
-
-  if (pct < 1) return 1;
-  if (pct > 99) return 99;
-  return pct;
-}
-
 export default async function HomePage() {
   const banner = await prisma.heroBanner.findFirst({
     orderBy: { createdAt: "asc" },
@@ -54,9 +26,7 @@ export default async function HomePage() {
       products: {
         orderBy: { createdAt: "desc" },
         include: {
-          variants: {
-            select: { id: true, stock: true },
-          },
+          variants: { select: { id: true, stock: true } },
         },
       },
     },
@@ -98,29 +68,16 @@ export default async function HomePage() {
                         | null
                         | undefined;
 
-                      const base = Number(p.price ?? 0);
-
-                      const hasDiscount = isValidDiscount(base, discountPrice);
-                      const disc = hasDiscount ? Number(discountPrice) : null;
-
-                      // ✅ цена к оплате — строго discountPrice, если он валидный
-                      const payPrice = hasDiscount && disc != null ? disc : base;
-
-                      // ✅ процент скидки — только чтобы карточка показала плашку/старую цену
-                      const displayPercent =
-                        hasDiscount && disc != null
-                          ? calcDisplayPercent(base, disc)
-                          : 0;
-
                       return (
                         <ProductCard
                           key={p.id}
                           slug={p.slug}
                           title={p.title}
-                          price={payPrice} // ✅ итоговая цена (discountPrice) без пересчётов
+                          price={p.price} // ✅ цена БЕЗ скидки (для зачёркнутой)
+                          discountPrice={discountPrice ?? null} // ✅ цена СО скидкой (для открытой)
                           imageUrl={p.images?.[0] ?? null}
                           isSoon={p.isSoon}
-                          discountPercent={displayPercent} // ✅ чтобы не пропадала плашка/старая цена
+                          discountPercent={p.discountPercent ?? 0} // ✅ только плашка, на цену НЕ влияет
                         />
                       );
                     })}

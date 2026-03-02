@@ -1,179 +1,98 @@
+"use client";
+
 import Link from "next/link";
+
+type Props = {
+  slug: string;
+  title: string;
+
+  // цена БЕЗ скидки (как в админке)
+  price: number;
+
+  // цена СО скидкой (как в админке)
+  discountPrice?: number | null;
+
+  imageUrl?: string | null;
+  isSoon?: boolean;
+
+  // ТОЛЬКО ДЛЯ ПЛАШКИ. На цену НЕ влияет.
+  discountPercent?: number;
+};
+
+function rub(v: number) {
+  // если у тебя цена в копейках:
+  return (Number(v ?? 0) / 100).toFixed(0) + "р";
+}
 
 export default function ProductCard({
   slug,
   title,
   price,
+  discountPrice,
   imageUrl,
-  isSoon = false,
+  isSoon,
   discountPercent = 0,
-}: {
-  slug: string;
-  title: string;
-  price: number; // цена в копейках/центах (как у тебя: /100)
-  imageUrl?: string | null;
-  isSoon?: boolean;
-  discountPercent?: number;
-}) {
-  const Wrapper: any = isSoon ? "div" : Link;
-  const wrapperProps = isSoon ? {} : { href: `/product/${slug}` };
+}: Props) {
+  const base = Number(price ?? 0);
+  const disc = discountPrice == null ? null : Number(discountPrice);
 
-  const showDiscount = !isSoon && (discountPercent ?? 0) > 0;
+  const hasDiscount = disc != null && disc > 0 && disc < base;
 
-  const oldPrice = price; // исходная цена (до скидки) в копейках
-  const finalPrice = showDiscount
-    ? Math.max(
-        0,
-        Math.round(oldPrice * (1 - Number(discountPercent) / 100))
-      )
-    : oldPrice;
+  const openPrice = hasDiscount ? disc! : base;
+  const oldPrice = hasDiscount ? base : null;
 
   return (
-    <Wrapper
-      {...wrapperProps}
-      className="
-        relative block text-center overflow-visible
-        w-full md:w-[400px]
-      "
+    <Link
+      href={`/product/${encodeURIComponent(slug)}`}
+      className="block w-full max-w-[320px]"
     >
-      {/* ✅ СКИДКА */}
-      {showDiscount ? (
-        <div className="absolute right-[8px] md:right-[18px] top-[5px] md:top-[-28px] z-30 pointer-events-none">
-          <span
-            className="text-[15px] md:text-[20px] leading-none"
-            style={{ fontFamily: "Yeast", fontWeight: 300, color: "#B60404" }}
-          >
-            -{discountPercent}
-          </span>
-          <span
-            className="text-[12px] md:text-[16px] leading-none"
-            style={{
-              fontFamily: "YrsaBold",
-              fontWeight: 700,
-              color: "#B60404",
-              marginLeft: "1px",
-            }}
-          >
-            %
-          </span>
-        </div>
-      ) : null}
-
-      {/* ОБЛАСТЬ ИЗОБРАЖЕНИЯ */}
-      <div
-        className="
-          relative mx-auto
-          w-[100%] sm:w-full md:w-[400px]
-          aspect-[0.9/1] sm:aspect-[4/3]
-          md:h-[300px]
-        "
-      >
-        {/* ✅ свечение/тень */}
-        {!isSoon && (
-          <div
-            className="
-              absolute inset-0
-              rounded-[28px] sm:rounded-[40px] md:rounded-[60px]
-              opacity-60 md:opacity-70
-              blur-[20px] sm:blur-[22px] md:blur-[38px]
-            "
-            style={{ backgroundColor: "#929292" }}
-            aria-hidden="true"
-          />
-        )}
-
-        {/* ===== MOBILE IMAGE (НЕ РЕЖЕМ) ===== */}
-        <div className="md:hidden absolute inset-0 z-10">
-          {/* скруглённая “рамка” */}
-          <div className="absolute inset-0 rounded-[28px] sm:rounded-[40px]" />
-          {/* фото без клипа */}
-          <div className="absolute inset-0 z-20 p-[18px] overflow-visible">
-            <img
-              src={imageUrl ?? "https://picsum.photos/seed/product/800/600"}
-              alt={title}
-              className="h-full w-full object-contain scale-[1.35]"
-              draggable={false}
-            />
-          </div>
-        </div>
-
-        {/* ===== DESKTOP IMAGE (АККУРАТНО ВНУТРИ) ===== */}
-        <div className="hidden md:block absolute inset-0 z-10 overflow-hidden rounded-[60px]">
+      <div className="relative w-full">
+        <div className="relative aspect-[3/4] w-full overflow-hidden rounded-[18px] bg-black/5">
+          {/* картинка */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={imageUrl ?? "https://picsum.photos/seed/product/800/600"}
+            src={imageUrl ?? "https://picsum.photos/seed/product/600/800"}
             alt={title}
-            className="h-full w-full object-contain"
-            draggable={false}
+            className="h-full w-full object-cover"
+            loading="lazy"
           />
+
+          {/* SOON */}
+          {isSoon ? (
+            <div className="absolute left-[10px] top-[10px] rounded-full bg-black/75 px-3 py-1 text-[11px] text-white">
+              SOON
+            </div>
+          ) : null}
+
+          {/* Плашка скидки — ТОЛЬКО визуально */}
+          {hasDiscount && discountPercent > 0 ? (
+            <div className="absolute right-[10px] top-[10px] rounded-full bg-[#B60404] px-3 py-1 text-[11px] font-bold text-white">
+              -{discountPercent}%
+            </div>
+          ) : null}
         </div>
 
-        {/* ===== СКОРО OVERLAY (поверх обоих вариантов) ===== */}
-        {isSoon && (
-          <div className="absolute inset-0 z-20">
-            <div
-              className="
-                absolute inset-0
-                rounded-[24px] sm:rounded-[34px] md:rounded-[50px]
-                bg-black/15 backdrop-blur-[22px] md:backdrop-blur-[28px]
-              "
-            />
-            <div className="absolute inset-0 grid place-items-center">
-              <div
-                className="text-[34px] sm:text-[40px] md:text-[64px] tracking-[-0.02em] text-white uppercase"
-                style={{
-                  fontFamily: "Montserrat",
-                  fontWeight: 800,
-                  fontSynthesis: "none",
-                  textShadow: "0 6px 12px rgba(0,0,0,0.6)",
-                  WebkitTextStroke: "3px rgb(255, 255, 255)",
-                }}
-              >
-                СКОРО
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* НАЗВАНИЕ + ЦЕНА показываются только если НЕ "скоро" */}
-      {!isSoon && (
-        <div className="mt-[-5px] md:mt-5">
-          <div
-            className="text-[18px] sm:text-[20px] md:text-[30px] leading-none"
-            style={{ fontFamily: "Yeast" }}
-          >
+        {/* title + price */}
+        <div className="mt-3">
+          <div className="text-[13px] md:text-[14px] leading-[1.2] text-black">
             {title}
           </div>
 
-          {/* ЦЕНЫ */}
-          {showDiscount ? (
-            <div className="mt-2 flex items-baseline justify-center gap-2 md:gap-3">
-              {/* старая зачеркнутая */}
-              <div
-                className="text-[14px] sm:text-[14px] md:text-[18px] leading-none opacity-70 line-through"
-                style={{ fontFamily: "Yeast" }}
-              >
-                {(oldPrice / 100).toFixed(0)}р
-              </div>
+          <div className="mt-2 flex items-end gap-2">
+            {/* открытая цена */}
+            <div className="text-[14px] md:text-[16px]">
+              {rub(openPrice)}
+            </div>
 
-              {/* новая (со скидкой) */}
-              <div
-                className="text-[18px] sm:text-[16px] md:text-[25px] leading-none"
-                style={{ fontFamily: "Yeast" }}
-              >
-                {(finalPrice / 100).toFixed(0)}р
+            {/* зачёркнутая старая */}
+            {oldPrice != null ? (
+              <div className="text-[12px] md:text-[13px] text-black/40 line-through">
+                {rub(oldPrice)}
               </div>
-            </div>
-          ) : (
-            <div
-              className="mt-2 text-[18px] sm:text-[16px] md:text-[25px] leading-none"
-              style={{ fontFamily: "Yeast" }}
-            >
-              {(price / 100).toFixed(0)}р
-            </div>
-          )}
+            ) : null}
+          </div>
         </div>
-      )}
-    </Wrapper>
+      </div>
+    </Link>
   );
 }
