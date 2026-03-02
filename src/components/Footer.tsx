@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { akonyBold } from "@/lib/fonts";
 import Link from "next/link";
-import { X, Menu, ChevronDown } from "lucide-react";
 
-type NavCategory = { id: string; title: string; slug: string };
-type InfoLink = { href: string; label: string };
+function buildSatlLine(count: number) {
+  return Array.from({ length: count }, () => "SATL").join(" ");
+}
 
 type ContactItem = { label: string; href: string };
 
@@ -21,19 +22,16 @@ const DEFAULT_CONTACTS_RIGHT: ContactItem[] = [
   { label: "вк", href: "#" },
 ];
 
-export default function MobileNav(props: {
-  categories: NavCategory[];
-  infoLinks: InfoLink[];
-  isAuthed: boolean;
-}) {
-  const { categories, infoLinks, isAuthed } = props;
+export default function Footer() {
+  const [count, setCount] = useState(6);
 
-  const [open, setOpen] = useState(false);
-  const [catsOpen, setCatsOpen] = useState(true);
-  const [infoOpen, setInfoOpen] = useState(true);
-  const [contactsOpen, setContactsOpen] = useState(true);
-  const [profileOpen, setProfileOpen] = useState(true);
+  // subscribe state
+  const [email, setEmail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [subOk, setSubOk] = useState<string | null>(null);
+  const [subErr, setSubErr] = useState<string | null>(null);
 
+  // ✅ contacts state (from admin settings)
   const [contactsLeft, setContactsLeft] = useState<ContactItem[]>(
     DEFAULT_CONTACTS_LEFT
   );
@@ -41,32 +39,18 @@ export default function MobileNav(props: {
     DEFAULT_CONTACTS_RIGHT
   );
 
-  const cats = useMemo(() => categories ?? [], [categories]);
-
-  function close() {
-    setOpen(false);
-  }
-
-  // ✅ Блокируем скролл BODY, когда меню открыто
   useEffect(() => {
-    if (!open) return;
-
-    const prevOverflow = document.body.style.overflow;
-    const prevPaddingRight = document.body.style.paddingRight;
-
-    const scrollBarWidth =
-      window.innerWidth - document.documentElement.clientWidth;
-    document.body.style.overflow = "hidden";
-    if (scrollBarWidth > 0)
-      document.body.style.paddingRight = `${scrollBarWidth}px`;
-
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      document.body.style.paddingRight = prevPaddingRight;
+    const recalc = () => {
+      const w = window.innerWidth;
+      const approxWord = 240;
+      setCount(Math.max(6, Math.ceil(w / approxWord) + 2));
     };
-  }, [open]);
+    recalc();
+    window.addEventListener("resize", recalc);
+    return () => window.removeEventListener("resize", recalc);
+  }, []);
 
-  // ✅ load contacts once (как в футере)
+  // ✅ load contacts once
   useEffect(() => {
     let cancelled = false;
 
@@ -92,319 +76,208 @@ export default function MobileNav(props: {
     };
   }, []);
 
-  const isHttp = (href: string) =>
-    /^https?:\/\//i.test(String(href ?? ""));
+  const line = useMemo(() => buildSatlLine(count), [count]);
+
+  async function subscribe() {
+    setSubmitting(true);
+    setSubOk(null);
+    setSubErr(null);
+
+    try {
+      const res = await fetch("/api/newsletter/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Не удалось подписаться");
+
+      setSubOk("Вы подписаны ✅ (отображается в личном кабинете)");
+      setEmail("");
+    } catch (e: any) {
+      setSubErr(e?.message || "Ошибка");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
-    <>
-      {/* Burger */}
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-label="Открыть меню"
-        className="md:hidden inline-flex items-center justify-center hover:opacity-70 transition"
-      >
-        <Menu size={34} strokeWidth={2} />
-      </button>
+    <footer className="bg-white text-black mt-[120px] flex flex-col">
+      {/* ===== ВЕРХ ФУТЕРА ===== */}
+      {/* ❗ На мобилке скрываем полностью */}
+      <div className="hidden md:block mx-auto w-full max-w-[1440px] px-[15px]">
+        <div className="grid grid-cols-12 items-start">
+          {/* Покупателям */}
+          <div className="col-span-5">
+            <div className="font-bold italic text-[20px] leading-none tracking-[-0.05em]">
+              Покупателям
+            </div>
 
-      {/* Overlay */}
-      <div
-        className={[
-          "fixed inset-0 z-[60] md:hidden",
-          open ? "pointer-events-auto" : "pointer-events-none",
-        ].join(" ")}
-        aria-hidden={!open}
-      >
-        {/* Backdrop */}
-        <div
-          onClick={close}
-          className={[
-            "absolute inset-0 bg-black/35 transition-opacity duration-200",
-            open ? "opacity-100" : "opacity-0",
-          ].join(" ")}
-        />
+            <div className="mt-[10px] flex gap-x-[80px]" style={{ fontFamily: "Brygada" }}>
+              <div className="flex flex-col gap-y-[6px] text-[9px] leading-[1.2] uppercase tracking-[0.02em] text-black/80" >
+                <Link
+                  href="/docs/user-agreement"
+                  className="hover:text-black transition"
+                >
+                  пользовательское соглашение
+                </Link>
+                <Link
+                  href="/docs/pd-policy"
+                  className="hover:text-black transition"
+                >
+                  политика обработки персональных данных
+                </Link>
+                <Link
+                  href="/docs/privacy-policy"
+                  className="hover:text-black transition"
+                >
+                  политика конфиденциальности
+                </Link>
+              </div>
 
-        {/* Panel */}
-        <aside
-          className={[
-            "absolute right-0 top-0 h-full w-[86vw] max-w-[380px]",
-            "bg-white border-l border-black/10",
-            "shadow-[0_18px_55px_rgba(0,0,0,0.18)]",
-            "transition-transform duration-200",
-            open ? "translate-x-0" : "translate-x-full",
-            "flex flex-col",
-          ].join(" ")}
-        >
-          {/* Header */}
-          <div className="h-[72px] px-[18px] flex items-center justify-between shrink-0">
-            <div className="text-[13px] font-bold uppercase tracking-[0.06em] text-black/70" />
-            <button
-              type="button"
-              onClick={close}
-              aria-label="Закрыть меню"
-              className="inline-flex items-center justify-center hover:opacity-70 transition"
-            >
-              <X size={25} strokeWidth={2} />
-            </button>
+              <div className="flex flex-col gap-y-[6px] text-[9px] leading-[1.2] uppercase tracking-[0.02em] text-black/80">
+                <Link
+                  href="/docs/delivery"
+                  className="hover:text-black transition"
+                >
+                  доставка и оплата
+                </Link>
+                <Link href="/docs/returns" className="hover:text-black transition">
+                  обмен и возврат
+                </Link>
+                <Link
+                  href="/docs/public-offer"
+                  className="hover:text-black transition"
+                >
+                  публичная оферта
+                </Link>
+              </div>
+            </div>
           </div>
 
-          {/* Body */}
-          <div
-            className="
-              px-[18px] py-[6px]
-              flex-1 overflow-y-auto
-              overscroll-contain
-              touch-pan-y
-            "
-          >
-            {/* Categories */}
-            <button
-              type="button"
-              onClick={() => setCatsOpen((v) => !v)}
-              className="w-full flex items-center justify-between py-[12px] text-left"
-            >
-              <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-black/100">
-                Категории
-              </span>
-              <ChevronDown
-                size={18}
-                strokeWidth={2}
-                className={[
-                  "transition-transform",
-                  catsOpen ? "rotate-180" : "rotate-0",
-                ].join(" ")}
-              />
-            </button>
-
-            <div
-              className={[
-                "overflow-hidden transition-[max-height,opacity] duration-200",
-                catsOpen ? "max-h-[520px] opacity-100" : "max-h-0 opacity-0",
-              ].join(" ")}
-            >
-              <div className="pb-[10px]">
-                {cats.length === 0 ? (
-                  <div className="py-[10px] text-[11px] uppercase tracking-[0.08em] text-black/45">
-                    Нет категорий
-                  </div>
-                ) : (
-                  <div className="grid">
-                    {cats.map((c) => (
-                      <Link
-                        key={c.id}
-                        href={`/#cat-${c.slug}`}
-                        onClick={close}
-                        className="py-[12px] border-t border-black/10 text-[12px] font-semibold uppercase tracking-[0.06em] text-black/75 hover:text-black hover:bg-black/5 px-[10px] transition"
-                      >
-                        {c.title}
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
+          {/* Контакты */}
+          <div className="col-span-3">
+            <div className="font-bold italic text-[20px] leading-none tracking-[-0.05em]">
+              Контакты
             </div>
 
-            <div className="h-[1px] bg-black/10" />
+            <div className="mt-[10px] flex gap-x-[48px]" style={{ fontFamily: "Brygada" }}>
+              {/* Левая колонка */}
+              <div className="flex flex-col gap-y-[6px] text-[9px] leading-[1.2] uppercase tracking-[0.02em] text-black/80">
+                {contactsLeft.map((it, idx) => (
+                  <a
+                    key={`${it.label}-${idx}`}
+                    href={it.href}
+                    className="hover:text-black transition"
+                  >
+                    {it.label}
+                  </a>
+                ))}
+              </div>
 
-            {/* Info */}
-            <button
-              type="button"
-              onClick={() => setInfoOpen((v) => !v)}
-              className="w-full flex items-center justify-between py-[12px] text-left"
-            >
-              <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-black/100">
-                Информация
-              </span>
-              <ChevronDown
-                size={18}
-                strokeWidth={2}
-                className={[
-                  "transition-transform",
-                  infoOpen ? "rotate-180" : "rotate-0",
-                ].join(" ")}
-              />
-            </button>
-
-            <div
-              className={[
-                "overflow-hidden transition-[max-height,opacity] duration-200",
-                infoOpen ? "max-h-[520px] opacity-100" : "max-h-0 opacity-0",
-              ].join(" ")}
-            >
-              <div className="pb-[10px]">
-                <div className="grid">
-                  {infoLinks.map((x) => (
-                    <Link
-                      key={x.href}
-                      href={x.href}
-                      onClick={close}
-                      className="py-[12px] border-t border-black/10 text-[12px] font-semibold uppercase tracking-[0.06em] text-black/75 hover:text-black hover:bg-black/5 px-[10px] transition"
-                    >
-                      {x.label}
-                    </Link>
-                  ))}
-                </div>
+              {/* Правая колонка */}
+              <div className="flex flex-col gap-y-[6px] text-[9px] leading-[1.2] uppercase tracking-[0.02em] text-black/80">
+                {contactsRight.map((it, idx) => (
+                  <a
+                    key={`${it.label}-${idx}`}
+                    href={it.href}
+                    className="hover:text-black transition"
+                  >
+                    {it.label}
+                  </a>
+                ))}
               </div>
             </div>
-
-            <div className="h-[1px] bg-black/10" />
-
-            {/* Contacts (как в футере: 2 колонки) */}
-            <button
-              type="button"
-              onClick={() => setContactsOpen((v) => !v)}
-              className="w-full flex items-center justify-between py-[12px] text-left"
-            >
-              <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-black/100">
-                Контакты
-              </span>
-              <ChevronDown
-                size={18}
-                strokeWidth={2}
-                className={[
-                  "transition-transform",
-                  contactsOpen ? "rotate-180" : "rotate-0",
-                ].join(" ")}
-              />
-            </button>
-
-            <div
-              className={[
-                "overflow-hidden transition-[max-height,opacity] duration-200",
-                contactsOpen ? "max-h-[520px] opacity-100" : "max-h-0 opacity-0",
-              ].join(" ")}
-            >
-              <div className="pb-[10px]">
-                <div className="grid grid-cols-2 gap-x-[10px]">
-                  {/* Left column */}
-                  <div className="flex flex-col">
-                    {contactsLeft.map((it, idx) => (
-                      <a
-                        key={`${it.label}-${idx}`}
-                        href={it.href}
-                        target={isHttp(it.href) ? "_blank" : undefined}
-                        rel={isHttp(it.href) ? "noreferrer" : undefined}
-                        onClick={close}
-                        className="py-[12px] border-t border-black/10 text-[12px] font-semibold uppercase tracking-[0.06em] text-black/75 hover:text-black hover:bg-black/5 px-[10px] transition"
-                      >
-                        {it.label}
-                      </a>
-                    ))}
-                  </div>
-
-                  {/* Right column */}
-                  <div className="flex flex-col">
-                    {contactsRight.map((it, idx) => (
-                      <a
-                        key={`${it.label}-${idx}`}
-                        href={it.href}
-                        target={isHttp(it.href) ? "_blank" : undefined}
-                        rel={isHttp(it.href) ? "noreferrer" : undefined}
-                        onClick={close}
-                        className="py-[12px] border-t border-black/10 text-[12px] font-semibold uppercase tracking-[0.06em] text-black/75 hover:text-black hover:bg-black/5 px-[10px] transition"
-                      >
-                        {it.label}
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="h-[1px] bg-black/10" />
-
-            {/* Profile */}
-            <button
-              type="button"
-              onClick={() => setProfileOpen((v) => !v)}
-              className="w-full flex items-center justify-between py-[12px] text-left"
-            >
-              <span className="text-[12px] font-semibold uppercase tracking-[0.08em] text-black/100">
-                Профиль
-              </span>
-              <ChevronDown
-                size={18}
-                strokeWidth={2}
-                className={[
-                  "transition-transform",
-                  profileOpen ? "rotate-180" : "rotate-0",
-                ].join(" ")}
-              />
-            </button>
-
-            <div
-              className={[
-                "overflow-hidden transition-[max-height,opacity] duration-200",
-                profileOpen ? "max-h-[520px] opacity-100" : "max-h-0 opacity-0",
-              ].join(" ")}
-            >
-              <div className="pb-[10px]">
-                <div className="grid">
-                  {isAuthed ? (
-                    <>
-                      <Link
-                        href="/account/orders"
-                        onClick={close}
-                        className="py-[12px] border-t border-black/10 text-[12px] font-semibold uppercase tracking-[0.06em] text-black/75 hover:text-black hover:bg-black/5 px-[10px] transition"
-                      >
-                        Заказы
-                      </Link>
-
-                      <Link
-                        href="/account/profile"
-                        onClick={close}
-                        className="py-[12px] border-t border-black/10 text-[12px] font-semibold uppercase tracking-[0.06em] text-black/75 hover:text-black hover:bg-black/5 px-[10px] transition"
-                      >
-                        Личные данные
-                      </Link>
-
-                      <Link
-                        href="/account/address"
-                        onClick={close}
-                        className="py-[12px] border-t border-black/10 text-[12px] font-semibold uppercase tracking-[0.06em] text-black/75 hover:text-black hover:bg-black/5 px-[10px] transition"
-                      >
-                        Адрес доставки
-                      </Link>
-
-                      <Link
-                        href="/account/subscriptions"
-                        onClick={close}
-                        className="py-[12px] border-t border-black/10 text-[12px] font-semibold uppercase tracking-[0.06em] text-black/75 hover:text-black hover:bg-black/5 px-[10px] transition"
-                      >
-                        Подписки
-                      </Link>
-
-                      <form
-                        action="/auth/logout"
-                        method="POST"
-                        className="border-t border-black/10"
-                      >
-                        <button
-                          type="submit"
-                          onClick={close}
-                          className="w-full text-left py-[12px] text-[12px] font-semibold uppercase tracking-[0.06em] text-black/75 hover:text-black hover:bg-black/5 px-[10px] transition"
-                        >
-                          Выход
-                        </button>
-                      </form>
-                    </>
-                  ) : (
-                    <Link
-                      href="/auth/login"
-                      onClick={close}
-                      className="py-[12px] border-t border-black/10 text-[12px] font-semibold uppercase tracking-[0.06em] text-black/75 hover:text-black hover:bg-black/5 px-[10px] transition"
-                    >
-                      Регистрация/вход
-                    </Link>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="h-[18px]" />
           </div>
-        </aside>
+
+          {/* Подписка */}
+          <div className="col-span-4">
+            <div className="font-bold italic text-[20px] leading-none tracking-[-0.05em]">
+              Подписаться
+            </div>
+
+            <div className="mt-[12px] flex items-center gap-[16px]">
+              <input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Ваш E-mail*"
+                className="
+                  h-[32px] w-[220px]
+                  border border-[#BFBFBF]
+                  px-[10px]
+                  text-[11px] tracking-[0.02em]
+                  outline-none
+                  placeholder:text-black/50
+                  focus:border-black transition
+                "
+              />
+
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={subscribe}
+                className="
+                  h-[32px] px-[28px]
+                  bg-black text-white
+                  text-[11px] font-bold uppercase tracking-[0.02em]
+                  transition hover:bg-[#111]
+                  active:scale-[0.98]
+                  disabled:opacity-40 disabled:cursor-not-allowed
+                "
+              >
+                {submitting ? "..." : "подписаться"}
+              </button>
+            </div>
+
+            {subOk ? (
+              <div className="mt-[6px] text-[9px] italic leading-[1.4] text-black/70">
+                {subOk}
+              </div>
+            ) : null}
+
+            {subErr ? (
+              <div className="mt-[6px] text-[9px] italic leading-[1.4] text-[#B60404]">
+                {subErr}
+              </div>
+            ) : (
+              <div className="mt-[6px] text-[9px] italic leading-[1.4] text-black/70">
+                *Нажав на кнопку “Подписаться”, Вы соглашаетесь с{" "}
+                <Link
+                  href="/docs/pd-policy"
+                  target="_blank"
+                  className="border-b border-black/40 text-black hover:border-black transition"
+                >
+                  политикой обработки персональных данных
+                </Link>{" "}
+                и даёте{" "}
+                <Link
+                  href="/legal/consent"
+                  target="_blank"
+                  className="border-b border-black/40 text-black hover:border-black transition"
+                >
+                  согласие на обработку персональных данных
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
-    </>
+
+      {/* ===== НИЖНИЙ SATL ===== */}
+      <div className="mt-auto w-full overflow-hidden">
+        <div
+          className={`
+            ${akonyBold.className}
+            whitespace-nowrap uppercase leading-none
+            text-[60px] md:text-[100px]
+            tracking-[-0.30em]
+            translate-y-[14px] md:translate-y-[22px]
+          `}
+        >
+          {line}
+        </div>
+      </div>
+    </footer>
   );
 }
