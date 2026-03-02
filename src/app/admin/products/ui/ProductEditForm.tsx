@@ -21,7 +21,7 @@ type ProductInput = {
   slug: string;
   price: number;
 
-  // ✅ NEW: цена со скидкой (в копейках) или null
+  // ✅ цена со скидкой (в копейках) или null
   discountPrice?: number | null;
 
   description: string;
@@ -81,7 +81,9 @@ export default function ProductEditForm({
   const [description, setDescription] = useState(product.description ?? "");
 
   const [isSoon, setIsSoon] = useState(Boolean(product.isSoon));
-  const [priceRub, setPriceRub] = useState(String((product.price / 100).toFixed(0)));
+  const [priceRub, setPriceRub] = useState(
+    String((product.price / 100).toFixed(0))
+  );
 
   // ✅ NEW: цена со скидкой (р) — редактируемая
   const [discountPriceRub, setDiscountPriceRub] = useState(
@@ -90,9 +92,13 @@ export default function ProductEditForm({
       : ""
   );
 
-  const [categoryId, setCategoryId] = useState<string>(product.categoryId ?? "");
+  const [categoryId, setCategoryId] = useState<string>(
+    product.categoryId ?? ""
+  );
 
-  const [discountPercent, setDiscountPercent] = useState(String(product.discountPercent ?? 0));
+  const [discountPercent, setDiscountPercent] = useState(
+    String(product.discountPercent ?? 0)
+  );
 
   // ✅ Обложка
   const [homeUrl, setHomeUrl] = useState<string>(product.homeImage ?? "");
@@ -100,18 +106,26 @@ export default function ProductEditForm({
   const [homePreview, setHomePreview] = useState<string>("");
 
   // ✅ Галерея (URL’ы)
-  const [galleryUrls, setGalleryUrls] = useState<string[]>(product.galleryImages ?? []);
+  const [galleryUrls, setGalleryUrls] = useState<string[]>(
+    product.galleryImages ?? []
+  );
   const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
   const [galleryPreviews, setGalleryPreviews] = useState<string[]>([]);
 
   // ✅ Таблица размеров (URL + файл + превью)
-  const [sizeChartUrl, setSizeChartUrl] = useState<string>(product.sizeChartImage ?? "");
+  const [sizeChartUrl, setSizeChartUrl] = useState<string>(
+    product.sizeChartImage ?? ""
+  );
   const [sizeChartFile, setSizeChartFile] = useState<File | null>(null);
   const [sizeChartPreview, setSizeChartPreview] = useState<string>("");
 
   // ✅ Размеры
   const [variants, setVariants] = useState<VariantRow[]>(
-    (product.variants?.length ? product.variants : [{ size: "ONE", stock: "0", color: "default" }]).map((v) => ({
+    (
+      product.variants?.length
+        ? product.variants
+        : [{ size: "ONE", stock: "0", color: "default" }]
+    ).map((v) => ({
       size: v.size,
       stock: String(v.stock ?? 0),
       color: v.color ?? "default",
@@ -123,7 +137,10 @@ export default function ProductEditForm({
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
 
-  const computedSlug = useMemo(() => (slug.trim() ? slug.trim() : slugify(title)), [slug, title]);
+  const computedSlug = useMemo(
+    () => (slug.trim() ? slug.trim() : slugify(title)),
+    [slug, title]
+  );
 
   const totalStock = useMemo(() => {
     return variants.reduce((sum, v) => {
@@ -136,7 +153,7 @@ export default function ProductEditForm({
   useEffect(() => {
     if (isSoon) {
       setPriceRub("0");
-      setDiscountPriceRub(""); // ✅ NEW
+      setDiscountPriceRub(""); // UI пустое
       setDiscountPercent("0");
       setVariants([{ size: "ONE", stock: "0", color: "default" }]);
     }
@@ -186,7 +203,11 @@ export default function ProductEditForm({
     return String(data.url || "");
   }
 
-  async function uploadAll(): Promise<{ home?: string; gallery: string[]; sizeChart?: string }> {
+  async function uploadAll(): Promise<{
+    home?: string;
+    gallery: string[];
+    sizeChart?: string;
+  }> {
     setUploading(true);
     try {
       const outGallery: string[] = [];
@@ -209,13 +230,18 @@ export default function ProductEditForm({
   }
 
   function addVariantRow() {
-    setVariants((prev) => [...prev, { size: "", stock: "0", color: "default" }]);
+    setVariants((prev) => [
+      ...prev,
+      { size: "", stock: "0", color: "default" },
+    ]);
   }
   function removeVariantRow(idx: number) {
     setVariants((prev) => prev.filter((_, i) => i !== idx));
   }
   function updateVariantRow(idx: number, patch: Partial<VariantRow>) {
-    setVariants((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+    setVariants((prev) =>
+      prev.map((r, i) => (i === idx ? { ...r, ...patch } : r))
+    );
   }
 
   function validateVariants(): string | null {
@@ -231,7 +257,8 @@ export default function ProductEditForm({
     for (const v of cleaned) {
       if (seen.has(v.size)) return `Дублируется размер: ${v.size}`;
       seen.add(v.size);
-      if (!isValidNonNegativeIntString(v.stock)) return `Некорректный stock у размера ${v.size}`;
+      if (!isValidNonNegativeIntString(v.stock))
+        return `Некорректный stock у размера ${v.size}`;
     }
 
     return null;
@@ -248,21 +275,25 @@ export default function ProductEditForm({
     const hasHome = Boolean(homeFile) || Boolean(homeUrl);
     if (!hasHome) return setErr("Нужно фото на главную (обложка)");
 
-    const hasGallery = (galleryUrls?.length ?? 0) + (galleryFiles?.length ?? 0) > 0;
+    const hasGallery =
+      (galleryUrls?.length ?? 0) + (galleryFiles?.length ?? 0) > 0;
     if (!hasGallery) return setErr("Добавь хотя бы одно фото в галерею");
 
     if (!isSoon) {
-      if (!isValidPositiveNumberString(priceRub)) return setErr("Некорректная цена (без скидки)");
+      if (!isValidPositiveNumberString(priceRub))
+        return setErr("Некорректная цена (без скидки)");
       const d = parseDiscount(discountPercent);
       if (d === null) return setErr("Некорректная скидка (0..99)");
 
       // ✅ NEW: валидация цены со скидкой (если заполнена)
       const dp = discountPriceRub.trim();
       if (dp) {
-        if (!isValidPositiveNumberString(dp)) return setErr("Некорректная цена со скидкой");
+        if (!isValidPositiveNumberString(dp))
+          return setErr("Некорректная цена со скидкой");
         const base = Number(String(priceRub).replace(",", "."));
         const disc = Number(String(dp).replace(",", "."));
-        if (disc >= base) return setErr("Цена со скидкой должна быть меньше обычной цены");
+        if (disc >= base)
+          return setErr("Цена со скидкой должна быть меньше обычной цены");
       }
 
       const vErr = validateVariants();
@@ -275,7 +306,6 @@ export default function ProductEditForm({
       const uploaded = await uploadAll();
 
       const nextHome = uploaded.home ?? homeUrl; // если новый не загружали — оставляем старый
-
       const nextGallery = [...galleryUrls, ...uploaded.gallery].filter(Boolean);
 
       // таблица размеров: новый upload или старый URL (или пусто)
@@ -293,15 +323,18 @@ export default function ProductEditForm({
         homeImage: nextHome,
         images: nextGallery, // только галерея, без обложки
 
-        // ✅ добавили
         sizeChartImage: nextSizeChart || null,
       };
 
       if (!isSoon) {
         payload.priceRub = priceRub;
 
-        // ✅ NEW: скидочная цена (строкой), если пусто — скидки нет
-        payload.discountPriceRub = discountPriceRub.trim() || undefined;
+        // ✅ ВАЖНО: всегда отправляем ключ:
+        // - строка => сохранить
+        // - null => очистить
+        payload.discountPriceRub = discountPriceRub.trim()
+          ? discountPriceRub.trim()
+          : null;
 
         payload.discountPercent = parseDiscount(discountPercent) ?? 0;
 
@@ -314,7 +347,7 @@ export default function ProductEditForm({
           .filter((v) => v.size.length > 0);
       } else {
         payload.discountPercent = 0;
-        payload.discountPriceRub = undefined;
+        payload.discountPriceRub = null; // ✅ явно чистим
         payload.variants = [{ size: "ONE", color: "default", stock: 0 }];
       }
 
@@ -340,7 +373,8 @@ export default function ProductEditForm({
 
       // обновляем URL’ы если загрузили новые
       if (uploaded.home) setHomeUrl(uploaded.home);
-      if (uploaded.gallery.length) setGalleryUrls((prev) => [...prev, ...uploaded.gallery]);
+      if (uploaded.gallery.length)
+        setGalleryUrls((prev) => [...prev, ...uploaded.gallery]);
       if (uploaded.sizeChart) setSizeChartUrl(uploaded.sizeChart);
 
       router.refresh();
@@ -358,7 +392,9 @@ export default function ProductEditForm({
     setOk(null);
     setSaving(true);
     try {
-      const res = await fetch(`/api/admin/products/${product.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/products/${product.id}`, {
+        method: "DELETE",
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Не удалось удалить");
 
@@ -373,17 +409,33 @@ export default function ProductEditForm({
 
   return (
     <div className="mt-4 grid gap-3">
-      {err && <div className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm">{err}</div>}
-      {ok && <div className="rounded-xl border border-green-300 bg-green-50 p-3 text-sm">{ok}</div>}
+      {err && (
+        <div className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm">
+          {err}
+        </div>
+      )}
+      {ok && (
+        <div className="rounded-xl border border-green-300 bg-green-50 p-3 text-sm">
+          {ok}
+        </div>
+      )}
 
       <label className="grid gap-1">
         <span className="text-sm font-medium">Название</span>
-        <input className="rounded-xl border p-2" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <input
+          className="rounded-xl border p-2"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
       </label>
 
       <label className="grid gap-1">
         <span className="text-sm font-medium">Slug</span>
-        <input className="rounded-xl border p-2" value={slug} onChange={(e) => setSlug(e.target.value)} />
+        <input
+          className="rounded-xl border p-2"
+          value={slug}
+          onChange={(e) => setSlug(e.target.value)}
+        />
         <div className="text-xs text-gray-600">
           Итоговый slug: <b>{computedSlug || "—"}</b>
         </div>
@@ -391,7 +443,11 @@ export default function ProductEditForm({
 
       <label className="grid gap-1">
         <span className="text-sm font-medium">Категория</span>
-        <select className="rounded-xl border p-2" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+        <select
+          className="rounded-xl border p-2"
+          value={categoryId}
+          onChange={(e) => setCategoryId(e.target.value)}
+        >
           <option value="">— Без категории —</option>
           {categories.map((c) => (
             <option key={c.id} value={c.id}>
@@ -399,7 +455,9 @@ export default function ProductEditForm({
             </option>
           ))}
         </select>
-        <div className="text-xs text-gray-600">Если убрать категорию — товар исчезнет из категорий на главной/в шапке.</div>
+        <div className="text-xs text-gray-600">
+          Если убрать категорию — товар исчезнет из категорий на главной/в шапке.
+        </div>
       </label>
 
       <label className="grid gap-1">
@@ -413,7 +471,11 @@ export default function ProductEditForm({
       </label>
 
       <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={isSoon} onChange={(e) => setIsSoon(e.target.checked)} />
+        <input
+          type="checkbox"
+          checked={isSoon}
+          onChange={(e) => setIsSoon(e.target.checked)}
+        />
         Скоро (цена/скидка/размеры не нужны)
       </label>
 
@@ -426,12 +488,18 @@ export default function ProductEditForm({
           disabled={isSoon}
           inputMode="decimal"
         />
-        {isSoon ? <div className="text-xs text-gray-600">В режиме "Скоро" цена не нужна.</div> : null}
+        {isSoon ? (
+          <div className="text-xs text-gray-600">
+            В режиме "Скоро" цена не нужна.
+          </div>
+        ) : null}
       </label>
 
-      {/* ✅ NEW: Цена со скидкой */}
+      {/* ✅ Цена со скидкой */}
       <label className="grid gap-1">
-        <span className="text-sm font-medium">Цена со скидкой (р) — если есть</span>
+        <span className="text-sm font-medium">
+          Цена со скидкой (р) — если есть
+        </span>
         <input
           className="rounded-xl border p-2"
           value={discountPriceRub}
@@ -441,9 +509,14 @@ export default function ProductEditForm({
           inputMode="decimal"
         />
         {isSoon ? (
-          <div className="text-xs text-gray-600">В режиме "Скоро" цена со скидкой не нужна.</div>
+          <div className="text-xs text-gray-600">
+            В режиме "Скоро" цена со скидкой не нужна.
+          </div>
         ) : (
-          <div className="text-xs text-gray-600">Оставь пустым — скидки нет. Если заполнено — должно быть меньше обычной цены.</div>
+          <div className="text-xs text-gray-600">
+            Оставь пустым — скидки нет. Если заполнено — должно быть меньше
+            обычной цены.
+          </div>
         )}
       </label>
 
@@ -457,8 +530,16 @@ export default function ProductEditForm({
           placeholder="0"
           inputMode="numeric"
         />
-        {isSoon ? <div className="text-xs text-gray-600">В режиме "Скоро" скидка не нужна.</div> : null}
-        {!isSoon ? <div className="text-xs text-gray-600">0..99 (если 0 — плашка не показывается)</div> : null}
+        {isSoon ? (
+          <div className="text-xs text-gray-600">
+            В режиме "Скоро" скидка не нужна.
+          </div>
+        ) : null}
+        {!isSoon ? (
+          <div className="text-xs text-gray-600">
+            0..99 (если 0 — плашка не показывается)
+          </div>
+        ) : null}
       </label>
 
       {/* ✅ Обложка */}
@@ -477,11 +558,24 @@ export default function ProductEditForm({
           </div>
 
           <div className="grid gap-2">
-            <div className="text-xs text-gray-600">Новое (если нужно заменить)</div>
-            <input type="file" accept="image/*" className="rounded-xl border p-2" onChange={(e) => setHomeFile(e.target.files?.[0] ?? null)} />
+            <div className="text-xs text-gray-600">
+              Новое (если нужно заменить)
+            </div>
+            <input
+              type="file"
+              accept="image/*"
+              className="rounded-xl border p-2"
+              onChange={(e) =>
+                setHomeFile(e.target.files?.[0] ?? null)
+              }
+            />
             {homePreview ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={homePreview} alt="home preview" className="h-32 w-32 rounded-xl border object-cover" />
+              <img
+                src={homePreview}
+                alt="home preview"
+                className="h-32 w-32 rounded-xl border object-cover"
+              />
             ) : null}
           </div>
         </div>
@@ -496,11 +590,19 @@ export default function ProductEditForm({
             {galleryUrls.map((u, idx) => (
               <div key={u + idx} className="relative">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={u} alt={`gallery-${idx}`} className="h-24 w-24 rounded-xl border object-cover" />
+                <img
+                  src={u}
+                  alt={`gallery-${idx}`}
+                  className="h-24 w-24 rounded-xl border object-cover"
+                />
                 <button
                   type="button"
                   className="absolute right-1 top-1 rounded-md bg-white/90 border px-2 py-1 text-[11px]"
-                  onClick={() => setGalleryUrls((prev) => prev.filter((_, i) => i !== idx))}
+                  onClick={() =>
+                    setGalleryUrls((prev) =>
+                      prev.filter((_, i) => i !== idx)
+                    )
+                  }
                   title="Удалить"
                 >
                   ✕
@@ -514,14 +616,27 @@ export default function ProductEditForm({
 
         <div className="grid gap-1">
           <div className="text-xs text-gray-600">Добавить новые фото</div>
-          <input type="file" accept="image/*" multiple className="rounded-xl border p-2" onChange={(e) => setGalleryFiles(Array.from(e.target.files ?? []))} />
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            className="rounded-xl border p-2"
+            onChange={(e) =>
+              setGalleryFiles(Array.from(e.target.files ?? []))
+            }
+          />
         </div>
 
         {galleryPreviews.length ? (
           <div className="flex flex-wrap gap-2">
             {galleryPreviews.map((src, i) => (
               // eslint-disable-next-line @next/next/no-img-element
-              <img key={src + i} src={src} alt={`new-${i}`} className="h-24 w-24 rounded-xl border object-cover" />
+              <img
+                key={src + i}
+                src={src}
+                alt={`new-${i}`}
+                className="h-24 w-24 rounded-xl border object-cover"
+              />
             ))}
           </div>
         ) : null}
@@ -536,7 +651,11 @@ export default function ProductEditForm({
             <div className="text-xs text-gray-600">Текущая</div>
             {sizeChartUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={sizeChartUrl} alt="size chart" className="h-32 w-32 rounded-xl border object-cover" />
+              <img
+                src={sizeChartUrl}
+                alt="size chart"
+                className="h-32 w-32 rounded-xl border object-cover"
+              />
             ) : (
               <div className="text-xs text-gray-600">Не прикреплена.</div>
             )}
@@ -562,13 +681,21 @@ export default function ProductEditForm({
               type="file"
               accept="image/*"
               className="rounded-xl border p-2"
-              onChange={(e) => setSizeChartFile(e.target.files?.[0] ?? null)}
+              onChange={(e) =>
+                setSizeChartFile(e.target.files?.[0] ?? null)
+              }
             />
             {sizeChartPreview ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={sizeChartPreview} alt="size chart preview" className="h-32 w-32 rounded-xl border object-cover" />
+              <img
+                src={sizeChartPreview}
+                alt="size chart preview"
+                className="h-32 w-32 rounded-xl border object-cover"
+              />
             ) : null}
-            <div className="text-[11px] text-gray-500">Если загрузишь — при сохранении заменит текущую.</div>
+            <div className="text-[11px] text-gray-500">
+              Если загрузишь — при сохранении заменит текущую.
+            </div>
           </div>
         </div>
       </div>
@@ -577,7 +704,12 @@ export default function ProductEditForm({
       <div className="rounded-xl border p-3">
         <div className="flex items-center justify-between">
           <div className="text-sm font-medium">Размеры</div>
-          <button type="button" className="text-sm underline disabled:opacity-40" onClick={addVariantRow} disabled={isSoon}>
+          <button
+            type="button"
+            className="text-sm underline disabled:opacity-40"
+            onClick={addVariantRow}
+            disabled={isSoon}
+          >
             + Добавить размер
           </button>
         </div>
@@ -586,7 +718,11 @@ export default function ProductEditForm({
           Общий остаток: <b>{totalStock}</b>
         </div>
 
-        {isSoon ? <div className="mt-2 text-xs text-gray-600">В режиме "Скоро" размеры не нужны.</div> : null}
+        {isSoon ? (
+          <div className="mt-2 text-xs text-gray-600">
+            В режиме "Скоро" размеры не нужны.
+          </div>
+        ) : null}
 
         <div className="mt-3 grid gap-2">
           {variants.map((row, idx) => (
@@ -594,14 +730,18 @@ export default function ProductEditForm({
               <input
                 className="w-[120px] rounded-xl border p-2"
                 value={row.size}
-                onChange={(e) => updateVariantRow(idx, { size: e.target.value })}
+                onChange={(e) =>
+                  updateVariantRow(idx, { size: e.target.value })
+                }
                 placeholder="S / M / L"
                 disabled={isSoon}
               />
               <input
                 className="w-[140px] rounded-xl border p-2"
                 value={row.stock}
-                onChange={(e) => updateVariantRow(idx, { stock: e.target.value })}
+                onChange={(e) =>
+                  updateVariantRow(idx, { stock: e.target.value })
+                }
                 placeholder="stock"
                 inputMode="numeric"
                 disabled={isSoon}
@@ -616,16 +756,28 @@ export default function ProductEditForm({
               </button>
             </div>
           ))}
-          {!isSoon ? <div className="text-xs text-gray-600">Сохраняется в Variant (color = default).</div> : null}
+          {!isSoon ? (
+            <div className="text-xs text-gray-600">
+              Сохраняется в Variant (color = default).
+            </div>
+          ) : null}
         </div>
       </div>
 
       <div className="mt-2 flex flex-wrap gap-2">
-        <button className="rounded-xl bg-black px-4 py-2 text-white disabled:opacity-50" disabled={saving || uploading} onClick={save}>
+        <button
+          className="rounded-xl bg-black px-4 py-2 text-white disabled:opacity-50"
+          disabled={saving || uploading}
+          onClick={save}
+        >
           {uploading ? "Загружаю фото..." : saving ? "Сохраняю..." : "Сохранить"}
         </button>
 
-        <button className="rounded-xl border px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50" disabled={saving || uploading} onClick={() => router.push("/admin/products")}>
+        <button
+          className="rounded-xl border px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
+          disabled={saving || uploading}
+          onClick={() => router.push("/admin/products")}
+        >
           Назад
         </button>
 
