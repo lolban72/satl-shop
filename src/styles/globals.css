@@ -93,8 +93,16 @@ body {
 /* =========================
    PRINT FIX (labels only)
    ========================= */
+/* =========================
+   PRINT: labels only (safe)
+   Работает ТОЛЬКО когда body.print-labels
+   ========================= */
 @media print {
-  /* убираем влияние 100% высоты и тёмной темы */
+  @page {
+    size: 58mm 40mm;
+    margin: 0;
+  }
+
   html, body {
     height: auto !important;
     margin: 0 !important;
@@ -103,29 +111,17 @@ body {
     color: #000 !important;
   }
 
-  /* вырубить весь UI (важно: display none, а не visibility) */
-  header, footer, nav, aside {
+  /* включаем режим печати только для страницы этикеток */
+  body.print-labels * {
     display: none !important;
   }
 
-  /* на скрине у тебя обёртка .grid + aside + main */
-  .grid {
+  body.print-labels .label-root,
+  body.print-labels .label-root * {
     display: block !important;
   }
 
-  main {
-    display: block !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-
-  /* оставить в main только блок с печатью */
-  main > *:not(.label-root) {
-    display: none !important;
-  }
-
-  .label-root {
-    display: block !important;
+  body.print-labels .label-root {
     margin: 0 !important;
     padding: 0 !important;
     background: #fff !important;
