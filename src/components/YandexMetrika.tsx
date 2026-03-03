@@ -2,7 +2,7 @@
 
 import Script from "next/script";
 
-const METRIKA_ID = 107021293;
+const METRIKA_ID = 107023268;
 
 export default function YandexMetrika() {
   return (
