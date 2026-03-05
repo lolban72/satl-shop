@@ -80,7 +80,7 @@ export async function POST(req: Request) {
     }
 
     // 2) Тянем товары из БД (габариты/вес)
-    const productIds = Array.from(new Set(normalizedItems.map((x) => x.productId)));
+    const productIds = Array.from(new Set(normalizedItems.map((x: { productId: any; }) => x.productId)));
 
     const products = await prisma.product.findMany({
       where: { id: { in: productIds } },
