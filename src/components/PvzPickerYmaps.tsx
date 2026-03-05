@@ -219,33 +219,7 @@ export default function PvzPickerYmaps({
   }, []);
 
   return (
-    <div className="border border-black/10 bg-white p-[14px]">
-      <div className="flex items-end justify-between">
-        <div>
-          <div className="text-[9px] uppercase tracking-[0.12em] text-black/55">
-            ПВЗ СДЭК
-          </div>
-          <div className="mt-[4px] text-[12px] text-black/55">
-            {effectiveCity ? (
-              <>
-                Город: <span className="text-black">{effectiveCity}</span>
-              </>
-            ) : (
-              "Укажите город сверху"
-            )}
-          </div>
-        </div>
-
-        <button
-          className="h-[34px] border border-black/15 px-[10px] text-[10px] font-bold uppercase tracking-[0.12em]
-                     hover:bg-black/5 transition disabled:opacity-50"
-          onClick={() => loadPoints(effectiveCity)}
-          disabled={loading || !apiKey || !effectiveCity}
-          type="button"
-        >
-          {loading ? "..." : "Обновить"}
-        </button>
-      </div>
+    <div className="p-[14px]">
 
       {!apiKey ? (
         <div className="mt-2 text-[12px] text-red-600">
@@ -260,7 +234,7 @@ export default function PvzPickerYmaps({
         <div className="mt-3 flex gap-2">
           <input
             className="h-[46px] w-full border border-black/15 px-[14px] text-[14px] outline-none focus:border-black transition bg-white"
-            placeholder="Город (например: Краснодар)"
+            placeholder="Город"
             value={cityLocal}
             onChange={(e) => setCityLocal(e.target.value)}
           />

@@ -243,9 +243,6 @@ export default function CheckoutForm(props: {
             </>
           ) : (
             <>
-              <div className={clsx("mt-[10px]", hint)}>
-                Выберите город и ПВЗ на карте. Город вводится один раз — внутри выбора ПВЗ.
-              </div>
 
               <div className="mt-[18px] grid gap-[16px]">
                 {/* NAME */}
@@ -275,12 +272,6 @@ export default function CheckoutForm(props: {
                 {/* DELIVERY */}
                 <div className={clsx(card, "p-[14px]")}>
                   <div className="flex items-center justify-between gap-[10px]">
-                    <div>
-                      <div className={label}>Доставка (ПВЗ СДЭК)</div>
-                      <div className="mt-[4px] text-[12px] text-black/55">
-                        Цена посчитается автоматически после выбора пункта.
-                      </div>
-                    </div>
 
                     <div className="text-right">
                       {deliveryLoading ? (
