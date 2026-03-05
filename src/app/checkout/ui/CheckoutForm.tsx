@@ -273,7 +273,6 @@ export default function CheckoutForm(props: {
                   <div className="grid gap-[10px]">
                     {/* MAP WRAPPER */}
                     <span className={label}>Адрес пункта выдачи</span>
-                    <div>
                       <PvzPickerYmaps
                         // ✅ город вводится только внутри компонента (один раз)
                         hideCityInput={false}
@@ -308,7 +307,6 @@ export default function CheckoutForm(props: {
                       />
                     </div>
                   </div>
-                </div>
 
                 {/* CTA */}
                 <button
