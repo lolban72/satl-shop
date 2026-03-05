@@ -47,13 +47,10 @@ export async function POST(req: Request) {
 
     const city = String(body?.city ?? "").trim();
     const pvzCode = String(body?.pvzCode ?? "").trim();
-    const items = Array.isArray(body?.items) ? body.items : [];
+    const items: any[] = Array.isArray(body?.items) ? body.items : [];
 
     if (!city || !pvzCode) {
-      return Response.json(
-        { error: "city/pvzCode required" },
-        { status: 400 }
-      );
+      return Response.json({ error: "city/pvzCode required" }, { status: 400 });
     }
     if (items.length === 0) {
       return Response.json({ error: "items required" }, { status: 400 });
@@ -63,19 +60,19 @@ export async function POST(req: Request) {
     const fromCity = String(process.env.CDEK_FROM_CITY ?? "Краснодар").trim();
     const fromPvz = String(process.env.CDEK_FROM_PVZ_CODE ?? "").trim();
 
-    // Пакет по умолчанию (габариты) — пока один стандарт
+    // Дефолт для товара, если у него не заполнены габариты/вес
     const defaultWeightGr = toInt(process.env.CDEK_DEFAULT_WEIGHT_GR, 500);
-    const lengthCm = toInt(process.env.CDEK_DEFAULT_LENGTH_CM, 20);
-    const widthCm = toInt(process.env.CDEK_DEFAULT_WIDTH_CM, 15);
-    const heightCm = toInt(process.env.CDEK_DEFAULT_HEIGHT_CM, 10);
+    const defaultLengthCm = toInt(process.env.CDEK_DEFAULT_LENGTH_CM, 20);
+    const defaultWidthCm = toInt(process.env.CDEK_DEFAULT_WIDTH_CM, 15);
+    const defaultHeightCm = toInt(process.env.CDEK_DEFAULT_HEIGHT_CM, 10);
 
-    // 1) Собираем productId + qty
-    const normalizedItems = items
-      .map((it: any) => ({
+    // 1) Нормализуем items -> строго типизированный массив
+    const normalizedItems: NormalizedItem[] = items
+      .map((it: any): NormalizedItem => ({
         productId: String(it?.productId ?? "").trim(),
         qty: toInt(it?.qty, 1),
       }))
-      .filter((x: NormalizedItem) => x.productId && x.qty > 0);
+      .filter((x: NormalizedItem) => x.productId.length > 0 && x.qty > 0);
 
     if (normalizedItems.length === 0) {
       return Response.json(
@@ -85,7 +82,9 @@ export async function POST(req: Request) {
     }
 
     // 2) Тянем товары из БД (габариты/вес)
-    const productIds = Array.from(new Set(normalizedItems.map((x) => x.productId)));
+    const productIds = Array.from(
+      new Set(normalizedItems.map((x: NormalizedItem) => x.productId))
+    );
 
     const products = await prisma.product.findMany({
       where: { id: { in: productIds } },
@@ -100,16 +99,29 @@ export async function POST(req: Request) {
 
     const byId = new Map(products.map((p) => [p.id, p]));
 
-    // 3) Считаем общий вес (в граммах). Если вес не задан — берём defaultWeightGr/1шт.
+    // 3) Считаем общий вес и габариты посылки
+    // Вес суммируем (по qty), габариты берём максимум по товарам (упрощённо, но стабильно)
     let totalWeightGr = 0;
+    let packL = defaultLengthCm;
+    let packW = defaultWidthCm;
+    let packH = defaultHeightCm;
 
     for (const it of normalizedItems) {
       const p = byId.get(it.productId);
+
       const w = toInt(p?.weightGr, defaultWeightGr);
+      const l = toInt(p?.lengthCm, defaultLengthCm);
+      const ww = toInt(p?.widthCm, defaultWidthCm);
+      const h = toInt(p?.heightCm, defaultHeightCm);
+
       totalWeightGr += w * it.qty;
+
+      // берём максимум, чтобы не занижать габариты
+      packL = Math.max(packL, l);
+      packW = Math.max(packW, ww);
+      packH = Math.max(packH, h);
     }
 
-    // CDEK требует вес пакета > 0
     totalWeightGr = Math.max(1, totalWeightGr);
 
     const [fromCode, toCode] = await Promise.all([
@@ -126,25 +138,21 @@ export async function POST(req: Request) {
       packages: [
         {
           weight: totalWeightGr,
-          length: lengthCm,
-          width: widthCm,
-          height: heightCm,
+          length: packL,
+          width: packW,
+          height: packH,
         },
       ],
       delivery_point: pvzCode,
     };
 
-    // Отгрузка из одного ПВЗ (опционально)
     if (fromPvz) payload.shipment_point = fromPvz;
 
     const data = await cdekTariffList(payload);
     const { best, variants } = pickBestTariff(data);
 
     if (!best) {
-      return Response.json(
-        { error: "No tariffs", details: data },
-        { status: 400 }
-      );
+      return Response.json({ error: "No tariffs", details: data }, { status: 400 });
     }
 
     return Response.json({
@@ -152,12 +160,7 @@ export async function POST(req: Request) {
       fromCity,
       toCity: city,
       pvzCode,
-      package: {
-        weightGr: totalWeightGr,
-        lengthCm,
-        widthCm,
-        heightCm,
-      },
+      package: { weightGr: totalWeightGr, lengthCm: packL, widthCm: packW, heightCm: packH },
       best,
       variants,
     });
