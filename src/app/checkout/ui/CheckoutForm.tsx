@@ -274,20 +274,6 @@ export default function CheckoutForm(props: {
                   <div className="flex items-center justify-between gap-[10px]">
 
                     <div className="text-right">
-                      {deliveryLoading ? (
-                        <div className="text-[10px] uppercase tracking-[0.12em] text-black/45">
-                          Считаем…
-                        </div>
-                      ) : delivery ? (
-                        <div className="text-[10px] uppercase tracking-[0.12em] text-black">
-                          {moneyRub(delivery.priceCents)}
-                        </div>
-                      ) : (
-                        <div className="text-[10px] uppercase tracking-[0.12em] text-black/45">
-                          Не выбрано
-                        </div>
-                      )}
-
                       {delivery && (delivery.daysMin || delivery.daysMax) ? (
                         <div className="text-[11px] text-black/55">
                           {delivery.daysMin ?? "?"}-{delivery.daysMax ?? "?"} дн.
