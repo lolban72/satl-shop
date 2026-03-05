@@ -19,17 +19,18 @@ export default function CheckoutForm(props: {
     name: string;
     phone: string;
     address: string;
-    tgChatId?: string | null; // ✅ добавили (передай с сервера)
-    city?: string; // ✅ (если подставляешь город из профиля — опционально)
+    tgChatId?: string | null;
+    city?: string;
   };
 }) {
   const router = useRouter();
   const { items } = useCart();
 
-  const total = useMemo(
+  const itemsTotal = useMemo(
     () => items.reduce((s, i) => s + i.price * i.qty, 0),
     [items]
   );
+
   const itemsCount = useMemo(
     () => items.reduce((s, i) => s + i.qty, 0),
     [items]
@@ -38,18 +39,80 @@ export default function CheckoutForm(props: {
   const [name, setName] = useState(props.initial.name);
   const [phone, setPhone] = useState(props.initial.phone);
 
-  // ⚠️ address теперь = адрес ПВЗ (мы будем подставлять его после выбора)
+  // address = адрес ПВЗ (readonly)
   const [address, setAddress] = useState(props.initial.address);
 
-  // ✅ новое: город + выбранный ПВЗ
+  // город + выбранный ПВЗ
   const [city, setCity] = useState(props.initial.city ?? "");
   const [pvz, setPvz] = useState<{ code: string; address: string } | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // ✅ если Telegram не привязан — показываем блок и запрещаем оформление
+  const [delivery, setDelivery] = useState<{
+    priceCents: number;
+    daysMin: number | null;
+    daysMax: number | null;
+  } | null>(null);
+
+  const [deliveryLoading, setDeliveryLoading] = useState(false);
+
   const isTelegramNotLinked = !String(props.initial.tgChatId ?? "").trim();
+
+  const payTotal = itemsTotal + (delivery?.priceCents ?? 0);
+
+  async function recalcDelivery(
+    nextCity: string,
+    nextPvz: { code: string; address: string } | null
+  ) {
+    // сбрасываем старый расчёт при любом изменении
+    setDelivery(null);
+
+    const c = String(nextCity ?? "").trim();
+    if (!c || !nextPvz?.code) return;
+
+    setDeliveryLoading(true);
+    try {
+      const res = await fetch("/api/cdek/calc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          city: c,
+          pvzCode: nextPvz.code,
+          items: items.map((i: any) => ({ productId: i.productId, qty: i.qty })),
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || "Не удалось рассчитать доставку");
+      }
+
+      const best = data?.best;
+      const priceRub = Number(best?.delivery_sum);
+
+      if (!Number.isFinite(priceRub)) {
+        throw new Error("СДЭК не вернул цену доставки");
+      }
+
+      // СДЭК часто возвращает сумму в рублях → переводим в копейки
+      const priceCents = Math.round(priceRub * 100);
+
+      const dMin = best?.period_min != null ? Number(best.period_min) : null;
+      const dMax = best?.period_max != null ? Number(best.period_max) : null;
+
+      setDelivery({
+        priceCents,
+        daysMin: Number.isFinite(dMin as any) ? dMin : null,
+        daysMax: Number.isFinite(dMax as any) ? dMax : null,
+      });
+    } catch (e: any) {
+      setErr(e?.message || "Ошибка расчёта доставки");
+      setDelivery(null);
+    } finally {
+      setDeliveryLoading(false);
+    }
+  }
 
   async function submit() {
     setErr(null);
@@ -62,9 +125,14 @@ export default function CheckoutForm(props: {
     if (!name.trim()) return setErr("Укажите имя.");
     if (!phone.trim()) return setErr("Укажите телефон.");
 
-    // ✅ доставка только в ПВЗ: город + ПВЗ обязательны
     if (!city.trim()) return setErr("Укажите город.");
-    if (!pvz?.code || !pvz?.address) return setErr("Выберите ПВЗ СДЭК на карте.");
+    if (!pvz?.code || !pvz?.address)
+      return setErr("Выберите ПВЗ СДЭК на карте.");
+
+    // доставка должна быть рассчитана до оплаты
+    if (deliveryLoading) return setErr("Считаем доставку... подождите.");
+    if (!delivery)
+      return setErr("Не удалось рассчитать доставку. Выберите ПВЗ ещё раз.");
 
     setLoading(true);
     try {
@@ -75,19 +143,22 @@ export default function CheckoutForm(props: {
           name: name.trim(),
           phone: phone.trim(),
 
-          // ✅ address сохраняем как адрес ПВЗ (как договорились)
+          // address сохраняем как адрес ПВЗ
           address: pvz.address,
 
-          // ✅ новые поля для draft
           city: city.trim(),
           pvzCode: pvz.code,
           pvzAddress: pvz.address,
+
+          // ✅ доставка (копейки + дни)
+          deliveryPrice: delivery.priceCents,
+          deliveryDays: delivery.daysMax ?? delivery.daysMin ?? null,
 
           items: items.map((i: any) => ({
             productId: i.productId,
             variantId: i.variantId ?? null,
             title: i.title,
-            price: i.price, // ✅ в копейках
+            price: i.price, // копейки
             qty: i.qty,
           })),
         }),
@@ -143,7 +214,6 @@ export default function CheckoutForm(props: {
             Данные получателя
           </div>
 
-          {/* ✅ TG NOT LINKED BLOCK (ПРИОРИТЕТ) */}
           {isTelegramNotLinked ? (
             <>
               <div className="mt-[12px] text-[12px] text-black/55 leading-[1.5]">
@@ -215,20 +285,36 @@ export default function CheckoutForm(props: {
                     Доставка (ПВЗ СДЭК)
                   </div>
 
-                  {/* маленький инпут города сверху (чтобы пользователю было понятно, что искать) */}
                   <input
                     className="h-[46px] border border-black/15 px-[14px] text-[14px] outline-none
                                focus:border-black transition bg-white"
                     value={city}
                     style={{ fontFamily: "Brygada" }}
-                    onChange={(e) => setCity(e.target.value)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setCity(v);
+                      // если ПВЗ уже выбран — пересчитаем
+                      recalcDelivery(v, pvz);
+                    }}
                     placeholder="Город (например: Краснодар)"
                   />
 
                   <PvzPickerYmaps
-                    onSelect={(p) => {
-                      setPvz(p);
-                      setAddress(p.address); // ✅ сохраняем адрес = адрес ПВЗ
+                    onSelect={(p: any) => {
+                      // нормализуем формат
+                      const next = {
+                        code: String(p?.code ?? p?.pvzCode ?? "").trim(),
+                        address: String(p?.address ?? p?.pvzAddress ?? "").trim(),
+                      };
+
+                      if (!next.code || !next.address) {
+                        setErr("Не удалось прочитать выбранный ПВЗ (нет code/address)");
+                        return;
+                      }
+
+                      setPvz(next);
+                      setAddress(next.address);
+                      recalcDelivery(city, next);
                     }}
                   />
                 </div>
@@ -251,11 +337,15 @@ export default function CheckoutForm(props: {
                   className="mt-[6px] flex h-[46px] w-full items-center justify-center bg-black text-white
                             text-[10px] font-bold uppercase tracking-[0.12em] hover:bg-black/85 transition
                             disabled:opacity-50 disabled:hover:bg-black"
-                  disabled={loading || items.length === 0}
+                  disabled={loading || items.length === 0 || deliveryLoading}
                   onClick={submit}
                   type="button"
                 >
-                  {loading ? "Переходим к оплате..." : "Перейти к оплате"}
+                  {loading
+                    ? "Переходим к оплате..."
+                    : deliveryLoading
+                    ? "Считаем доставку..."
+                    : "Перейти к оплате"}
                 </button>
 
                 <div className="text-[11px] italic leading-[1.25] text-black/45 mt-[6px]">
@@ -345,15 +435,28 @@ export default function CheckoutForm(props: {
             <div className="flex items-center justify-between">
               <span>Товары</span>
               <span style={{ fontFamily: "Brygada" }} className="text-black">
-                {moneyRub(total)}
+                {moneyRub(itemsTotal)}
               </span>
             </div>
 
             <div className="flex items-center justify-between">
               <span>Доставка</span>
-              <span style={{ fontFamily: "Brygada" }} className="text-black/45">
-                Рассчитается позже
-              </span>
+              {deliveryLoading ? (
+                <span style={{ fontFamily: "Brygada" }} className="text-black/45">
+                  Считаем...
+                </span>
+              ) : delivery ? (
+                <span style={{ fontFamily: "Brygada" }} className="text-black">
+                  {moneyRub(delivery.priceCents)}
+                  {delivery.daysMin || delivery.daysMax
+                    ? ` (${delivery.daysMin ?? "?"}-${delivery.daysMax ?? "?"} дн.)`
+                    : ""}
+                </span>
+              ) : (
+                <span style={{ fontFamily: "Brygada" }} className="text-black/45">
+                  Выберите ПВЗ
+                </span>
+              )}
             </div>
 
             <div className="h-[1px] bg-black/10 my-[12px]" />
@@ -364,7 +467,7 @@ export default function CheckoutForm(props: {
                 style={{ fontFamily: "Brygada" }}
                 className="text-[16px] font-semibold text-black"
               >
-                {moneyRub(total)}
+                {moneyRub(payTotal)}
               </span>
             </div>
           </div>

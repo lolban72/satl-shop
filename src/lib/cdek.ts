@@ -38,23 +38,37 @@ async function getToken(): Promise<string> {
   return data.access_token;
 }
 
-async function cdekFetch(path: string) {
+/**
+ * Универсальный запрос к CDEK API (GET/POST/etc).
+ * Всегда JSON, всегда Bearer token.
+ */
+async function cdekFetchJson(path: string, init?: RequestInit) {
   const token = await getToken();
+
   const r = await fetch(`${BASE}${path}`, {
-    method: "GET",
-    headers: { Authorization: `Bearer ${token}` },
+    ...init,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(init?.headers || {}),
+    },
     cache: "no-store",
   });
 
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(`CDEK ${path} failed: ${r.status} ${JSON.stringify(data)}`);
+  if (!r.ok) {
+    throw new Error(`CDEK ${path} failed: ${r.status} ${JSON.stringify(data)}`);
+  }
   return data;
 }
 
 // Город -> city_code
 export async function cdekResolveCityCode(city: string): Promise<number> {
   const q = encodeURIComponent(city);
-  const data = await cdekFetch(`/v2/location/cities?city=${q}&size=1&country_codes=RU`);
+  const data = await cdekFetchJson(
+    `/v2/location/cities?city=${q}&size=1&country_codes=RU`,
+    { method: "GET" }
+  );
   const first = Array.isArray(data) ? data[0] : data?.[0];
   const code = first?.code;
   if (!code) throw new Error(`CDEK city not found: ${city}`);
@@ -63,5 +77,19 @@ export async function cdekResolveCityCode(city: string): Promise<number> {
 
 // ПВЗ по коду города
 export async function cdekDeliveryPoints(cityCode: number) {
-  return await cdekFetch(`/v2/deliverypoints?city_code=${cityCode}&type=PVZ`);
+  return await cdekFetchJson(
+    `/v2/deliverypoints?city_code=${cityCode}&type=PVZ`,
+    { method: "GET" }
+  );
+}
+
+/**
+ * Калькулятор: список доступных тарифов (цена/сроки).
+ * POST /v2/calculator/tarifflist
+ */
+export async function cdekTariffList(payload: any) {
+  return await cdekFetchJson(`/v2/calculator/tarifflist`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }

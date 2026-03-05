@@ -15,7 +15,14 @@ export async function POST(req: Request) {
 
     const draft = await prisma.paymentDraft.findUnique({
       where: { id: draftId },
-      select: { id: true, total: true, itemsJson: true },
+      select: {
+        id: true,
+        total: true,
+        itemsJson: true,
+        deliveryPrice: true, // ✅ добавили
+        pvzCity: true,
+        pvzAddress: true,
+      },
     });
 
     if (!draft) {
@@ -30,22 +37,20 @@ export async function POST(req: Request) {
       );
     }
 
-    // В sandbox API-Key = merchantId (по докам)
-    // В production нужно выпустить API key в Merchant Console и хранить его в env
     const isProd = process.env.NEXT_PUBLIC_YAPAY_ENV === "PRODUCTION";
     const apiKey = isProd ? (process.env.YAPAY_API_KEY || "") : merchantId;
 
     if (isProd && !apiKey) {
-      return Response.json({ error: "YAPAY_API_KEY is missing" }, { status: 500 });
+      return Response.json(
+        { error: "YAPAY_API_KEY is missing" },
+        { status: 500 }
+      );
     }
 
     const baseUrl = isProd
       ? "https://pay.yandex.ru/api/merchant/v1/orders"
       : "https://sandbox.pay.yandex.ru/api/merchant/v1/orders";
 
-    // itemsJson у тебя хранится как JSONB (как ты создавал draft).
-    // Ожидаем массив товаров вида:
-    // [{ productId, title, qty, priceCents }, ...]
     const rawItems: any[] = Array.isArray(draft.itemsJson) ? draft.itemsJson : [];
 
     const items = rawItems.map((it, idx) => {
@@ -53,17 +58,32 @@ export async function POST(req: Request) {
       const title = String(it?.title ?? "Товар");
       const qty = Number(it?.qty ?? 1);
 
-      // у тебя price в корзине = cents (копейки)
       const priceCents = Number(it?.price ?? it?.priceCents ?? 0);
       const lineTotalCents = priceCents * qty;
 
       return {
         productId,
         title,
-        quantity: { count: String(qty) }, // в примерах допускается строка
+        quantity: { count: String(qty) },
         total: rub2(lineTotalCents),
       };
     });
+
+    // ✅ Добавляем доставку отдельной строкой, чтобы сумма items == cart.total
+    const deliveryCents = Number(draft.deliveryPrice ?? 0);
+    if (Number.isFinite(deliveryCents) && deliveryCents > 0) {
+      const city = String(draft.pvzCity ?? "").trim();
+      const addr = String(draft.pvzAddress ?? "").trim();
+      const label =
+        city || addr ? `Доставка СДЭК до ПВЗ (${[city, addr].filter(Boolean).join(", ")})` : "Доставка СДЭК до ПВЗ";
+
+      items.push({
+        productId: "delivery",
+        title: label,
+        quantity: { count: "1" },
+        total: rub2(deliveryCents),
+      });
+    }
 
     const payload = {
       orderId: draft.id,
@@ -93,7 +113,6 @@ export async function POST(req: Request) {
     const data = await r.json().catch(() => ({}));
 
     if (!r.ok) {
-      // чтобы видеть реальную причину
       return Response.json(
         { error: "Yandex Pay order create failed", details: data },
         { status: 500 }

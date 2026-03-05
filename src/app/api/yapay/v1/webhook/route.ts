@@ -168,6 +168,25 @@ async function handleYaPayWebhook(req: Request) {
 
   const draft = await prisma.paymentDraft.findUnique({
     where: { id: orderId },
+    select: {
+      id: true,
+      userId: true,
+      email: true,
+      name: true,
+      phone: true,
+      address: true,
+      itemsJson: true,
+      total: true,
+      status: true,
+      trackNumber: true,
+
+      pvzCity: true,
+      pvzCode: true,
+      pvzAddress: true,
+      pvzName: true,
+      deliveryPrice: true,
+      deliveryDays: true,
+    },
   });
 
   if (!draft) {
@@ -211,12 +230,12 @@ async function handleYaPayWebhook(req: Request) {
         address: draft.address,
 
         // ✅ переносим доставку из draft → order
-        pvzCity: (draft as any).pvzCity ?? null,
-        pvzCode: (draft as any).pvzCode ?? null,
-        pvzAddress: (draft as any).pvzAddress ?? null,
-        pvzName: (draft as any).pvzName ?? null,
-        deliveryPrice: (draft as any).deliveryPrice ?? null,
-        deliveryDays: (draft as any).deliveryDays ?? null,
+        pvzCity: draft.pvzCity ?? null,
+        pvzCode: draft.pvzCode ?? null,
+        pvzAddress: draft.pvzAddress ?? null,
+        pvzName: draft.pvzName ?? null,
+        deliveryPrice: draft.deliveryPrice ?? null,
+        deliveryDays: draft.deliveryDays ?? null,
 
         trackNumber: draft.trackNumber ?? null, // ✅ если есть
         items: {
@@ -253,16 +272,14 @@ async function handleYaPayWebhook(req: Request) {
 
   const adminChatIds = parseChatIds(process.env.TG_ADMIN_CHAT_IDS);
 
-  const pvzLine = (draft as any).pvzCode
-    ? `ПВЗ: ${(draft as any).pvzCity ? (draft as any).pvzCity + ", " : ""}<code>${(draft as any).pvzCode}</code>\nАдрес ПВЗ: ${(draft as any).pvzAddress ?? "—"}\n`
+  const pvzLine = draft.pvzCode
+    ? `ПВЗ: ${draft.pvzCity ? draft.pvzCity + ", " : ""}<code>${draft.pvzCode}</code>\nАдрес ПВЗ: ${draft.pvzAddress ?? "—"}\n`
     : "";
 
   const deliveryLine =
-    (draft as any).deliveryPrice != null
-      ? `Доставка: ${rubFromCents(Number((draft as any).deliveryPrice))}${
-          (draft as any).deliveryDays != null
-            ? ` (${(draft as any).deliveryDays} дн.)`
-            : ""
+    draft.deliveryPrice != null
+      ? `Доставка: ${rubFromCents(Number(draft.deliveryPrice))}${
+          draft.deliveryDays != null ? ` (${draft.deliveryDays} дн.)` : ""
         }\n`
       : "";
 
