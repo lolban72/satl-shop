@@ -14,6 +14,7 @@
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.3",
     "bwip-js": "^4.8.0",
+    "cdek": "^2.0.0",
     "dotenv": "^17.2.4",
     "html-to-image": "^1.11.13",
     "jsbarcode": "^3.12.3",
