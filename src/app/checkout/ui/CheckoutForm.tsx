@@ -282,7 +282,7 @@ export default function CheckoutForm(props: {
                     </div>
                   </div>
 
-                  <div className="mt-[12px] grid gap-[10px]">
+                  <div className="grid gap-[10px]">
                     {/* MAP WRAPPER */}
                     <div>
                       <PvzPickerYmaps
