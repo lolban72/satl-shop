@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useCart } from "@/lib/cart-store";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import PvzPickerYmaps from "@/components/PvzPickerYmaps";
 
 export const metadata = {
   title: "Оформление заказа | SATL",
@@ -19,10 +20,11 @@ export default function CheckoutForm(props: {
     phone: string;
     address: string;
     tgChatId?: string | null; // ✅ добавили (передай с сервера)
+    city?: string; // ✅ (если подставляешь город из профиля — опционально)
   };
 }) {
   const router = useRouter();
-  const { items, clear } = useCart();
+  const { items } = useCart();
 
   const total = useMemo(
     () => items.reduce((s, i) => s + i.price * i.qty, 0),
@@ -35,13 +37,16 @@ export default function CheckoutForm(props: {
 
   const [name, setName] = useState(props.initial.name);
   const [phone, setPhone] = useState(props.initial.phone);
+
+  // ⚠️ address теперь = адрес ПВЗ (мы будем подставлять его после выбора)
   const [address, setAddress] = useState(props.initial.address);
+
+  // ✅ новое: город + выбранный ПВЗ
+  const [city, setCity] = useState(props.initial.city ?? "");
+  const [pvz, setPvz] = useState<{ code: string; address: string } | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-
-  // ✅ если адрес в ЛК не заполнен — запрещаем оформление и просим заполнить
-  const isProfileAddressEmpty = !props.initial.address?.trim();
 
   // ✅ если Telegram не привязан — показываем блок и запрещаем оформление
   const isTelegramNotLinked = !String(props.initial.tgChatId ?? "").trim();
@@ -53,27 +58,31 @@ export default function CheckoutForm(props: {
       return setErr("Привяжите Telegram перед оформлением заказа.");
     }
 
-    if (isProfileAddressEmpty) {
-      return setErr("Заполните адрес доставки в личном кабинете.");
-    }
-
     if (items.length === 0) return setErr("Корзина пуста.");
     if (!name.trim()) return setErr("Укажите имя.");
     if (!phone.trim()) return setErr("Укажите телефон.");
-    if (!address.trim()) return setErr("Укажите адрес.");
+
+    // ✅ доставка только в ПВЗ: город + ПВЗ обязательны
+    if (!city.trim()) return setErr("Укажите город.");
+    if (!pvz?.code || !pvz?.address) return setErr("Выберите ПВЗ СДЭК на карте.");
 
     setLoading(true);
     try {
-      // ✅ ВАЖНО: теперь мы НЕ создаём заказ.
-      // Создаём только PaymentDraft и отправляем на страницу оплаты.
       const res = await fetch("/api/pay/draft", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim(),
           phone: phone.trim(),
-          address: address.trim(),
-          // email можешь добавить, если хочешь прокидывать с сервера
+
+          // ✅ address сохраняем как адрес ПВЗ (как договорились)
+          address: pvz.address,
+
+          // ✅ новые поля для draft
+          city: city.trim(),
+          pvzCode: pvz.code,
+          pvzAddress: pvz.address,
+
           items: items.map((i: any) => ({
             productId: i.productId,
             variantId: i.variantId ?? null,
@@ -89,10 +98,6 @@ export default function CheckoutForm(props: {
 
       const draftId = String(data?.draftId || "");
       if (!draftId) throw new Error("Не удалось получить draftId");
-
-      // ⚠️ корзину лучше чистить ПОСЛЕ подтверждения оплаты (webhook),
-      // иначе если человек закрыл оплату, корзина пропадёт.
-      // clear();
 
       router.push(`/pay/${encodeURIComponent(draftId)}`);
     } catch (e: any) {
@@ -142,7 +147,8 @@ export default function CheckoutForm(props: {
           {isTelegramNotLinked ? (
             <>
               <div className="mt-[12px] text-[12px] text-black/55 leading-[1.5]">
-                Для оформления заказа нужно привязать телеграм — туда будут приходить уведомления о заказе и восстановление пароля.
+                Для оформления заказа нужно привязать телеграм — туда будут
+                приходить уведомления о заказе и восстановление пароля.
               </div>
 
               <div className="mt-[18px] border border-black/20 p-[16px]">
@@ -151,7 +157,8 @@ export default function CheckoutForm(props: {
                 </div>
 
                 <div className="text-[12px] text-black/75">
-                  Перейдите в профиль и нажмите «Привязать телеграм». Это займёт 10–20 секунд.
+                  Перейдите в профиль и нажмите «Привязать телеграм». Это займёт
+                  10–20 секунд.
                 </div>
 
                 <button
@@ -165,36 +172,10 @@ export default function CheckoutForm(props: {
                 </button>
               </div>
             </>
-          ) : isProfileAddressEmpty ? (
-            <>
-              <div className="mt-[12px] text-[12px] text-black/55 leading-[1.5]">
-                Для оформления заказа необходимо заполнить адрес доставки в личном кабинете.
-              </div>
-
-              <div className="mt-[18px] border border-black/20 p-[16px]">
-                <div className="text-[10px] uppercase tracking-[0.12em] text-black/55 mb-[6px]">
-                  Внимание
-                </div>
-
-                <div className="text-[12px] text-black/75">
-                  Перейдите в раздел «Мои данные» и заполните поле адреса.
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => router.push("/account/address")}
-                  className="mt-[14px] h-[42px] w-full bg-black text-white
-                             text-[10px] font-bold uppercase tracking-[0.12em]
-                             hover:bg-black/85 transition"
-                >
-                  Перейти в личный кабинет
-                </button>
-              </div>
-            </>
           ) : (
             <>
               <div className="mt-[6px] text-[12px] text-black/55">
-                Мы используем эти данные для доставки.
+                Доставка только в ПВЗ СДЭК. Выберите город и пункт выдачи.
               </div>
 
               <div className="mt-[18px] grid gap-[16px]">
@@ -228,18 +209,40 @@ export default function CheckoutForm(props: {
                   />
                 </label>
 
-                {/* ADDRESS */}
-                <label className="grid gap-[4px]">
-                  <span className="text-[9px] uppercase tracking-[0.12em] text-black/55">
-                    Адрес
-                  </span>
+                {/* CITY + PVZ PICKER */}
+                <div className="grid gap-[8px]">
+                  <div className="text-[9px] uppercase tracking-[0.12em] text-black/55">
+                    Доставка (ПВЗ СДЭК)
+                  </div>
+
+                  {/* маленький инпут города сверху (чтобы пользователю было понятно, что искать) */}
                   <input
                     className="h-[46px] border border-black/15 px-[14px] text-[14px] outline-none
                                focus:border-black transition bg-white"
-                    value={address}
+                    value={city}
                     style={{ fontFamily: "Brygada" }}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder="Город, улица, дом, квартира"
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="Город (например: Краснодар)"
+                  />
+
+                  <PvzPickerYmaps
+                    onSelect={(p) => {
+                      setPvz(p);
+                      setAddress(p.address); // ✅ сохраняем адрес = адрес ПВЗ
+                    }}
+                  />
+                </div>
+
+                {/* READONLY ADDRESS (PVZ) */}
+                <label className="grid gap-[4px]">
+                  <span className="text-[9px] uppercase tracking-[0.12em] text-black/55">
+                    Адрес ПВЗ (выбран)
+                  </span>
+                  <input
+                    className="h-[46px] border border-black/15 px-[14px] text-[14px] outline-none bg-black/5"
+                    value={address}
+                    readOnly
+                    placeholder="Выберите ПВЗ на карте"
                   />
                 </label>
 

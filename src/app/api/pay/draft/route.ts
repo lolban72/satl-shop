@@ -20,16 +20,34 @@ export async function POST(req: Request) {
 
     const name = String(body?.name ?? "").trim();
     const phone = String(body?.phone ?? "").trim();
+
+    // ✅ теперь address с клиента НЕ обязателен как "уличный адрес"
+    // потому что доставка только в ПВЗ. Можно оставить как fallback.
     const address = String(body?.address ?? "").trim();
+
+    // ✅ новые поля для СДЭК ПВЗ (приходят с клиента после выбора на карте)
+    const city = String(body?.city ?? "").trim(); // например "Краснодар"
+    const pvzCode = String(body?.pvzCode ?? "").trim(); // код ПВЗ СДЭК
+    const pvzAddress = String(body?.pvzAddress ?? "").trim(); // адрес ПВЗ
 
     const items = Array.isArray(body?.items) ? body.items : [];
 
-    if (!name || !phone || !address) {
+    // ✅ имя/телефон обязательны
+    if (!name || !phone) {
       return Response.json(
-        { error: "Заполните имя/телефон/адрес" },
+        { error: "Заполните имя/телефон" },
         { status: 400 }
       );
     }
+
+    // ✅ выбор города + ПВЗ обязателен (потому что доставка только в ПВЗ)
+    if (!city || !pvzCode || !pvzAddress) {
+      return Response.json(
+        { error: "Выберите город и ПВЗ СДЭК" },
+        { status: 400 }
+      );
+    }
+
     if (items.length === 0) {
       return Response.json({ error: "Корзина пуста" }, { status: 400 });
     }
@@ -52,13 +70,14 @@ export async function POST(req: Request) {
       );
     }
 
-    // ✅ требуем адрес в профиле (чтобы не расходилось)
-    if (!user.address || !user.address.trim()) {
-      return Response.json(
-        { error: "Заполните адрес доставки в личном кабинете" },
-        { status: 400 }
-      );
-    }
+    // ✅ адрес в профиле больше НЕ обязателен, потому что доставка в ПВЗ
+    // (оставляем проверку выключенной)
+    // if (!user.address || !user.address.trim()) {
+    //   return Response.json(
+    //     { error: "Заполните адрес доставки в личном кабинете" },
+    //     { status: 400 }
+    //   );
+    // }
 
     // ✅ пересчёт total (в копейках) из items
     const total = items.reduce((s: number, it: any) => {
@@ -71,13 +90,27 @@ export async function POST(req: Request) {
       return Response.json({ error: "Некорректная сумма" }, { status: 400 });
     }
 
+    // ✅ address, который сохраняем в draft:
+    // приоритет — адрес выбранного ПВЗ, иначе fallback на то, что прислали
+    const finalAddress = pvzAddress || address;
+
     const draft = await prisma.paymentDraft.create({
       data: {
         userId, // ✅ ВАЖНО
         email: user.email ?? null, // ✅ из БД
         name,
         phone,
-        address,
+
+        // ✅ сохраняем адрес = адрес ПВЗ (так у тебя уже везде используется draft.address)
+        address: finalAddress,
+
+        // ✅ новые поля (должны быть добавлены в Prisma и миграцией)
+        pvzCode,
+        pvzAddress,
+        // deliveryPrice/deliveryDays добавим следующим шагом после калькулятора СДЭК
+        // deliveryPrice: null,
+        // deliveryDays: null,
+
         itemsJson: items,
         total,
         status: "PENDING",

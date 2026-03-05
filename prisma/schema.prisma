@@ -157,6 +157,10 @@ model Product {
   sizeChartImage  String?
   categoryId      String?
   category        Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  weightGr Int?   // вес товара в граммах
+  lengthCm Int?
+  widthCm  Int?
+  heightCm Int?
 }
 
 model Variant {
@@ -193,6 +197,14 @@ model Order {
   name    String
   phone   String
   address String
+  pvzCode       String?
+  pvzAddress    String?
+  deliveryPrice Int?
+  deliveryDays  Int?
+
+  cdekUuid      String?  // uuid заказа в СДЭК
+  cdekStatus    String?
+  cdekStatusAt  DateTime?
 
   items OrderItem[]
 }
@@ -228,6 +240,11 @@ model PaymentDraft {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  pvzCode       String?
+  pvzAddress    String?
+  deliveryPrice Int?   // копейки
+  deliveryDays  Int?
 
   @@index([status])
 }
