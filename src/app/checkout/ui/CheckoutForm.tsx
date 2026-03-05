@@ -47,7 +47,7 @@ export default function CheckoutForm(props: {
   // address = адрес ПВЗ (readonly)
   const [address, setAddress] = useState(props.initial.address);
 
-  // ✅ город выбирается ЕДИНОЖДЫ — внутри PvzPickerYmaps (мы убрали отдельный инпут города)
+  // ✅ город сохраняем только итоговый выбранный из подсказок
   const [city, setCity] = useState(props.initial.city ?? "");
   const [pvz, setPvz] = useState<{ code: string; address: string } | null>(null);
 
@@ -129,7 +129,7 @@ export default function CheckoutForm(props: {
     if (!phone.trim()) return setErr("Укажите телефон.");
 
     const cityTrim = String(city ?? "").trim();
-    if (!cityTrim) return setErr("Выберите город в выборе ПВЗ.");
+    if (!cityTrim) return setErr("Выберите город из подсказок (в выборе ПВЗ).");
     if (!pvz?.code || !pvz?.address) return setErr("Выберите ПВЗ СДЭК на карте.");
 
     if (deliveryLoading) return setErr("Считаем доставку... подождите.");
@@ -205,9 +205,7 @@ export default function CheckoutForm(props: {
       {/* ERROR */}
       {err ? (
         <div className="mt-[22px] border border-black/20 bg-white p-[14px] text-[12px] text-black">
-          <div className="font-semibold uppercase tracking-[0.08em] text-[10px] mb-[6px]">
-            Ошибка
-          </div>
+          <div className="font-semibold uppercase tracking-[0.08em] text-[10px] mb-[6px]">Ошибка</div>
           {err}
         </div>
       ) : null}
@@ -220,14 +218,12 @@ export default function CheckoutForm(props: {
           {isTelegramNotLinked ? (
             <>
               <div className={clsx("mt-[12px]", hint)}>
-                Для оформления заказа нужно привязать телеграм — туда будут приходить
-                уведомления о заказе и восстановление пароля.
+                Для оформления заказа нужно привязать телеграм — туда будут приходить уведомления
+                о заказе и восстановление пароля.
               </div>
 
               <div className="mt-[18px] border border-black/20 p-[16px]">
-                <div className="text-[10px] uppercase tracking-[0.12em] text-black/55 mb-[6px]">
-                  Важно
-                </div>
+                <div className="text-[10px] uppercase tracking-[0.12em] text-black/55 mb-[6px]">Важно</div>
                 <div className="text-[12px] text-black/75">
                   Перейдите в профиль и нажмите «Привязать телеграм». Это займёт 10–20 секунд.
                 </div>
@@ -243,7 +239,6 @@ export default function CheckoutForm(props: {
             </>
           ) : (
             <>
-
               <div className="mt-[18px] grid gap-[16px]">
                 {/* NAME */}
                 <label className="grid gap-[4px]">
@@ -270,68 +265,75 @@ export default function CheckoutForm(props: {
                 </label>
 
                 {/* DELIVERY */}
-                  <div className="grid gap-[4px]">
-                    {/* MAP WRAPPER */}
-                    <span className={label}>Адрес пункт выдачи</span>
-                    <PvzPickerYmaps
-                      // ✅ город вводится только внутри компонента (один раз)
-                      hideCityInput={false}
-                      autoLoad={false}
-                      onSelect={(p: { code: string; address: string; city: string }) => {
-                        const pickedCity = String(p?.city ?? "").trim();
+                <div className="grid gap-[4px]">
+                  <span className={label}>Адрес пункт выдачи</span>
 
-                        const next = {
-                          code: String(p?.code ?? "").trim(),
-                          address: String(p?.address ?? "").trim(),
-                        };
+                  <PvzPickerYmaps
+                    // ✅ variant A: без кнопки, только выбор города из подсказок
+                    hideCityInput={false}
+                    autoLoad={false}
+                    onSelect={(p: { code: string; address: string; city: string }) => {
+                      setErr(null);
 
-                        if (!pickedCity) {
-                          setErr("Не удалось определить город. Введите город и выберите ПВЗ ещё раз.");
-                          return;
-                        }
+                      const pickedCity = String(p?.city ?? "").trim();
+                      const next = {
+                        code: String(p?.code ?? "").trim(),
+                        address: String(p?.address ?? "").trim(),
+                      };
 
-                        if (!next.code || !next.address) {
-                          setErr("Не удалось прочитать выбранный ПВЗ (нет code/address)");
-                          return;
-                        }
+                      if (!pickedCity) {
+                        setErr("Не удалось определить город. Выберите город из подсказок ещё раз.");
+                        return;
+                      }
+                      if (!next.code || !next.address) {
+                        setErr("Не удалось прочитать выбранный ПВЗ (нет code/address)");
+                        return;
+                      }
 
-                        // ✅ сохраняем выбранный город (единожды)
-                        setCity(pickedCity);
+                      setCity(pickedCity);
+                      setPvz(next);
+                      setAddress(next.address);
 
-                        setPvz(next);
-                        setAddress(next.address);
+                      recalcDelivery(pickedCity, next);
+                    }}
+                  />
 
-                        // ✅ пересчёт доставки
-                        recalcDelivery(pickedCity, next);
-                        }}
-                      />
-                    </div>
+                  <div className="mt-[8px] text-[11px] text-black/45">
+                    {city && pvz?.code ? (
+                      <>
+                        Выбрано: <span className="text-black/70">{city}</span>
+                      </>
+                    ) : (
+                      <>Выберите город из подсказок — после этого появятся пункты выдачи.</>
+                    )}
+                  </div>
                 </div>
+              </div>
 
-                {/* CTA */}
-                <button
-                  className={btn}
-                  disabled={loading || items.length === 0 || deliveryLoading}
-                  onClick={submit}
-                  type="button"
+              {/* CTA */}
+              <button
+                className={btn}
+                disabled={loading || items.length === 0 || deliveryLoading}
+                onClick={submit}
+                type="button"
+              >
+                {loading
+                  ? "Переходим к оплате..."
+                  : deliveryLoading
+                  ? "Считаем доставку..."
+                  : "Перейти к оплате"}
+              </button>
+
+              <div className="text-[11px] italic leading-[1.25] text-black/45 mt-[6px]">
+                Нажимая кнопку, вы соглашаетесь с{" "}
+                <Link
+                  href="https://satl.shop/docs/public-offer"
+                  target="_blank"
+                  className="underline hover:text-black transition"
                 >
-                  {loading
-                    ? "Переходим к оплате..."
-                    : deliveryLoading
-                    ? "Считаем доставку..."
-                    : "Перейти к оплате"}
-                </button>
-
-                <div className="text-[11px] italic leading-[1.25] text-black/45 mt-[6px]">
-                  Нажимая кнопку, вы соглашаетесь с{" "}
-                  <Link
-                    href="https://satl.shop/docs/public-offer"
-                    target="_blank"
-                    className="underline hover:text-black transition"
-                  >
-                    публичной офертой
-                  </Link>
-                </div>
+                  публичной офертой
+                </Link>
+              </div>
             </>
           )}
         </div>
