@@ -324,19 +324,9 @@ export default function CheckoutForm(props: {
                       <div className={label}>Выбранный ПВЗ</div>
                       <div className="border border-black/15 px-[14px] py-[12px] text-[12px] bg-black/5">
                         {pvz?.address ? (
-                          <>
                             <div className="text-black">{pvz.address}</div>
-                            <div className="mt-[4px] text-[11px] text-black/55">
-                              Код: <span className="text-black">{pvz.code}</span>
-                            </div>
-                            {city ? (
-                              <div className="mt-[4px] text-[11px] text-black/55">
-                                Город: <span className="text-black">{city}</span>
-                              </div>
-                            ) : null}
-                          </>
                         ) : (
-                          <div className="text-black/55">Выберите пункт выдачи на карте</div>
+                          <div className="text-black/55">Выберите пункт выдачи</div>
                         )}
                       </div>
                     </div>
