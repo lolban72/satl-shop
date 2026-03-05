@@ -197,14 +197,18 @@ model Order {
   name    String
   phone   String
   address String
-  pvzCode       String?
-  pvzAddress    String?
-  deliveryPrice Int?
-  deliveryDays  Int?
+
+
+  pvzCode    String?
+  pvzAddress String?
+  pvzName    String?
+  pvzCity    String?
 
   cdekUuid      String?  // uuid заказа в СДЭК
   cdekStatus    String?
   cdekStatusAt  DateTime?
+  deliveryPrice Int?
+  deliveryDays  Int?
 
   items OrderItem[]
 }
@@ -243,6 +247,8 @@ model PaymentDraft {
 
   pvzCode       String?
   pvzAddress    String?
+  pvzName    String?
+  pvzCity    String?
   deliveryPrice Int?   // копейки
   deliveryDays  Int?
 

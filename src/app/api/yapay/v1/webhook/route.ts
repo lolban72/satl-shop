@@ -33,7 +33,9 @@ async function notifyUserOrderStatus(params: {
   });
   if (!u?.tgChatId) return;
 
-  const track = params.trackNumber ? `\nТрек номер: <code>${params.trackNumber}</code>` : "";
+  const track = params.trackNumber
+    ? `\nТрек номер: <code>${params.trackNumber}</code>`
+    : "";
   const text =
     `<b>Статус заказа изменён</b>\n` +
     `Заказ: <code>${params.orderId}</code>\n` +
@@ -58,17 +60,21 @@ async function handleStatusWebhook(req: Request) {
   }
 
   const body = await req.json().catch(() => null);
-  if (!body) return Response.json({ ok: false, error: "Bad JSON" }, { status: 400 });
+  if (!body)
+    return Response.json({ ok: false, error: "Bad JSON" }, { status: 400 });
 
   const orderId = String(body?.orderId ?? "").trim();
   const newStatus = String(body?.status ?? "").trim().toUpperCase();
-  const newTrackNumber = body?.trackNumber != null ? String(body.trackNumber) : null;
+  const newTrackNumber =
+    body?.trackNumber != null ? String(body.trackNumber) : null;
 
   if (!orderId || !newStatus) {
-    return Response.json({ ok: false, error: "orderId/status required" }, { status: 400 });
+    return Response.json(
+      { ok: false, error: "orderId/status required" },
+      { status: 400 }
+    );
   }
 
-  // Меняем статус и (опционально) трек — и отправляем уведомление только на нужные статусы
   const result = await prisma.$transaction(async (tx) => {
     const prev = await tx.order.findUnique({
       where: { id: orderId },
@@ -76,11 +82,19 @@ async function handleStatusWebhook(req: Request) {
     });
     if (!prev) return { ok: false as const, error: "Order not found" };
 
-    const needUpdateTrack = newTrackNumber !== null && newTrackNumber !== prev.trackNumber;
-    const needUpdateStatus = newStatus !== String(prev.status).toUpperCase();
+    const needUpdateTrack =
+      newTrackNumber !== null && newTrackNumber !== prev.trackNumber;
+    const needUpdateStatus =
+      newStatus !== String(prev.status).toUpperCase();
 
     if (!needUpdateStatus && !needUpdateTrack) {
-      return { ok: true as const, changed: false, order: prev, prevStatus: prev.status, newStatus: prev.status };
+      return {
+        ok: true as const,
+        changed: false,
+        order: prev,
+        prevStatus: prev.status,
+        newStatus: prev.status,
+      };
     }
 
     const updated = await tx.order.update({
@@ -92,17 +106,27 @@ async function handleStatusWebhook(req: Request) {
       select: { id: true, userId: true, status: true, trackNumber: true },
     });
 
-    return { ok: true as const, changed: true, order: updated, prevStatus: prev.status, newStatus: updated.status };
+    return {
+      ok: true as const,
+      changed: true,
+      order: updated,
+      prevStatus: prev.status,
+      newStatus: updated.status,
+    };
   });
 
   if (!result.ok) return Response.json(result, { status: 404 });
 
-  // Уведомляем клиента только на SHIPPED/DELIVERED и только при переходе статуса
   const prevS = String((result as any).prevStatus ?? "").toUpperCase();
   const currS = String((result as any).newStatus ?? "").toUpperCase();
 
   if (prevS !== currS && (currS === "SHIPPED" || currS === "DELIVERED")) {
-    const order = (result as any).order as { id: string; userId: string | null; status: any; trackNumber: string | null };
+    const order = (result as any).order as {
+      id: string;
+      userId: string | null;
+      status: any;
+      trackNumber: string | null;
+    };
 
     await notifyUserOrderStatus({
       userId: order.userId,
@@ -140,11 +164,8 @@ async function handleYaPayWebhook(req: Request) {
   console.log("✅ YAPAY PAYLOAD:", { orderId, paymentStatus });
 
   if (!orderId) return Response.json({ ok: true });
-
-  // Только успешная оплата
   if (paymentStatus !== "CAPTURED") return Response.json({ ok: true });
 
-  // Берём draft
   const draft = await prisma.paymentDraft.findUnique({
     where: { id: orderId },
   });
@@ -154,7 +175,6 @@ async function handleYaPayWebhook(req: Request) {
     return Response.json({ ok: true });
   }
 
-  // Если заказ уже создан — просто гарантируем статус PAID и выходим
   const already = await prisma.order.findUnique({
     where: { paymentDraftId: draft.id },
     select: { id: true },
@@ -170,7 +190,9 @@ async function handleYaPayWebhook(req: Request) {
     return Response.json({ ok: true });
   }
 
-  const items: any[] = Array.isArray(draft.itemsJson) ? (draft.itemsJson as any[]) : [];
+  const items: any[] = Array.isArray(draft.itemsJson)
+    ? (draft.itemsJson as any[])
+    : [];
 
   const createdOrder = await prisma.$transaction(async (tx) => {
     await tx.paymentDraft.update({
@@ -187,6 +209,15 @@ async function handleYaPayWebhook(req: Request) {
         name: draft.name,
         phone: draft.phone,
         address: draft.address,
+
+        // ✅ переносим доставку из draft → order
+        pvzCity: (draft as any).pvzCity ?? null,
+        pvzCode: (draft as any).pvzCode ?? null,
+        pvzAddress: (draft as any).pvzAddress ?? null,
+        pvzName: (draft as any).pvzName ?? null,
+        deliveryPrice: (draft as any).deliveryPrice ?? null,
+        deliveryDays: (draft as any).deliveryDays ?? null,
+
         trackNumber: draft.trackNumber ?? null, // ✅ если есть
         items: {
           create: items.map((it: any) => ({
@@ -201,7 +232,6 @@ async function handleYaPayWebhook(req: Request) {
       select: { id: true },
     });
 
-    // списание остатков (только по variantId)
     for (const it of items) {
       const variantId = it?.variantId ? String(it.variantId) : null;
       const qty = Number(it?.qty ?? it?.quantity ?? 1);
@@ -221,14 +251,28 @@ async function handleYaPayWebhook(req: Request) {
     return order;
   });
 
-  // TG уведомления админам
   const adminChatIds = parseChatIds(process.env.TG_ADMIN_CHAT_IDS);
+
+  const pvzLine = (draft as any).pvzCode
+    ? `ПВЗ: ${(draft as any).pvzCity ? (draft as any).pvzCity + ", " : ""}<code>${(draft as any).pvzCode}</code>\nАдрес ПВЗ: ${(draft as any).pvzAddress ?? "—"}\n`
+    : "";
+
+  const deliveryLine =
+    (draft as any).deliveryPrice != null
+      ? `Доставка: ${rubFromCents(Number((draft as any).deliveryPrice))}${
+          (draft as any).deliveryDays != null
+            ? ` (${(draft as any).deliveryDays} дн.)`
+            : ""
+        }\n`
+      : "";
 
   const adminText =
     `<b>Новый заказ ✅ (оплачен)</b>\n` +
     `ID: <code>${createdOrder.id}</code>\n` +
     `Имя: ${draft.name}\n` +
     `Телефон: ${draft.phone}\n` +
+    `${pvzLine}` +
+    `${deliveryLine}` +
     `Адрес: ${draft.address}\n` +
     `Пользователь: ${draft.email || "Не указан (клиент не авторизован)"}\n\n` +
     `<b>Состав заказа:</b>\n` +
@@ -250,7 +294,6 @@ async function handleYaPayWebhook(req: Request) {
     tgSendMessage(chatId, adminText).catch(() => {});
   }
 
-  // пользователю (оплата прошла)
   if (draft.userId) {
     const u = await prisma.user.findUnique({
       where: { id: draft.userId },
@@ -277,17 +320,13 @@ async function handleYaPayWebhook(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    // Если тело похоже на JWT (yapay) — обрабатываем как YAPAY
     const contentType = req.headers.get("content-type") || "";
     if (!contentType.includes("application/json")) {
       return await handleYaPayWebhook(req);
     }
-
-    // Иначе считаем, что это webhook смены статуса (из админки)
     return await handleStatusWebhook(req);
   } catch (e: any) {
     console.log("❌ WEBHOOK ERROR:", e?.message || e);
-    // Всегда 200, чтобы внешние сервисы не ретраили бесконечно
     return Response.json({ ok: true });
   }
 }
