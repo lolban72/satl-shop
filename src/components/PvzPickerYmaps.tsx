@@ -219,7 +219,7 @@ export default function PvzPickerYmaps({
   }, []);
 
   return (
-    <div>
+    <span>
 
       {!apiKey ? (
         <div className="mt-2 text-[12px] text-red-600">
@@ -290,6 +290,6 @@ export default function PvzPickerYmaps({
           ) : null}
         </div>
       </div>
-    </div>
+    </span>
   );
 }

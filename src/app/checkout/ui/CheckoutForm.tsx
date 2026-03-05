@@ -272,41 +272,41 @@ export default function CheckoutForm(props: {
                 {/* DELIVERY */}
                   <div className="grid gap-[10px]">
                     {/* MAP WRAPPER */}
-                    <span className={label}>Адрес пункта выдачи</span>
-                      <PvzPickerYmaps
-                        // ✅ город вводится только внутри компонента (один раз)
-                        hideCityInput={false}
-                        autoLoad={false}
-                        onSelect={(p: { code: string; address: string; city: string }) => {
-                          const pickedCity = String(p?.city ?? "").trim();
+                    <span className={label}>Адрес пункт выдачи</span>
+                    <PvzPickerYmaps
+                      // ✅ город вводится только внутри компонента (один раз)
+                      hideCityInput={false}
+                      autoLoad={false}
+                      onSelect={(p: { code: string; address: string; city: string }) => {
+                        const pickedCity = String(p?.city ?? "").trim();
 
-                          const next = {
-                            code: String(p?.code ?? "").trim(),
-                            address: String(p?.address ?? "").trim(),
-                          };
+                        const next = {
+                          code: String(p?.code ?? "").trim(),
+                          address: String(p?.address ?? "").trim(),
+                        };
 
-                          if (!pickedCity) {
-                            setErr("Не удалось определить город. Введите город и выберите ПВЗ ещё раз.");
-                            return;
-                          }
+                        if (!pickedCity) {
+                          setErr("Не удалось определить город. Введите город и выберите ПВЗ ещё раз.");
+                          return;
+                        }
 
-                          if (!next.code || !next.address) {
-                            setErr("Не удалось прочитать выбранный ПВЗ (нет code/address)");
-                            return;
-                          }
+                        if (!next.code || !next.address) {
+                          setErr("Не удалось прочитать выбранный ПВЗ (нет code/address)");
+                          return;
+                        }
 
-                          // ✅ сохраняем выбранный город (единожды)
-                          setCity(pickedCity);
+                        // ✅ сохраняем выбранный город (единожды)
+                        setCity(pickedCity);
 
-                          setPvz(next);
-                          setAddress(next.address);
+                        setPvz(next);
+                        setAddress(next.address);
 
-                          // ✅ пересчёт доставки
-                          recalcDelivery(pickedCity, next);
+                        // ✅ пересчёт доставки
+                        recalcDelivery(pickedCity, next);
                         }}
                       />
                     </div>
-                  </div>
+                </div>
 
                 {/* CTA */}
                 <button
