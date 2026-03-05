@@ -1,14 +1,19 @@
-// ✅ src/app/api/cdek/cities/route.ts
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-// Поддержка PROD/TEST как в доках/SDK
-const CDEK_BASE = process.env.CDEK_BASE_URL || "https://api.cdek.ru/v2"; // можно поставить https://api.edu.cdek.ru/v2
+const ENV = String(process.env.CDEK_ENV || "TEST").toUpperCase(); // TEST | PROD
+
+// ✅ правильные домены под ENV
+const CDEK_BASE =
+  ENV === "PROD"
+    ? "https://api.cdek.ru/v2"
+    : "https://api.edu.cdek.ru/v2";
+
 const CLIENT_ID = process.env.CDEK_CLIENT_ID || "";
 const CLIENT_SECRET = process.env.CDEK_CLIENT_SECRET || "";
 
-// простой in-memory cache токена
+// in-memory cache токена
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
 async function getCdekToken() {
@@ -35,8 +40,8 @@ async function getCdekToken() {
   });
 
   const data = await res.json().catch(() => ({} as any));
+
   if (!res.ok) {
-    // СДЭК обычно возвращает error/error_description
     const msg =
       data?.error_description ||
       data?.message ||
@@ -61,8 +66,6 @@ async function getCdekToken() {
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
-
-    // ты дергаешь /api/cdek/cities?q=...&limit=10
     const q = String(url.searchParams.get("q") || "").trim();
     const limit = Math.min(Math.max(Number(url.searchParams.get("limit") || 10), 1), 20);
 
@@ -72,7 +75,7 @@ export async function GET(req: Request) {
 
     const token = await getCdekToken();
 
-    // В СДЭК для location/cities используется параметр "city" (а не q)
+    // ✅ СДЭК: параметр city
     const params = new URLSearchParams({
       country_codes: "RU",
       city: q,
@@ -88,6 +91,7 @@ export async function GET(req: Request) {
     });
 
     const data = await res.json().catch(() => ({} as any));
+
     if (!res.ok) {
       const msg =
         data?.message ||
@@ -99,7 +103,6 @@ export async function GET(req: Request) {
 
     const list = Array.isArray(data) ? data : [];
 
-    // нормализуем под твой фронт: { city, region, country }
     const items = list
       .map((x: any) => ({
         city: String(x?.city || x?.city_name || "").trim(),
