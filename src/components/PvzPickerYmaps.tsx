@@ -251,11 +251,11 @@ export default function PvzPickerYmaps({
       ) : null}
 
       <div className="mt-[12px] mb-[12px] grid gap-[12px] md:grid-cols-2">
-        <div className="border border-black/15 rounded-[14px] overflow-hidden bg-white">
+        <div className="border border-black/15 overflow-hidden bg-white">
           <div id="pvz-map" className="h-[360px] w-full" />
         </div>
 
-        <div className="border border-black/15 rounded-[14px] overflow-auto max-h-[360px] bg-white">
+        <div className="border border-black/15 overflow-auto max-h-[360px] bg-white">
           {points.map((p) => (
             <button
               key={p.code}
@@ -269,9 +269,6 @@ export default function PvzPickerYmaps({
               }}
               type="button"
             >
-              <div className="text-[11px] font-semibold uppercase tracking-[0.06em]">
-                {p.name}
-              </div>
               <div className="mt-[6px] text-black/70">{p.address}</div>
               {p.workTime ? (
                 <div className="mt-[6px] text-[11px] text-black/50">
