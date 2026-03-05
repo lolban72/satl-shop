@@ -284,7 +284,7 @@ export default function CheckoutForm(props: {
 
                   <div className="mt-[12px] grid gap-[10px]">
                     {/* MAP WRAPPER */}
-                    <div className="border border-black/15 rounded-[14px] overflow-hidden bg-white">
+                    <div>
                       <PvzPickerYmaps
                         // ✅ город вводится только внутри компонента (один раз)
                         hideCityInput={false}

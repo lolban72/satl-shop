@@ -233,7 +233,7 @@ export default function PvzPickerYmaps({
       {!hideCityInput ? (
         <div className="mt-3 flex gap-2">
           <input
-            className="h-[46px] w-full px-[14px] text-[14px] outline-none focus:border-black transition bg-white"
+            className="h-[46px] w-full border border-black/15 px-[14px] text-[14px] outline-none focus:border-black transition bg-white"
             placeholder="Город"
             value={cityLocal}
             onChange={(e) => setCityLocal(e.target.value)}
