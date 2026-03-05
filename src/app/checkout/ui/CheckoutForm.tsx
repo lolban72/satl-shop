@@ -31,23 +31,16 @@ export default function CheckoutForm(props: {
   const router = useRouter();
   const { items } = useCart();
 
-  const itemsTotal = useMemo(
-    () => items.reduce((s, i) => s + i.price * i.qty, 0),
-    [items]
-  );
-
-  const itemsCount = useMemo(
-    () => items.reduce((s, i) => s + i.qty, 0),
-    [items]
-  );
+  const itemsTotal = useMemo(() => items.reduce((s, i) => s + i.price * i.qty, 0), [items]);
+  const itemsCount = useMemo(() => items.reduce((s, i) => s + i.qty, 0), [items]);
 
   const [name, setName] = useState(props.initial.name);
   const [phone, setPhone] = useState(props.initial.phone);
 
-  // address = адрес ПВЗ (readonly)
+  // ✅ адрес выбранного ПВЗ показываем в поле ниже
   const [address, setAddress] = useState(props.initial.address);
 
-  // ✅ город сохраняем только итоговый выбранный из подсказок
+  // ✅ город — итоговый выбранный из подсказок
   const [city, setCity] = useState(props.initial.city ?? "");
   const [pvz, setPvz] = useState<{ code: string; address: string } | null>(null);
 
@@ -67,10 +60,7 @@ export default function CheckoutForm(props: {
 
   const deliveryAbortRef = useRef<AbortController | null>(null);
 
-  async function recalcDelivery(
-    nextCity: string,
-    nextPvz: { code: string; address: string } | null
-  ) {
+  async function recalcDelivery(nextCity: string, nextPvz: { code: string; address: string } | null) {
     setErr(null);
     setDelivery(null);
 
@@ -187,7 +177,6 @@ export default function CheckoutForm(props: {
 
   return (
     <div className="mx-auto max-w-[1440px] px-[65px] pt-[70px] pb-[140px] text-black bg-white">
-      {/* HEADER */}
       <div className="flex items-end justify-between">
         <div>
           <div className="text-[26px] font-semibold tracking-[-0.02em]">Оформление</div>
@@ -202,7 +191,6 @@ export default function CheckoutForm(props: {
         </button>
       </div>
 
-      {/* ERROR */}
       {err ? (
         <div className="mt-[22px] border border-black/20 bg-white p-[14px] text-[12px] text-black">
           <div className="font-semibold uppercase tracking-[0.08em] text-[10px] mb-[6px]">Ошибка</div>
@@ -211,7 +199,6 @@ export default function CheckoutForm(props: {
       ) : null}
 
       <div className="mt-[36px] grid gap-[28px] lg:grid-cols-[1fr_420px] lg:items-start">
-        {/* LEFT */}
         <div className={clsx(card, "p-[18px] md:p-[22px]")}>
           <div className="text-[18px] font-semibold tracking-[-0.01em]">Данные получателя</div>
 
@@ -240,7 +227,6 @@ export default function CheckoutForm(props: {
           ) : (
             <>
               <div className="mt-[18px] grid gap-[16px]">
-                {/* NAME */}
                 <label className="grid gap-[4px]">
                   <span className={label}>Имя</span>
                   <input
@@ -252,7 +238,6 @@ export default function CheckoutForm(props: {
                   />
                 </label>
 
-                {/* PHONE */}
                 <label className="grid gap-[4px]">
                   <span className={label}>Телефон</span>
                   <input
@@ -264,12 +249,20 @@ export default function CheckoutForm(props: {
                   />
                 </label>
 
-                {/* DELIVERY */}
+                {/* ✅ DELIVERY */}
                 <div className="grid gap-[4px]">
                   <span className={label}>Адрес пункт выдачи</span>
 
+                  {/* ✅ СЮДА вставляется адрес выбранного ПВЗ */}
+                  <input
+                    className={input}
+                    value={address}
+                    style={{ fontFamily: "Brygada" }}
+                    placeholder="Адрес появится после выбора ПВЗ"
+                    readOnly
+                  />
+
                   <PvzPickerYmaps
-                    // ✅ variant A: без кнопки, только выбор города из подсказок
                     hideCityInput={false}
                     autoLoad={false}
                     onSelect={(p: { code: string; address: string; city: string }) => {
@@ -292,6 +285,8 @@ export default function CheckoutForm(props: {
 
                       setCity(pickedCity);
                       setPvz(next);
+
+                      // ✅ адрес вставляется в поле “Адрес пункт выдачи”
                       setAddress(next.address);
 
                       recalcDelivery(pickedCity, next);
@@ -310,7 +305,6 @@ export default function CheckoutForm(props: {
                 </div>
               </div>
 
-              {/* CTA */}
               <button
                 className={btn}
                 disabled={loading || items.length === 0 || deliveryLoading}
@@ -338,7 +332,6 @@ export default function CheckoutForm(props: {
           )}
         </div>
 
-        {/* RIGHT */}
         <aside className={clsx(card, "p-[18px] lg:sticky lg:top-[110px]")}>
           <div className="flex items-end justify-between">
             <div className="text-[20px] font-semibold">Ваш заказ</div>

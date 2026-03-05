@@ -60,7 +60,7 @@ export default function PvzPickerYmaps({
   const [selected, setSelected] = useState<Pvz | null>(null);
   const [err, setErr] = useState<string>("");
 
-  // ✅ подсказки
+  // ✅ подсказки городов
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [suggestLoading, setSuggestLoading] = useState(false);
   const [suggest, setSuggest] = useState<CitySuggest[]>([]);
@@ -162,7 +162,7 @@ export default function PvzPickerYmaps({
       } catch (e: any) {
         if (String(e?.name) === "AbortError") return;
         setSuggest([]);
-        setSuggestOpen(true); // ✅ оставляем открытым и покажем ошибку
+        setSuggestOpen(true);
         setSuggestErr(e?.message ? String(e.message) : "Не удалось загрузить города");
       } finally {
         setSuggestLoading(false);
@@ -191,13 +191,12 @@ export default function PvzPickerYmaps({
     loadPoints(v).catch(() => {});
   }
 
-  // ✅ init map once
+  // ✅ init map once — СРАЗУ (без ожидания points)
   useEffect(() => {
     destroyRef.current = false;
 
     async function initIfNeeded() {
       if (!apiKey) return;
-      if (!points.length) return;
 
       await loadYmaps(apiKey);
       await window.ymaps.ready();
@@ -210,8 +209,8 @@ export default function PvzPickerYmaps({
       if (mapRef.current && collectionRef.current) return;
 
       mapRef.current = new window.ymaps.Map("pvz-map", {
-        center,
-        zoom: 12,
+        center: [55.751244, 37.618423],
+        zoom: 10,
         controls: ["zoomControl"],
       });
 
@@ -225,13 +224,12 @@ export default function PvzPickerYmaps({
       destroyRef.current = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiKey, points.length]);
+  }, [apiKey]);
 
-  // ✅ update marks
+  // ✅ update marks (ждём, когда карта уже создана)
   useEffect(() => {
     async function updateMarks() {
       if (!apiKey) return;
-      if (!points.length) return;
 
       await loadYmaps(apiKey);
       await window.ymaps.ready();
@@ -258,7 +256,9 @@ export default function PvzPickerYmaps({
         collectionRef.current.add(placemark);
       }
 
-      mapRef.current.setCenter(center);
+      if (points.length) {
+        mapRef.current.setCenter(center);
+      }
     }
 
     updateMarks().catch(() => {});
@@ -267,8 +267,9 @@ export default function PvzPickerYmaps({
 
   useEffect(() => {
     if (!mapRef.current) return;
+    if (!points.length && !selected) return;
     mapRef.current.setCenter(center);
-  }, [center]);
+  }, [center, points.length, selected]);
 
   useEffect(() => {
     return () => {
@@ -288,7 +289,7 @@ export default function PvzPickerYmaps({
 
       {err ? <div className="mt-2 text-[12px] text-red-600">{err}</div> : null}
 
-      {/* ✅ город: подсказки по мере ввода (FIX: слой выше карты) */}
+      {/* ✅ Город + подсказки (поверх карты) */}
       {!hideCityInput ? (
         <div className="relative z-[9999]">
           <input
@@ -339,9 +340,7 @@ export default function PvzPickerYmaps({
               {suggestLoading ? (
                 <div className="px-[14px] py-[10px] text-[12px] text-black/50">Ищем города…</div>
               ) : suggestErr ? (
-                <div className="px-[14px] py-[10px] text-[12px] text-red-600">
-                  {suggestErr}
-                </div>
+                <div className="px-[14px] py-[10px] text-[12px] text-red-600">{suggestErr}</div>
               ) : suggest.length ? (
                 suggest.map((s, idx) => {
                   const line = [s.city, s.region].filter(Boolean).join(", ");
@@ -370,7 +369,7 @@ export default function PvzPickerYmaps({
       ) : null}
 
       <div className="mt-[12px] mb-[12px] grid gap-[12px] md:grid-cols-2">
-        {/* FIX: карта ниже по слою */}
+        {/* карта ниже по слою */}
         <div className="relative z-0 border border-black/15 overflow-hidden bg-white">
           <div id="pvz-map" className="h-[360px] w-full" />
         </div>
@@ -387,6 +386,9 @@ export default function PvzPickerYmaps({
               }}
               type="button"
             >
+              <div className="mt-[2px] text-[11px] uppercase tracking-[0.06em] text-black/80">
+                {p.name}
+              </div>
               <div className="mt-[6px] text-black/70">{p.address}</div>
               {p.workTime ? <div className="mt-[6px] text-[11px] text-black/50">{p.workTime}</div> : null}
             </button>
@@ -395,7 +397,9 @@ export default function PvzPickerYmaps({
           {!points.length ? (
             <div className="p-[14px] text-[12px] text-black/50">
               {effectiveCity
-                ? "Загружаем пункты или не найдены"
+                ? loading
+                  ? "Загружаем пункты…"
+                  : "Пункты не найдены"
                 : "Выберите город из подсказок — после этого появятся пункты выдачи"}
             </div>
           ) : null}
