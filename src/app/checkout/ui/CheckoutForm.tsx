@@ -270,7 +270,6 @@ export default function CheckoutForm(props: {
                 </label>
 
                 {/* DELIVERY */}
-                <div className="p-[14px]">
                   <div className="grid gap-[10px]">
                     {/* MAP WRAPPER */}
                     <div>
@@ -346,7 +345,6 @@ export default function CheckoutForm(props: {
                     публичной офертой
                   </Link>
                 </div>
-              </div>
             </>
           )}
         </div>
