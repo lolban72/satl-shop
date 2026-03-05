@@ -12,7 +12,6 @@ export async function GET(req: Request) {
     const cityCode = await cdekResolveCityCode(city);
     const points = await cdekDeliveryPoints(cityCode);
 
-    // нормализуем под фронт
     const normalized = (Array.isArray(points) ? points : []).map((p: any) => ({
       code: String(p.code),
       name: String(p.name ?? "ПВЗ"),
@@ -25,7 +24,8 @@ export async function GET(req: Request) {
 
     return Response.json({ city, cityCode, points: normalized });
   } catch (e: any) {
-    console.log("CDEK PVZ error:", e?.message || e);
-    return Response.json({ error: e?.message || "CDEK error" }, { status: 500 });
+    const msg = String(e?.message || e || "CDEK error");
+    console.log("❌ /api/cdek/pvz error:", msg);
+    return Response.json({ error: msg }, { status: 500 });
   }
 }
