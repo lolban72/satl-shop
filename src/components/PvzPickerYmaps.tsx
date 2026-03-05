@@ -231,7 +231,7 @@ export default function PvzPickerYmaps({
 
       {/* ✅ второй ввод города выключен по умолчанию */}
       {!hideCityInput ? (
-        <div className="mt-3 flex gap-2">
+        <div className="flex gap-2">
           <input
             className="h-[46px] w-full border border-black/15 px-[14px] text-[14px] outline-none focus:border-black transition bg-white"
             placeholder="Город"

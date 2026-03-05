@@ -219,7 +219,7 @@ export default function CheckoutForm(props: {
 
           {isTelegramNotLinked ? (
             <>
-              <div className={clsx("mt-[12px]", hint)}>
+              <div className={clsx("mt-[12px] mb-[12px]", hint)}>
                 Для оформления заказа нужно привязать телеграм — туда будут приходить
                 уведомления о заказе и восстановление пароля.
               </div>
@@ -270,7 +270,7 @@ export default function CheckoutForm(props: {
                 </label>
 
                 {/* DELIVERY */}
-                  <div className="grid gap-[10px]">
+                  <div className="grid gap-[4px]">
                     {/* MAP WRAPPER */}
                     <span className={label}>Адрес пункт выдачи</span>
                     <PvzPickerYmaps
