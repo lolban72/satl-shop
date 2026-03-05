@@ -46,19 +46,12 @@ type Props = {
 export default function PvzPickerYmaps({
   onSelect,
   city: cityProp,
-  hideCityInput = false, // ✅ по умолчанию показываем инпут
+  hideCityInput = true,
   autoLoad = true,
 }: Props) {
   const apiKey = process.env.NEXT_PUBLIC_YMAPS_API_KEY || "";
 
-  // ✅ инпут всегда есть: если сверху пришёл cityProp — подставляем в поле
   const [cityLocal, setCityLocal] = useState("");
-  useEffect(() => {
-    if (cityProp && String(cityProp).trim()) {
-      setCityLocal(String(cityProp).trim());
-    }
-  }, [cityProp]);
-
   const effectiveCity = String((cityProp ?? cityLocal) || "").trim();
 
   const [loading, setLoading] = useState(false);
@@ -75,7 +68,7 @@ export default function PvzPickerYmaps({
 
   const cityInputRef = useRef<HTMLInputElement | null>(null);
 
-  // refs для карты
+  // refs для карты, чтобы не пересоздавать постоянно
   const mapRef = useRef<any>(null);
   const collectionRef = useRef<any>(null);
   const destroyRef = useRef(false);
@@ -113,13 +106,14 @@ export default function PvzPickerYmaps({
     }
   }
 
-  // ✅ подсказки городов: работают по мере ввода ВСЕГДА (если инпут показывается)
+  // ✅ подсказки городов (только когда есть внутренний инпут)
   useEffect(() => {
     if (hideCityInput) return;
 
     const q = cityLocal.trim();
     setActiveIdx(-1);
 
+    // закрываем, если мало символов
     if (q.length < 2) {
       setSuggest([]);
       setSuggestOpen(false);
@@ -151,7 +145,7 @@ export default function PvzPickerYmaps({
       } finally {
         setSuggestLoading(false);
       }
-    }, 200);
+    }, 250);
 
     return () => clearTimeout(t);
   }, [cityLocal, hideCityInput]);
@@ -168,15 +162,25 @@ export default function PvzPickerYmaps({
     loadPoints(v).catch(() => {});
   }
 
-  // ✅ автозагрузка ПВЗ если cityProp меняется извне
+  // ✅ автозагрузка при смене города сверху
   useEffect(() => {
     if (!autoLoad) return;
     if (!apiKey) return;
-    if (hideCityInput) return; // чтобы не дублировать, когда инпут скрыт намеренно
 
-    // если печатают — не грузим ПВЗ на каждый символ, только после выбора (pickCity) или кнопки
-    // поэтому тут НИЧЕГО не делаем
-  }, [effectiveCity, autoLoad, apiKey, hideCityInput]);
+    if (!effectiveCity) {
+      setPoints([]);
+      setSelected(null);
+      setErr("");
+      return;
+    }
+
+    const t = setTimeout(() => {
+      loadPoints(effectiveCity).catch(() => {});
+    }, 350);
+
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveCity, autoLoad, apiKey]);
 
   // ✅ init map once
   useEffect(() => {
@@ -275,20 +279,21 @@ export default function PvzPickerYmaps({
 
       {err ? <div className="mt-2 text-[12px] text-red-600">{err}</div> : null}
 
-      {/* ✅ город: подсказки по мере ввода */}
+      {/* ✅ город: с автоподсказками */}
       {!hideCityInput ? (
         <div className="relative">
           <div className="flex gap-2">
             <input
               ref={cityInputRef}
               className="h-[46px] w-full border border-black/15 px-[14px] text-[14px] outline-none focus:border-black transition bg-white"
-              placeholder="Начните вводить город…"
+              placeholder="Город"
               value={cityLocal}
               onChange={(e) => setCityLocal(e.target.value)}
               onFocus={() => {
                 if (suggest.length) setSuggestOpen(true);
               }}
               onBlur={() => {
+                // даём кликнуть по пункту
                 setTimeout(() => setSuggestOpen(false), 120);
               }}
               onKeyDown={(e) => {
@@ -324,6 +329,7 @@ export default function PvzPickerYmaps({
             </button>
           </div>
 
+          {/* dropdown */}
           {suggestOpen ? (
             <div className="absolute z-[50] mt-[6px] w-full border border-black/15 bg-white shadow-sm">
               {suggestLoading ? (
@@ -340,7 +346,6 @@ export default function PvzPickerYmaps({
                         active ? "bg-black/5" : ""
                       }`}
                       onMouseEnter={() => setActiveIdx(idx)}
-                      onMouseDown={(e) => e.preventDefault()} // ✅ чтобы blur не закрывал раньше клика
                       onClick={() => pickCity(s.city)}
                     >
                       <div className="text-black">{line}</div>
@@ -379,7 +384,7 @@ export default function PvzPickerYmaps({
 
           {!points.length ? (
             <div className="p-[14px] text-[12px] text-black/50">
-              {effectiveCity ? "Выберите город из подсказок или нажмите «Показать»" : "Начните вводить город сверху"}
+              {effectiveCity ? "Пункты выдачи загружаются или не найдены" : "Укажите город сверху"}
             </div>
           ) : null}
         </div>
