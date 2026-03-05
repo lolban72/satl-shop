@@ -219,7 +219,7 @@ export default function PvzPickerYmaps({
   }, []);
 
   return (
-    <div className="p-[14px]">
+    <div>
 
       {!apiKey ? (
         <div className="mt-2 text-[12px] text-red-600">
