@@ -1,3 +1,4 @@
+// ✅ src/app/api/pay/draft/route.ts
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 
@@ -25,13 +26,28 @@ export async function POST(req: Request) {
     const address = String(body?.address ?? "").trim();
 
     // ✅ СДЭК ПВЗ
-    const city = String(body?.city ?? "").trim(); // например "Краснодар"
-    const pvzCode = String(body?.pvzCode ?? "").trim(); // код ПВЗ
-    const pvzAddress = String(body?.pvzAddress ?? "").trim(); // адрес ПВЗ
+    const city = String(body?.city ?? "").trim();
+    const pvzCode = String(body?.pvzCode ?? "").trim();
+    const pvzAddress = String(body?.pvzAddress ?? "").trim();
 
-    // ✅ (пока опционально) имя ПВЗ — если начнёшь передавать с фронта
-    const pvzName =
-      body?.pvzName != null ? String(body.pvzName).trim() : null;
+    // ✅ (опционально) имя ПВЗ
+    const pvzName = body?.pvzName != null ? String(body.pvzName).trim() : null;
+
+    // ✅ доставка (копейки + дни) — приходит с фронта после /api/cdek/calc
+    const deliveryPriceRaw =
+      body?.deliveryPrice != null ? Number(body.deliveryPrice) : null;
+    const deliveryDaysRaw =
+      body?.deliveryDays != null ? Number(body.deliveryDays) : null;
+
+    const deliveryPrice =
+      deliveryPriceRaw != null && Number.isFinite(deliveryPriceRaw)
+        ? Math.round(deliveryPriceRaw)
+        : null;
+
+    const deliveryDays =
+      deliveryDaysRaw != null && Number.isFinite(deliveryDaysRaw)
+        ? Math.round(deliveryDaysRaw)
+        : null;
 
     const items = Array.isArray(body?.items) ? body.items : [];
 
@@ -66,14 +82,23 @@ export async function POST(req: Request) {
       );
     }
 
+    // ✅ пересчёт товаров (копейки)
     const total = items.reduce((s: number, it: any) => {
-      const price = Number(it?.price) || 0; // копейки
+      const price = Number(it?.price) || 0;
       const qty = Number(it?.qty) || 0;
       return s + price * qty;
     }, 0);
 
     if (total <= 0) {
       return Response.json({ error: "Некорректная сумма" }, { status: 400 });
+    }
+
+    // ✅ доставка обязательна (иначе она не попадёт в Яндекс Пей)
+    if (deliveryPrice == null || deliveryPrice < 0) {
+      return Response.json(
+        { error: "deliveryPrice required (calc delivery first)" },
+        { status: 400 }
+      );
     }
 
     const finalAddress = pvzAddress || address;
@@ -86,11 +111,15 @@ export async function POST(req: Request) {
         phone,
         address: finalAddress,
 
-        // ✅ сохраняем доставку в draft
+        // ✅ ПВЗ
         pvzCity: city,
         pvzCode,
         pvzAddress,
         pvzName,
+
+        // ✅ доставка в draft
+        deliveryPrice,
+        deliveryDays,
 
         itemsJson: items,
         total,

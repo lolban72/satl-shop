@@ -1,3 +1,4 @@
+// ✅ src/app/api/pay/link/route.ts
 import { prisma } from "@/lib/prisma";
 
 function rub2(totalCents: number) {
@@ -17,9 +18,9 @@ export async function POST(req: Request) {
       where: { id: draftId },
       select: {
         id: true,
-        total: true,
+        total: true, // товары (копейки)
         itemsJson: true,
-        deliveryPrice: true, // ✅ добавили
+        deliveryPrice: true, // доставка (копейки)
         pvzCity: true,
         pvzAddress: true,
       },
@@ -69,13 +70,16 @@ export async function POST(req: Request) {
       };
     });
 
-    // ✅ Добавляем доставку отдельной строкой, чтобы сумма items == cart.total
     const deliveryCents = Number(draft.deliveryPrice ?? 0);
+
+    // ✅ доставка отдельной строкой
     if (Number.isFinite(deliveryCents) && deliveryCents > 0) {
       const city = String(draft.pvzCity ?? "").trim();
       const addr = String(draft.pvzAddress ?? "").trim();
       const label =
-        city || addr ? `Доставка СДЭК до ПВЗ (${[city, addr].filter(Boolean).join(", ")})` : "Доставка СДЭК до ПВЗ";
+        city || addr
+          ? `Доставка СДЭК до ПВЗ (${[city, addr].filter(Boolean).join(", ")})`
+          : "Доставка СДЭК до ПВЗ";
 
       items.push({
         productId: "delivery",
@@ -84,6 +88,9 @@ export async function POST(req: Request) {
         total: rub2(deliveryCents),
       });
     }
+
+    // ✅ итог к оплате = товары + доставка
+    const payTotalCents = Number(draft.total) + (Number.isFinite(deliveryCents) ? deliveryCents : 0);
 
     const payload = {
       orderId: draft.id,
@@ -97,7 +104,7 @@ export async function POST(req: Request) {
       },
       cart: {
         items,
-        total: { amount: rub2(draft.total) },
+        total: { amount: rub2(payTotalCents) }, // ✅ ВАЖНО: уже с доставкой
       },
     };
 
