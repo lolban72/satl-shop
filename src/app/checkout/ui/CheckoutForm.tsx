@@ -282,16 +282,6 @@ export default function CheckoutForm(props: {
                       recalcDelivery(pickedCity, next);
                     }}
                   />
-
-                  <div className="mt-[8px] text-[11px] text-black/45">
-                    {city && pvz?.code ? (
-                      <>
-                        Выбрано: <span className="text-black/70">{city}</span>
-                      </>
-                    ) : (
-                      <>Выберите город из подсказок — после этого появятся пункты выдачи.</>
-                    )}
-                  </div>
                 </div>
               </div>
 
