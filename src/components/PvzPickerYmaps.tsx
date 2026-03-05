@@ -250,7 +250,7 @@ export default function PvzPickerYmaps({
         </div>
       ) : null}
 
-      <div className="mt-[12px] grid gap-[12px] md:grid-cols-2">
+      <div className="mt-[12px] mb-[12px] grid gap-[12px] md:grid-cols-2">
         <div className="border border-black/15 rounded-[14px] overflow-hidden bg-white">
           <div id="pvz-map" className="h-[360px] w-full" />
         </div>
