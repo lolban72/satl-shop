@@ -70,6 +70,15 @@ export default function PvzPickerYmaps({
 
   const cityInputRef = useRef<HTMLInputElement | null>(null);
 
+  // ✅ режим: после выбора ПВЗ показываем адрес в этом же поле
+  const [showAddressInCityInput, setShowAddressInCityInput] = useState(false);
+
+  const cityInputValue = showAddressInCityInput
+    ? String(selected?.address ?? "")
+    : cityLocal;
+
+  const cityInputReadOnly = showAddressInCityInput;
+
   // карта refs
   const mapRef = useRef<any>(null);
   const collectionRef = useRef<any>(null);
@@ -116,6 +125,7 @@ export default function PvzPickerYmaps({
     const c = String(cityProp ?? "").trim();
     if (!c) return;
 
+    setShowAddressInCityInput(false);
     setConfirmedCity(c);
     setCityLocal(c);
 
@@ -130,6 +140,7 @@ export default function PvzPickerYmaps({
   // ✅ подсказки по мере ввода (ПВЗ НЕ грузим пока не выбрали подсказку)
   useEffect(() => {
     if (hideCityInput) return;
+    if (showAddressInCityInput) return;
 
     const q = cityLocal.trim();
     setActiveIdx(-1);
@@ -170,11 +181,13 @@ export default function PvzPickerYmaps({
     }, 200);
 
     return () => clearTimeout(t);
-  }, [cityLocal, hideCityInput]);
+  }, [cityLocal, hideCityInput, showAddressInCityInput]);
 
   function pickCityFromSuggest(value: string) {
     const v = String(value || "").trim();
     if (!v) return;
+
+    setShowAddressInCityInput(false);
 
     setErr("");
     setSelected(null);
@@ -189,6 +202,27 @@ export default function PvzPickerYmaps({
     setSuggestErr(null);
 
     loadPoints(v).catch(() => {});
+  }
+
+  function resetAll() {
+    setShowAddressInCityInput(false);
+
+    setErr("");
+    setSelected(null);
+    setPoints([]);
+
+    setCityLocal("");
+    setConfirmedCity("");
+
+    setSuggest([]);
+    setSuggestErr(null);
+    setSuggestOpen(false);
+    setActiveIdx(-1);
+
+    // вернуть карту к дефолтному центру (если уже создана)
+    try {
+      mapRef.current?.setCenter?.([55.751244, 37.618423], 10);
+    } catch {}
   }
 
   // ✅ init map once — СРАЗУ (без ожидания points)
@@ -250,6 +284,8 @@ export default function PvzPickerYmaps({
 
         placemark.events.add("click", () => {
           setSelected(p);
+          setShowAddressInCityInput(true); // ✅ адрес в поле
+          setSuggestOpen(false);
           onSelect({ code: p.code, address: p.address, city: effectiveCity });
         });
 
@@ -289,53 +325,72 @@ export default function PvzPickerYmaps({
 
       {err ? <div className="mt-2 text-[12px] text-red-600">{err}</div> : null}
 
-      {/* ✅ Город + подсказки (поверх карты) */}
+      {/* ✅ этот же input: сначала город, потом адрес ПВЗ + кнопка "Изменить" */}
       {!hideCityInput ? (
         <div className="relative z-[9999]">
-          <input
-            ref={cityInputRef}
-            className="h-[46px] w-full border border-black/15 px-[14px] text-[14px] outline-none focus:border-black transition bg-white"
-            placeholder="Начните вводить город…"
-            value={cityLocal}
-            onChange={(e) => {
-              setCityLocal(e.target.value);
+          <div className="flex gap-2">
+            <input
+              ref={cityInputRef}
+              className="h-[46px] w-full border border-black/15 px-[14px] text-[14px] outline-none focus:border-black transition bg-white"
+              placeholder={showAddressInCityInput ? "Адрес пункта выдачи" : "Начните вводить город…"}
+              value={cityInputValue}
+              readOnly={cityInputReadOnly}
+              onChange={(e) => {
+                if (showAddressInCityInput) return;
 
-              // снимаем подтверждение — ПВЗ не грузим
-              setConfirmedCity("");
-              setPoints([]);
-              setSelected(null);
-              setErr("");
-            }}
-            onFocus={() => {
-              if (suggest.length || suggestErr) setSuggestOpen(true);
-            }}
-            onBlur={() => {
-              setTimeout(() => setSuggestOpen(false), 120);
-            }}
-            onKeyDown={(e) => {
-              if (!suggestOpen || (suggest.length === 0 && !suggestErr)) return;
+                setCityLocal(e.target.value);
 
-              if (e.key === "ArrowDown") {
-                e.preventDefault();
-                setActiveIdx((x) => Math.min(x + 1, suggest.length - 1));
-              }
-              if (e.key === "ArrowUp") {
-                e.preventDefault();
-                setActiveIdx((x) => Math.max(x - 1, 0));
-              }
-              if (e.key === "Enter") {
-                if (suggest.length === 0) return;
-                e.preventDefault();
-                const picked = suggest[activeIdx] ?? suggest[0];
-                if (picked?.city) pickCityFromSuggest(picked.city);
-              }
-              if (e.key === "Escape") {
-                setSuggestOpen(false);
-              }
-            }}
-          />
+                // снимаем подтверждение — ПВЗ не грузим
+                setConfirmedCity("");
+                setPoints([]);
+                setSelected(null);
+                setErr("");
+              }}
+              onFocus={() => {
+                if (showAddressInCityInput) return;
+                if (suggest.length || suggestErr) setSuggestOpen(true);
+              }}
+              onBlur={() => {
+                if (showAddressInCityInput) return;
+                setTimeout(() => setSuggestOpen(false), 120);
+              }}
+              onKeyDown={(e) => {
+                if (showAddressInCityInput) return;
+                if (!suggestOpen || (suggest.length === 0 && !suggestErr)) return;
 
-          {suggestOpen ? (
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setActiveIdx((x) => Math.min(x + 1, suggest.length - 1));
+                }
+                if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setActiveIdx((x) => Math.max(x - 1, 0));
+                }
+                if (e.key === "Enter") {
+                  if (suggest.length === 0) return;
+                  e.preventDefault();
+                  const picked = suggest[activeIdx] ?? suggest[0];
+                  if (picked?.city) pickCityFromSuggest(picked.city);
+                }
+                if (e.key === "Escape") {
+                  setSuggestOpen(false);
+                }
+              }}
+            />
+
+            {showAddressInCityInput ? (
+              <button
+                type="button"
+                className="h-[46px] border border-black/15 px-[14px] text-[10px] font-bold uppercase tracking-[0.12em] hover:bg-black/5 transition"
+                onClick={resetAll}
+              >
+                Изменить
+              </button>
+            ) : null}
+          </div>
+
+          {/* dropdown */}
+          {!showAddressInCityInput && suggestOpen ? (
             <div className="absolute z-[10000] mt-[6px] w-full border border-black/15 bg-white shadow-sm">
               {suggestLoading ? (
                 <div className="px-[14px] py-[10px] text-[12px] text-black/50">Ищем города…</div>
@@ -369,7 +424,6 @@ export default function PvzPickerYmaps({
       ) : null}
 
       <div className="mt-[12px] mb-[12px] grid gap-[12px] md:grid-cols-2">
-        {/* карта ниже по слою */}
         <div className="relative z-0 border border-black/15 overflow-hidden bg-white">
           <div id="pvz-map" className="h-[360px] w-full" />
         </div>
@@ -382,6 +436,8 @@ export default function PvzPickerYmaps({
                           hover:bg-black/5 transition ${selected?.code === p.code ? "bg-black/5" : ""}`}
               onClick={() => {
                 setSelected(p);
+                setShowAddressInCityInput(true); // ✅ адрес в поле
+                setSuggestOpen(false);
                 onSelect({ code: p.code, address: p.address, city: effectiveCity });
               }}
               type="button"

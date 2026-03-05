@@ -37,10 +37,9 @@ export default function CheckoutForm(props: {
   const [name, setName] = useState(props.initial.name);
   const [phone, setPhone] = useState(props.initial.phone);
 
-  // ✅ адрес выбранного ПВЗ показываем в поле ниже
+  // ✅ тут храним адрес выбранного ПВЗ для submit
   const [address, setAddress] = useState(props.initial.address);
 
-  // ✅ город — итоговый выбранный из подсказок
   const [city, setCity] = useState(props.initial.city ?? "");
   const [pvz, setPvz] = useState<{ code: string; address: string } | null>(null);
 
@@ -249,18 +248,9 @@ export default function CheckoutForm(props: {
                   />
                 </label>
 
-                {/* ✅ DELIVERY */}
+                {/* DELIVERY */}
                 <div className="grid gap-[4px]">
                   <span className={label}>Адрес пункт выдачи</span>
-
-                  {/* ✅ СЮДА вставляется адрес выбранного ПВЗ */}
-                  <input
-                    className={input}
-                    value={address}
-                    style={{ fontFamily: "Brygada" }}
-                    placeholder="Адрес появится после выбора ПВЗ"
-                    readOnly
-                  />
 
                   <PvzPickerYmaps
                     hideCityInput={false}
@@ -286,7 +276,7 @@ export default function CheckoutForm(props: {
                       setCity(pickedCity);
                       setPvz(next);
 
-                      // ✅ адрес вставляется в поле “Адрес пункт выдачи”
+                      // ✅ сохраняем адрес для submit (на экране адрес уже показывается в поле компонента)
                       setAddress(next.address);
 
                       recalcDelivery(pickedCity, next);
@@ -332,6 +322,7 @@ export default function CheckoutForm(props: {
           )}
         </div>
 
+        {/* RIGHT */}
         <aside className={clsx(card, "p-[18px] lg:sticky lg:top-[110px]")}>
           <div className="flex items-end justify-between">
             <div className="text-[20px] font-semibold">Ваш заказ</div>
