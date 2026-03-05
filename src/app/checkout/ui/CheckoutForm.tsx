@@ -272,6 +272,7 @@ export default function CheckoutForm(props: {
                 {/* DELIVERY */}
                   <div className="grid gap-[10px]">
                     {/* MAP WRAPPER */}
+                    <span className={label}>Адрес пункта выдачи</span>
                     <div>
                       <PvzPickerYmaps
                         // ✅ город вводится только внутри компонента (один раз)
@@ -305,18 +306,6 @@ export default function CheckoutForm(props: {
                           recalcDelivery(pickedCity, next);
                         }}
                       />
-                    </div>
-
-                    {/* SELECTED */}
-                    <div className="grid gap-[6px]">
-                      <div className={label}>Выбранный ПВЗ</div>
-                      <div className="border border-black/15 px-[14px] py-[12px] text-[12px] bg-black/5">
-                        {pvz?.address ? (
-                            <div className="text-black">{pvz.address}</div>
-                        ) : (
-                          <div className="text-black/55">Выберите пункт выдачи</div>
-                        )}
-                      </div>
                     </div>
                   </div>
                 </div>
