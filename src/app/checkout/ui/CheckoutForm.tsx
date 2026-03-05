@@ -270,18 +270,7 @@ export default function CheckoutForm(props: {
                 </label>
 
                 {/* DELIVERY */}
-                <div className={clsx(card, "p-[14px]")}>
-                  <div className="flex items-center justify-between gap-[10px]">
-
-                    <div className="text-right">
-                      {delivery && (delivery.daysMin || delivery.daysMax) ? (
-                        <div className="text-[11px] text-black/55">
-                          {delivery.daysMin ?? "?"}-{delivery.daysMax ?? "?"} дн.
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-
+                <div className="p-[14px]">
                   <div className="grid gap-[10px]">
                     {/* MAP WRAPPER */}
                     <div>
