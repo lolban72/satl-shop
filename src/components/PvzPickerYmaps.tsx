@@ -37,42 +37,26 @@ function loadYmaps(apiKey: string) {
 }
 
 type Props = {
-  // ✅ теперь отдаём ещё и city
   onSelect: (pvz: { code: string; address: string; city: string }) => void;
-
-  // ✅ если город уже есть в CheckoutForm — прокидывай сюда
   city?: string;
-
-  // ✅ когда false — показываем инпут города внутри компонента (как ты хочешь)
   hideCityInput?: boolean;
-
-  // ✅ если true — грузим ПВЗ когда city меняется (если city пропом)
   autoLoad?: boolean;
-
-  // ✅ ключ localStorage
-  storageKey?: string;
 };
 
 export default function PvzPickerYmaps({
   onSelect,
   city: cityProp,
-  hideCityInput = false, // ты хотел ввод города тут — значит по умолчанию показываем
+  hideCityInput = false, // ✅ по умолчанию показываем инпут
   autoLoad = true,
-  storageKey = "satl.checkout.city",
 }: Props) {
   const apiKey = process.env.NEXT_PUBLIC_YMAPS_API_KEY || "";
 
-  // 1) город: если передали пропом — используем его, иначе local state
+  // ✅ инпут всегда есть: если сверху пришёл cityProp — подставляем в поле
   const [cityLocal, setCityLocal] = useState("");
-
-  // ✅ подставим город из localStorage при первом рендере (если cityProp не задан)
   useEffect(() => {
-    if (cityProp) return;
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved && !cityLocal) setCityLocal(saved);
-    } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (cityProp && String(cityProp).trim()) {
+      setCityLocal(String(cityProp).trim());
+    }
   }, [cityProp]);
 
   const effectiveCity = String((cityProp ?? cityLocal) || "").trim();
@@ -89,12 +73,12 @@ export default function PvzPickerYmaps({
   const [activeIdx, setActiveIdx] = useState<number>(-1);
   const suggestAbortRef = useRef<AbortController | null>(null);
 
-  // ✅ PVZ загрузка: abort + debounce
-  const pvzAbortRef = useRef<AbortController | null>(null);
+  const cityInputRef = useRef<HTMLInputElement | null>(null);
 
-  // refs для карты (не пересоздаём постоянно)
+  // refs для карты
   const mapRef = useRef<any>(null);
   const collectionRef = useRef<any>(null);
+  const destroyRef = useRef(false);
 
   const center = useMemo(() => {
     if (selected) return [selected.lat, selected.lon];
@@ -102,27 +86,20 @@ export default function PvzPickerYmaps({
     return p ? [p.lat, p.lon] : [55.751244, 37.618423];
   }, [points, selected]);
 
-  async function loadPoints(city: string) {
+  async function loadPoints(forCity?: string) {
     setErr("");
     setSelected(null);
     setPoints([]);
 
-    const c = String(city || "").trim();
+    const c = String(forCity ?? effectiveCity).trim();
     if (!c) {
       setErr("Введите город");
       return;
     }
 
-    pvzAbortRef.current?.abort();
-    const ac = new AbortController();
-    pvzAbortRef.current = ac;
-
     setLoading(true);
     try {
-      const r = await fetch(`/api/cdek/pvz?city=${encodeURIComponent(c)}`, {
-        cache: "no-store",
-        signal: ac.signal,
-      });
+      const r = await fetch(`/api/cdek/pvz?city=${encodeURIComponent(c)}`, { cache: "no-store" });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error || "Не удалось получить ПВЗ");
 
@@ -130,14 +107,13 @@ export default function PvzPickerYmaps({
       if (!list.length) setErr("ПВЗ не найдены");
       setPoints(list);
     } catch (e: any) {
-      if (String(e?.name) === "AbortError") return;
       setErr(e?.message || "Ошибка");
     } finally {
       setLoading(false);
     }
   }
 
-  // ✅ Автопоиск подсказок городов (когда есть внутренний инпут)
+  // ✅ подсказки городов: работают по мере ввода ВСЕГДА (если инпут показывается)
   useEffect(() => {
     if (hideCityInput) return;
 
@@ -175,55 +151,36 @@ export default function PvzPickerYmaps({
       } finally {
         setSuggestLoading(false);
       }
-    }, 250);
+    }, 200);
 
     return () => clearTimeout(t);
   }, [cityLocal, hideCityInput]);
 
-  // ✅ Выбор города → сохраняем → автоматически грузим ПВЗ (без кнопок)
   function pickCity(value: string) {
     const v = String(value || "").trim();
     if (!v) return;
 
-    // сохраняем в local state (и показываем пользователю)
-    if (!cityProp) setCityLocal(v);
-
-    // localStorage
-    try {
-      localStorage.setItem(storageKey, v);
-    } catch {}
-
-    // закрываем подсказки
+    setCityLocal(v);
     setSuggestOpen(false);
     setSuggest([]);
     setActiveIdx(-1);
 
-    // сразу грузим ПВЗ
     loadPoints(v).catch(() => {});
   }
 
-  // ✅ Если город приходит пропом сверху — автогрузим ПВЗ при смене
+  // ✅ автозагрузка ПВЗ если cityProp меняется извне
   useEffect(() => {
     if (!autoLoad) return;
-    if (!cityProp) return;
     if (!apiKey) return;
+    if (hideCityInput) return; // чтобы не дублировать, когда инпут скрыт намеренно
 
-    const c = String(cityProp || "").trim();
-    if (!c) {
-      setPoints([]);
-      setSelected(null);
-      setErr("");
-      return;
-    }
+    // если печатают — не грузим ПВЗ на каждый символ, только после выбора (pickCity) или кнопки
+    // поэтому тут НИЧЕГО не делаем
+  }, [effectiveCity, autoLoad, apiKey, hideCityInput]);
 
-    const t = setTimeout(() => loadPoints(c).catch(() => {}), 250);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cityProp, autoLoad, apiKey]);
-
-  // ✅ init map once (когда есть точки)
+  // ✅ init map once
   useEffect(() => {
-    let cancelled = false;
+    destroyRef.current = false;
 
     async function initIfNeeded() {
       if (!apiKey) return;
@@ -231,41 +188,40 @@ export default function PvzPickerYmaps({
 
       await loadYmaps(apiKey);
       await window.ymaps.ready();
-      if (cancelled) return;
+
+      if (destroyRef.current) return;
 
       const el = document.getElementById("pvz-map");
       if (!el) return;
 
-      if (!mapRef.current) {
-        mapRef.current = new window.ymaps.Map("pvz-map", {
-          center,
-          zoom: 12,
-          controls: ["zoomControl"],
-        });
+      if (mapRef.current && collectionRef.current) return;
 
-        collectionRef.current = new window.ymaps.GeoObjectCollection();
-        mapRef.current.geoObjects.add(collectionRef.current);
-      }
+      mapRef.current = new window.ymaps.Map("pvz-map", {
+        center,
+        zoom: 12,
+        controls: ["zoomControl"],
+      });
+
+      collectionRef.current = new window.ymaps.GeoObjectCollection();
+      mapRef.current.geoObjects.add(collectionRef.current);
     }
 
     initIfNeeded().catch(() => {});
+
     return () => {
-      cancelled = true;
+      destroyRef.current = true;
     };
-  }, [apiKey, points.length, center]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiKey, points.length]);
 
   // ✅ update marks
   useEffect(() => {
-    let cancelled = false;
-
     async function updateMarks() {
       if (!apiKey) return;
       if (!points.length) return;
 
       await loadYmaps(apiKey);
       await window.ymaps.ready();
-      if (cancelled) return;
-
       if (!mapRef.current || !collectionRef.current) return;
 
       collectionRef.current.removeAll();
@@ -293,18 +249,14 @@ export default function PvzPickerYmaps({
     }
 
     updateMarks().catch(() => {});
-    return () => {
-      cancelled = true;
-    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey, points, center, effectiveCity, onSelect]);
 
-  // ✅ центр при выборе
   useEffect(() => {
     if (!mapRef.current) return;
     mapRef.current.setCenter(center);
   }, [center]);
 
-  // ✅ destroy on unmount
   useEffect(() => {
     return () => {
       try {
@@ -323,39 +275,54 @@ export default function PvzPickerYmaps({
 
       {err ? <div className="mt-2 text-[12px] text-red-600">{err}</div> : null}
 
-      {/* ✅ Ввод города (один раз) + подсказки */}
+      {/* ✅ город: подсказки по мере ввода */}
       {!hideCityInput ? (
         <div className="relative">
-          <input
-            className="h-[46px] w-full border border-black/15 px-[14px] text-[14px] outline-none focus:border-black transition bg-white"
-            placeholder="Город"
-            value={cityLocal}
-            onChange={(e) => setCityLocal(e.target.value)}
-            onFocus={() => {
-              if (suggest.length) setSuggestOpen(true);
-            }}
-            onBlur={() => {
-              setTimeout(() => setSuggestOpen(false), 120);
-            }}
-            onKeyDown={(e) => {
-              if (!suggestOpen || suggest.length === 0) return;
+          <div className="flex gap-2">
+            <input
+              ref={cityInputRef}
+              className="h-[46px] w-full border border-black/15 px-[14px] text-[14px] outline-none focus:border-black transition bg-white"
+              placeholder="Начните вводить город…"
+              value={cityLocal}
+              onChange={(e) => setCityLocal(e.target.value)}
+              onFocus={() => {
+                if (suggest.length) setSuggestOpen(true);
+              }}
+              onBlur={() => {
+                setTimeout(() => setSuggestOpen(false), 120);
+              }}
+              onKeyDown={(e) => {
+                if (!suggestOpen || suggest.length === 0) return;
 
-              if (e.key === "ArrowDown") {
-                e.preventDefault();
-                setActiveIdx((x) => Math.min(x + 1, suggest.length - 1));
-              }
-              if (e.key === "ArrowUp") {
-                e.preventDefault();
-                setActiveIdx((x) => Math.max(x - 1, 0));
-              }
-              if (e.key === "Enter") {
-                e.preventDefault();
-                const picked = suggest[activeIdx] ?? suggest[0];
-                if (picked?.city) pickCity(picked.city);
-              }
-              if (e.key === "Escape") setSuggestOpen(false);
-            }}
-          />
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setActiveIdx((x) => Math.min(x + 1, suggest.length - 1));
+                }
+                if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setActiveIdx((x) => Math.max(x - 1, 0));
+                }
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  const picked = suggest[activeIdx] ?? suggest[0];
+                  if (picked?.city) pickCity(picked.city);
+                }
+                if (e.key === "Escape") {
+                  setSuggestOpen(false);
+                }
+              }}
+            />
+
+            <button
+              className="h-[46px] border border-black/15 px-[14px] text-[10px] font-bold uppercase tracking-[0.12em]
+                         hover:bg-black/5 transition disabled:opacity-50"
+              onClick={() => pickCity(cityLocal)}
+              disabled={loading || !apiKey || cityLocal.trim().length < 2}
+              type="button"
+            >
+              {loading ? "..." : "Показать"}
+            </button>
+          </div>
 
           {suggestOpen ? (
             <div className="absolute z-[50] mt-[6px] w-full border border-black/15 bg-white shadow-sm">
@@ -373,7 +340,7 @@ export default function PvzPickerYmaps({
                         active ? "bg-black/5" : ""
                       }`}
                       onMouseEnter={() => setActiveIdx(idx)}
-                      onMouseDown={(e) => e.preventDefault()} // чтобы blur не закрыл раньше клика
+                      onMouseDown={(e) => e.preventDefault()} // ✅ чтобы blur не закрывал раньше клика
                       onClick={() => pickCity(s.city)}
                     >
                       <div className="text-black">{line}</div>
@@ -384,11 +351,6 @@ export default function PvzPickerYmaps({
                 <div className="px-[14px] py-[10px] text-[12px] text-black/50">Ничего не найдено</div>
               )}
             </div>
-          ) : null}
-
-          {/* маленький статус загрузки */}
-          {effectiveCity && loading ? (
-            <div className="mt-[8px] text-[12px] text-black/45">Загружаем ПВЗ…</div>
           ) : null}
         </div>
       ) : null}
@@ -417,7 +379,7 @@ export default function PvzPickerYmaps({
 
           {!points.length ? (
             <div className="p-[14px] text-[12px] text-black/50">
-              {effectiveCity ? (loading ? "Загружаем пункты выдачи..." : "ПВЗ не найдены") : "Начните вводить город"}
+              {effectiveCity ? "Выберите город из подсказок или нажмите «Показать»" : "Начните вводить город сверху"}
             </div>
           ) : null}
         </div>
