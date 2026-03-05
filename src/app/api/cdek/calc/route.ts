@@ -3,6 +3,11 @@ import { cdekResolveCityCode, cdekTariffList } from "@/lib/cdek";
 
 export const runtime = "nodejs";
 
+interface NormalizedItem {
+  productId: string;
+  qty: number;
+}
+
 function toInt(v: any, def: number) {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? Math.round(n) : def;
@@ -70,7 +75,7 @@ export async function POST(req: Request) {
         productId: String(it?.productId ?? "").trim(),
         qty: toInt(it?.qty, 1),
       }))
-      .filter((x: any) => x.productId && x.qty > 0);
+      .filter((x: NormalizedItem) => x.productId && x.qty > 0);
 
     if (normalizedItems.length === 0) {
       return Response.json(
@@ -80,7 +85,7 @@ export async function POST(req: Request) {
     }
 
     // 2) Тянем товары из БД (габариты/вес)
-    const productIds = Array.from(new Set(normalizedItems.map((x: { productId: any; }) => x.productId)));
+    const productIds = Array.from(new Set(normalizedItems.map((x) => x.productId)));
 
     const products = await prisma.product.findMany({
       where: { id: { in: productIds } },
