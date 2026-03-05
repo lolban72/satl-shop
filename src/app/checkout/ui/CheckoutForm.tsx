@@ -211,19 +211,6 @@ export default function CheckoutForm(props: {
 
                 {/* CITY + PVZ PICKER */}
                 <div className="grid gap-[8px]">
-                  <div className="text-[9px] uppercase tracking-[0.12em] text-black/55">
-                    Доставка (ПВЗ СДЭК)
-                  </div>
-
-                  {/* маленький инпут города сверху (чтобы пользователю было понятно, что искать) */}
-                  <input
-                    className="h-[46px] border border-black/15 px-[14px] text-[14px] outline-none
-                               focus:border-black transition bg-white"
-                    value={city}
-                    style={{ fontFamily: "Brygada" }}
-                    onChange={(e) => setCity(e.target.value)}
-                    placeholder="Город (например: Краснодар)"
-                  />
 
                   <PvzPickerYmaps
                     onSelect={(p) => {
@@ -232,20 +219,6 @@ export default function CheckoutForm(props: {
                     }}
                   />
                 </div>
-
-                {/* READONLY ADDRESS (PVZ) */}
-                <label className="grid gap-[4px]">
-                  <span className="text-[9px] uppercase tracking-[0.12em] text-black/55">
-                    Адрес ПВЗ (выбран)
-                  </span>
-                  <input
-                    className="h-[46px] border border-black/15 px-[14px] text-[14px] outline-none bg-black/5"
-                    value={address}
-                    readOnly
-                    placeholder="Выберите ПВЗ на карте"
-                  />
-                </label>
-
                 {/* CTA */}
                 <button
                   className="mt-[6px] flex h-[46px] w-full items-center justify-center bg-black text-white
