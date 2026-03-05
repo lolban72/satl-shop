@@ -42,7 +42,6 @@ export default function CheckoutForm(props: {
   const [address, setAddress] = useState(props.initial.address);
 
   // ✅ новое: город + выбранный ПВЗ
-  const [city, setCity] = useState(props.initial.city ?? "");
   const [pvz, setPvz] = useState<{ code: string; address: string } | null>(null);
 
   const [loading, setLoading] = useState(false);
@@ -63,7 +62,7 @@ export default function CheckoutForm(props: {
     if (!phone.trim()) return setErr("Укажите телефон.");
 
     // ✅ доставка только в ПВЗ: город + ПВЗ обязательны
-    if (!city.trim()) return setErr("Укажите город.");
+
     if (!pvz?.code || !pvz?.address) return setErr("Выберите ПВЗ СДЭК на карте.");
 
     setLoading(true);
@@ -79,7 +78,6 @@ export default function CheckoutForm(props: {
           address: pvz.address,
 
           // ✅ новые поля для draft
-          city: city.trim(),
           pvzCode: pvz.code,
           pvzAddress: pvz.address,
 
