@@ -47,7 +47,7 @@ export default function CheckoutForm(props: {
   // address = адрес ПВЗ (readonly)
   const [address, setAddress] = useState(props.initial.address);
 
-  // город + выбранный ПВЗ
+  // ✅ город выбирается ЕДИНОЖДЫ — внутри PvzPickerYmaps (мы убрали отдельный инпут города)
   const [city, setCity] = useState(props.initial.city ?? "");
   const [pvz, setPvz] = useState<{ code: string; address: string } | null>(null);
 
@@ -65,14 +65,12 @@ export default function CheckoutForm(props: {
   const isTelegramNotLinked = !String(props.initial.tgChatId ?? "").trim();
   const payTotal = itemsTotal + (delivery?.priceCents ?? 0);
 
-  // ✅ UX: один ввод города (в родителе). Внутрь карты прокидываем city.
-  // Если твой PvzPickerYmaps пока не принимает props — см. комментарий ниже.
-  const cityTrim = String(city ?? "").trim();
-
-  // небольшая защита от частых запросов при вводе
   const deliveryAbortRef = useRef<AbortController | null>(null);
 
-  async function recalcDelivery(nextCity: string, nextPvz: { code: string; address: string } | null) {
+  async function recalcDelivery(
+    nextCity: string,
+    nextPvz: { code: string; address: string } | null
+  ) {
     setErr(null);
     setDelivery(null);
 
@@ -114,7 +112,6 @@ export default function CheckoutForm(props: {
         daysMax: Number.isFinite(dMax as any) ? dMax : null,
       });
     } catch (e: any) {
-      // abort — не ошибка для UI
       if (String(e?.name) === "AbortError") return;
       setErr(e?.message || "Ошибка расчёта доставки");
       setDelivery(null);
@@ -130,7 +127,9 @@ export default function CheckoutForm(props: {
     if (items.length === 0) return setErr("Корзина пуста.");
     if (!name.trim()) return setErr("Укажите имя.");
     if (!phone.trim()) return setErr("Укажите телефон.");
-    if (!cityTrim) return setErr("Укажите город.");
+
+    const cityTrim = String(city ?? "").trim();
+    if (!cityTrim) return setErr("Выберите город в выборе ПВЗ.");
     if (!pvz?.code || !pvz?.address) return setErr("Выберите ПВЗ СДЭК на карте.");
 
     if (deliveryLoading) return setErr("Считаем доставку... подождите.");
@@ -206,24 +205,29 @@ export default function CheckoutForm(props: {
       {/* ERROR */}
       {err ? (
         <div className="mt-[22px] border border-black/20 bg-white p-[14px] text-[12px] text-black">
-          <div className="font-semibold uppercase tracking-[0.08em] text-[10px] mb-[6px]">Ошибка</div>
+          <div className="font-semibold uppercase tracking-[0.08em] text-[10px] mb-[6px]">
+            Ошибка
+          </div>
           {err}
         </div>
       ) : null}
 
       <div className="mt-[36px] grid gap-[28px] lg:grid-cols-[1fr_420px] lg:items-start">
-        {/* LEFT: FORM */}
+        {/* LEFT */}
         <div className={clsx(card, "p-[18px] md:p-[22px]")}>
           <div className="text-[18px] font-semibold tracking-[-0.01em]">Данные получателя</div>
 
           {isTelegramNotLinked ? (
             <>
               <div className={clsx("mt-[12px]", hint)}>
-                Для оформления заказа нужно привязать телеграм — туда будут приходить уведомления о заказе и восстановление пароля.
+                Для оформления заказа нужно привязать телеграм — туда будут приходить
+                уведомления о заказе и восстановление пароля.
               </div>
 
               <div className="mt-[18px] border border-black/20 p-[16px]">
-                <div className="text-[10px] uppercase tracking-[0.12em] text-black/55 mb-[6px]">Важно</div>
+                <div className="text-[10px] uppercase tracking-[0.12em] text-black/55 mb-[6px]">
+                  Важно
+                </div>
                 <div className="text-[12px] text-black/75">
                   Перейдите в профиль и нажмите «Привязать телеграм». Это займёт 10–20 секунд.
                 </div>
@@ -240,7 +244,7 @@ export default function CheckoutForm(props: {
           ) : (
             <>
               <div className={clsx("mt-[10px]", hint)}>
-                1) Укажите город → 2) Выберите ПВЗ на карте (без второго ввода города).
+                Выберите город и ПВЗ на карте. Город вводится один раз — внутри выбора ПВЗ.
               </div>
 
               <div className="mt-[18px] grid gap-[16px]">
@@ -268,27 +272,31 @@ export default function CheckoutForm(props: {
                   />
                 </label>
 
-                {/* DELIVERY CARD */}
+                {/* DELIVERY */}
                 <div className={clsx(card, "p-[14px]")}>
                   <div className="flex items-center justify-between gap-[10px]">
                     <div>
                       <div className={label}>Доставка (ПВЗ СДЭК)</div>
                       <div className="mt-[4px] text-[12px] text-black/55">
-                        Выберите город и точку выдачи — цена посчитается автоматически.
+                        Цена посчитается автоматически после выбора пункта.
                       </div>
                     </div>
 
-                    {/* маленький статус справа, в стиле сайта */}
                     <div className="text-right">
                       {deliveryLoading ? (
-                        <div className="text-[10px] uppercase tracking-[0.12em] text-black/45">Считаем…</div>
+                        <div className="text-[10px] uppercase tracking-[0.12em] text-black/45">
+                          Считаем…
+                        </div>
                       ) : delivery ? (
                         <div className="text-[10px] uppercase tracking-[0.12em] text-black">
                           {moneyRub(delivery.priceCents)}
                         </div>
                       ) : (
-                        <div className="text-[10px] uppercase tracking-[0.12em] text-black/45">Не выбрано</div>
+                        <div className="text-[10px] uppercase tracking-[0.12em] text-black/45">
+                          Не выбрано
+                        </div>
                       )}
+
                       {delivery && (delivery.daysMin || delivery.daysMax) ? (
                         <div className="text-[11px] text-black/55">
                           {delivery.daysMin ?? "?"}-{delivery.daysMax ?? "?"} дн.
@@ -298,58 +306,43 @@ export default function CheckoutForm(props: {
                   </div>
 
                   <div className="mt-[12px] grid gap-[10px]">
-                    {/* CITY (один раз) */}
-                    <label className="grid gap-[4px]">
-                      <span className={label}>Город</span>
-                      <input
-                        className={input}
-                        value={city}
-                        style={{ fontFamily: "Brygada" }}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setCity(v);
-
-                          // если ПВЗ уже выбран — пересчёт
-                          if (pvz?.code) recalcDelivery(v, pvz);
-                        }}
-                        placeholder="Например: Краснодар"
-                      />
-                    </label>
-
-                    {/* MAP WRAPPER — “как дизайн сайта”: рамка, скругление, без лишних цветных блоков */}
+                    {/* MAP WRAPPER */}
                     <div className="border border-black/15 rounded-[14px] overflow-hidden bg-white">
-                      {/* Если твой PvzPickerYmaps умеет принимать city — используй: */}
-                      {/* <PvzPickerYmaps city={cityTrim} onSelect={...} /> */}
-
                       <PvzPickerYmaps
-                        onSelect={(p: unknown) => {
-                          const obj = p as any;
-
-                          // ✅ убираем второй ввод города:
-                          // берём город из выбранного ПВЗ (если компонент отдаёт city)
-                          const pickedCity = String(obj?.city ?? obj?.pvzCity ?? "").trim();
-                          if (!cityTrim && pickedCity) setCity(pickedCity);
+                        // ✅ город вводится только внутри компонента (один раз)
+                        hideCityInput={false}
+                        autoLoad={false}
+                        onSelect={(p: { code: string; address: string; city: string }) => {
+                          const pickedCity = String(p?.city ?? "").trim();
 
                           const next = {
-                            code: String(obj?.code ?? obj?.pvzCode ?? "").trim(),
-                            address: String(obj?.address ?? obj?.pvzAddress ?? "").trim(),
+                            code: String(p?.code ?? "").trim(),
+                            address: String(p?.address ?? "").trim(),
                           };
+
+                          if (!pickedCity) {
+                            setErr("Не удалось определить город. Введите город и выберите ПВЗ ещё раз.");
+                            return;
+                          }
 
                           if (!next.code || !next.address) {
                             setErr("Не удалось прочитать выбранный ПВЗ (нет code/address)");
                             return;
                           }
 
+                          // ✅ сохраняем выбранный город (единожды)
+                          setCity(pickedCity);
+
                           setPvz(next);
                           setAddress(next.address);
 
-                          // ✅ пересчёт доставки сразу после выбора точки
-                          recalcDelivery(pickedCity || cityTrim, next);
+                          // ✅ пересчёт доставки
+                          recalcDelivery(pickedCity, next);
                         }}
                       />
                     </div>
 
-                    {/* SELECTED PVZ */}
+                    {/* SELECTED */}
                     <div className="grid gap-[6px]">
                       <div className={label}>Выбранный ПВЗ</div>
                       <div className="border border-black/15 px-[14px] py-[12px] text-[12px] bg-black/5">
@@ -359,6 +352,11 @@ export default function CheckoutForm(props: {
                             <div className="mt-[4px] text-[11px] text-black/55">
                               Код: <span className="text-black">{pvz.code}</span>
                             </div>
+                            {city ? (
+                              <div className="mt-[4px] text-[11px] text-black/55">
+                                Город: <span className="text-black">{city}</span>
+                              </div>
+                            ) : null}
                           </>
                         ) : (
                           <div className="text-black/55">Выберите пункт выдачи на карте</div>
@@ -375,7 +373,11 @@ export default function CheckoutForm(props: {
                   onClick={submit}
                   type="button"
                 >
-                  {loading ? "Переходим к оплате..." : deliveryLoading ? "Считаем доставку..." : "Перейти к оплате"}
+                  {loading
+                    ? "Переходим к оплате..."
+                    : deliveryLoading
+                    ? "Считаем доставку..."
+                    : "Перейти к оплате"}
                 </button>
 
                 <div className="text-[11px] italic leading-[1.25] text-black/45 mt-[6px]">
@@ -393,7 +395,7 @@ export default function CheckoutForm(props: {
           )}
         </div>
 
-        {/* RIGHT: SUMMARY */}
+        {/* RIGHT */}
         <aside className={clsx(card, "p-[18px] lg:sticky lg:top-[110px]")}>
           <div className="flex items-end justify-between">
             <div className="text-[20px] font-semibold">Ваш заказ</div>
@@ -402,10 +404,11 @@ export default function CheckoutForm(props: {
             </div>
           </div>
 
-          {/* items */}
           <div className="mt-[16px] grid gap-[12px]">
             {items.length === 0 ? (
-              <div className="border border-black/10 p-[14px] text-[12px] text-black/55">В корзине нет товаров.</div>
+              <div className="border border-black/10 p-[14px] text-[12px] text-black/55">
+                В корзине нет товаров.
+              </div>
             ) : (
               items.map((i: any) => (
                 <div key={`${i.productId}-${i.variantId ?? "na"}`} className="flex gap-[12px]">
@@ -447,7 +450,6 @@ export default function CheckoutForm(props: {
 
           <div className="h-[1px] bg-black/10 my-[16px]" />
 
-          {/* totals */}
           <div className="space-y-[10px] text-[12px] text-black/65">
             <div className="flex items-center justify-between">
               <span>Товары</span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Pvz = {
   code: string;
@@ -22,7 +22,9 @@ function loadYmaps(apiKey: string) {
     if (window.ymaps) return resolve();
 
     const s = document.createElement("script");
-    s.src = `https://api-maps.yandex.ru/2.1/?apikey=${encodeURIComponent(apiKey)}&lang=ru_RU`;
+    s.src = `https://api-maps.yandex.ru/2.1/?apikey=${encodeURIComponent(
+      apiKey
+    )}&lang=ru_RU`;
     s.async = true;
     s.onload = () => resolve();
     s.onerror = () => reject(new Error("Failed to load Yandex Maps"));
@@ -30,90 +32,54 @@ function loadYmaps(apiKey: string) {
   });
 }
 
+type Props = {
+  // ✅ теперь отдаём ещё и city (чтобы родитель не гадал)
+  onSelect: (pvz: { code: string; address: string; city: string }) => void;
+
+  // ✅ единственный источник города (из CheckoutForm)
+  city?: string;
+
+  // ✅ скрыть внутренний инпут города (по умолчанию скрыт)
+  hideCityInput?: boolean;
+
+  // ✅ автозагрузка ПВЗ при наличии city
+  autoLoad?: boolean;
+};
+
 export default function PvzPickerYmaps({
   onSelect,
-}: {
-  onSelect: (pvz: { code: string; address: string }) => void;
-}) {
+  city: cityProp,
+  hideCityInput = true,
+  autoLoad = true,
+}: Props) {
   const apiKey = process.env.NEXT_PUBLIC_YMAPS_API_KEY || "";
 
-  const [city, setCity] = useState("");
+  // если вдруг используешь без cityProp — можно включить инпут
+  const [cityLocal, setCityLocal] = useState("");
+  const effectiveCity = String((cityProp ?? cityLocal) || "").trim();
+
   const [loading, setLoading] = useState(false);
   const [points, setPoints] = useState<Pvz[]>([]);
   const [selected, setSelected] = useState<Pvz | null>(null);
   const [err, setErr] = useState<string>("");
 
-  // центр карты
+  // refs для карты, чтобы не пересоздавать постоянно
+  const mapRef = useRef<any>(null);
+  const collectionRef = useRef<any>(null);
+  const destroyRef = useRef(false);
+
   const center = useMemo(() => {
     if (selected) return [selected.lat, selected.lon];
     const p = points[0];
-    return p ? [p.lat, p.lon] : [55.751244, 37.618423]; // дефолт: Москва
+    return p ? [p.lat, p.lon] : [55.751244, 37.618423];
   }, [points, selected]);
 
-  // init map whenever points change
-  useEffect(() => {
-    let map: any = null;
-    let destroyed = false;
-
-    async function init() {
-      if (!apiKey) return;
-      if (!points.length) return;
-
-      await loadYmaps(apiKey);
-      await window.ymaps.ready();
-
-      if (destroyed) return;
-
-      const el = document.getElementById("pvz-map");
-      if (!el) return;
-
-      // пересоздаём карту
-      el.innerHTML = "";
-      map = new window.ymaps.Map("pvz-map", {
-        center,
-        zoom: 12,
-        controls: ["zoomControl"],
-      });
-
-      const collection = new window.ymaps.GeoObjectCollection();
-
-      for (const p of points) {
-        const placemark = new window.ymaps.Placemark(
-          [p.lat, p.lon],
-          {
-            balloonContent:
-              `<b>${p.name}</b><br/>${p.address}` +
-              (p.workTime ? `<br/><small>${p.workTime}</small>` : ""),
-          },
-          { preset: "islands#darkBlueDotIcon" }
-        );
-
-        placemark.events.add("click", () => {
-          setSelected(p);
-          onSelect({ code: p.code, address: p.address });
-        });
-
-        collection.add(placemark);
-      }
-
-      map.geoObjects.add(collection);
-      map.setCenter(center);
-    }
-
-    init().catch(() => {});
-
-    return () => {
-      destroyed = true;
-      if (map) map.destroy?.();
-    };
-  }, [apiKey, points, center, onSelect]);
-
-  async function loadPoints() {
+  async function loadPoints(forCity?: string) {
     setErr("");
     setSelected(null);
     setPoints([]);
 
-    const c = city.trim();
+    const c = String(forCity ?? effectiveCity).trim();
     if (!c) {
       setErr("Введите город");
       return;
@@ -127,7 +93,7 @@ export default function PvzPickerYmaps({
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error || "Не удалось получить ПВЗ");
 
-      const list = Array.isArray(data?.points) ? data.points : [];
+      const list = Array.isArray(data?.points) ? (data.points as Pvz[]) : [];
       if (!list.length) setErr("ПВЗ не найдены");
       setPoints(list);
     } catch (e: any) {
@@ -137,23 +103,147 @@ export default function PvzPickerYmaps({
     }
   }
 
-  return (
-    <div className="rounded-2xl border p-4">
-      <div className="text-[14px] font-semibold">Доставка в ПВЗ СДЭК</div>
+  // ✅ автозагрузка при смене города сверху
+  useEffect(() => {
+    if (!autoLoad) return;
+    if (!apiKey) return;
 
-      <div className="mt-3 flex gap-2">
-        <input
-          className="h-10 w-full rounded-xl border px-3 text-[14px]"
-          placeholder="Город (например: Краснодар)"
-          value={city}
-          onChange={(e) => setCity(e.target.value)}
-        />
+    if (!effectiveCity) {
+      setPoints([]);
+      setSelected(null);
+      setErr("");
+      return;
+    }
+
+    const t = setTimeout(() => {
+      loadPoints(effectiveCity).catch(() => {});
+    }, 350);
+
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveCity, autoLoad, apiKey]);
+
+  // ✅ init map once (когда появились точки)
+  useEffect(() => {
+    destroyRef.current = false;
+
+    async function initIfNeeded() {
+      if (!apiKey) return;
+      if (!points.length) return;
+
+      await loadYmaps(apiKey);
+      await window.ymaps.ready();
+
+      if (destroyRef.current) return;
+
+      const el = document.getElementById("pvz-map");
+      if (!el) return;
+
+      // если карта уже создана — только обновим
+      if (mapRef.current && collectionRef.current) return;
+
+      mapRef.current = new window.ymaps.Map("pvz-map", {
+        center,
+        zoom: 12,
+        controls: ["zoomControl"],
+      });
+
+      collectionRef.current = new window.ymaps.GeoObjectCollection();
+      mapRef.current.geoObjects.add(collectionRef.current);
+    }
+
+    initIfNeeded().catch(() => {});
+
+    return () => {
+      destroyRef.current = true;
+      // не уничтожаем карту на каждый ререндер —
+      // уничтожим только при размонтировании компонента:
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiKey, points.length]);
+
+  // ✅ обновляем метки при изменении points
+  useEffect(() => {
+    async function updateMarks() {
+      if (!apiKey) return;
+      if (!points.length) return;
+
+      await loadYmaps(apiKey);
+      await window.ymaps.ready();
+      if (!mapRef.current || !collectionRef.current) return;
+
+      // очищаем старые метки
+      collectionRef.current.removeAll();
+
+      for (const p of points) {
+        const placemark = new window.ymaps.Placemark(
+          [p.lat, p.lon],
+          {
+            balloonContent:
+              `<b>${p.name}</b><br/>${p.address}` +
+              (p.workTime ? `<br/><small>${p.workTime}</small>` : ""),
+          },
+          { preset: "islands#blackDotIcon" }
+        );
+
+        placemark.events.add("click", () => {
+          setSelected(p);
+          onSelect({ code: p.code, address: p.address, city: effectiveCity });
+        });
+
+        collectionRef.current.add(placemark);
+      }
+
+      mapRef.current.setCenter(center);
+    }
+
+    updateMarks().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiKey, points, center, effectiveCity, onSelect]);
+
+  // ✅ центрируем карту при выборе
+  useEffect(() => {
+    if (!mapRef.current) return;
+    mapRef.current.setCenter(center);
+  }, [center]);
+
+  // ✅ уничтожаем карту только при размонтировании
+  useEffect(() => {
+    return () => {
+      try {
+        mapRef.current?.destroy?.();
+      } catch {}
+      mapRef.current = null;
+      collectionRef.current = null;
+    };
+  }, []);
+
+  return (
+    <div className="border border-black/10 bg-white p-[14px]">
+      <div className="flex items-end justify-between">
+        <div>
+          <div className="text-[9px] uppercase tracking-[0.12em] text-black/55">
+            ПВЗ СДЭК
+          </div>
+          <div className="mt-[4px] text-[12px] text-black/55">
+            {effectiveCity ? (
+              <>
+                Город: <span className="text-black">{effectiveCity}</span>
+              </>
+            ) : (
+              "Укажите город сверху"
+            )}
+          </div>
+        </div>
+
         <button
-          className="h-10 rounded-xl border px-3 text-[14px] disabled:opacity-50"
-          onClick={loadPoints}
-          disabled={loading || !apiKey}
+          className="h-[34px] border border-black/15 px-[10px] text-[10px] font-bold uppercase tracking-[0.12em]
+                     hover:bg-black/5 transition disabled:opacity-50"
+          onClick={() => loadPoints(effectiveCity)}
+          disabled={loading || !apiKey || !effectiveCity}
+          type="button"
         >
-          {loading ? "..." : "ПВЗ"}
+          {loading ? "..." : "Обновить"}
         </button>
       </div>
 
@@ -165,45 +255,76 @@ export default function PvzPickerYmaps({
 
       {err ? <div className="mt-2 text-[12px] text-red-600">{err}</div> : null}
 
-      <div className="mt-3 grid gap-3 md:grid-cols-2">
-        <div
-          id="pvz-map"
-          className="h-[360px] w-full rounded-2xl border"
-        />
+      {/* ✅ второй ввод города выключен по умолчанию */}
+      {!hideCityInput ? (
+        <div className="mt-3 flex gap-2">
+          <input
+            className="h-[46px] w-full border border-black/15 px-[14px] text-[14px] outline-none focus:border-black transition bg-white"
+            placeholder="Город (например: Краснодар)"
+            value={cityLocal}
+            onChange={(e) => setCityLocal(e.target.value)}
+          />
+          <button
+            className="h-[46px] border border-black/15 px-[14px] text-[10px] font-bold uppercase tracking-[0.12em]
+                       hover:bg-black/5 transition disabled:opacity-50"
+            onClick={() => loadPoints(cityLocal)}
+            disabled={loading || !apiKey}
+            type="button"
+          >
+            {loading ? "..." : "Показать"}
+          </button>
+        </div>
+      ) : null}
 
-        <div className="max-h-[360px] overflow-auto rounded-2xl border">
+      <div className="mt-[12px] grid gap-[12px] md:grid-cols-2">
+        <div className="border border-black/15 rounded-[14px] overflow-hidden bg-white">
+          <div id="pvz-map" className="h-[360px] w-full" />
+        </div>
+
+        <div className="border border-black/15 rounded-[14px] overflow-auto max-h-[360px] bg-white">
           {points.map((p) => (
             <button
               key={p.code}
-              className={`block w-full border-b px-3 py-2 text-left text-[13px] hover:bg-black/5 ${
-                selected?.code === p.code ? "bg-black/5" : ""
-              }`}
+              className={`block w-full border-b border-black/10 px-[14px] py-[12px] text-left text-[12px]
+                          hover:bg-black/5 transition ${
+                            selected?.code === p.code ? "bg-black/5" : ""
+                          }`}
               onClick={() => {
                 setSelected(p);
-                onSelect({ code: p.code, address: p.address });
+                onSelect({ code: p.code, address: p.address, city: effectiveCity });
               }}
+              type="button"
             >
-              <div className="font-semibold">{p.name}</div>
-              <div className="text-black/70">{p.address}</div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.06em]">
+                {p.name}
+              </div>
+              <div className="mt-[6px] text-black/70">{p.address}</div>
               {p.workTime ? (
-                <div className="text-[12px] text-black/50">{p.workTime}</div>
+                <div className="mt-[6px] text-[11px] text-black/50">
+                  {p.workTime}
+                </div>
               ) : null}
             </button>
           ))}
+
           {!points.length ? (
-            <div className="p-3 text-[12px] text-black/50">
-              Введите город и нажмите «ПВЗ»
+            <div className="p-[14px] text-[12px] text-black/50">
+              {effectiveCity
+                ? "Пункты выдачи загружаются или не найдены"
+                : "Укажите город сверху"}
             </div>
           ) : null}
         </div>
       </div>
 
       {selected ? (
-        <div className="mt-3 rounded-xl bg-black/5 p-3 text-[13px]">
-          <div className="font-semibold">Выбран ПВЗ:</div>
-          <div>{selected.address}</div>
-          <div className="mt-1 text-[12px] text-black/60">
-            Код: <span className="font-mono">{selected.code}</span>
+        <div className="mt-[12px] border border-black/10 bg-black/5 p-[12px] text-[12px]">
+          <div className="text-[9px] uppercase tracking-[0.12em] text-black/55">
+            Выбран ПВЗ
+          </div>
+          <div className="mt-[6px] text-black">{selected.address}</div>
+          <div className="mt-[6px] text-[11px] text-black/60">
+            Код: <span className="font-mono text-black">{selected.code}</span>
           </div>
         </div>
       ) : null}
