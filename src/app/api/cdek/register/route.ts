@@ -96,9 +96,6 @@ export async function POST(req: Request) {
       from_location: {
         city: fromCity,
       },
-      to_location: {
-        city,
-      },
       delivery_point: pvzCode,
       packages: [
         {
