@@ -385,13 +385,22 @@ async function handleYaPayWebhook(req: Request) {
         pvzCode: createdOrder.pvzCode,
       });
 
+      const updateData: any = {};
+
+      if (cdek.uuid) {
+        updateData.cdekUuid = cdek.uuid;
+      }
+
       if (cdek.cdekNumber && cdek.cdekNumber !== createdOrder.trackNumber) {
+        updateData.trackNumber = cdek.cdekNumber;
+        effectiveTrackNumber = cdek.cdekNumber;
+      }
+
+      if (Object.keys(updateData).length > 0) {
         await prisma.order.update({
           where: { id: createdOrder.id },
-          data: { trackNumber: cdek.cdekNumber },
+          data: updateData,
         });
-
-        effectiveTrackNumber = cdek.cdekNumber;
       }
 
       console.log("✅ CDEK order registered:", {
