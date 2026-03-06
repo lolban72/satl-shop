@@ -104,10 +104,10 @@ async function registerCdekOrder(params: {
 
   console.log("[CDEK_WEBHOOK] register success:", JSON.stringify(created, null, 2));
 
-  const uuid = String(created?.entity?.uuid ?? created?.uuid ?? "").trim();
-  const cdekNumber = String(
-    created?.entity?.cdek_number ?? created?.cdek_number ?? ""
-  ).trim();
+  const entity = (created as any)?.entity ?? null;
+
+  const uuid = String(entity?.uuid ?? "").trim();
+  const cdekNumber = String(entity?.cdek_number ?? "").trim();
 
   return {
     uuid: uuid || null,
