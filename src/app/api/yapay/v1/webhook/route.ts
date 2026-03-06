@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { tgSendMessage, parseChatIds } from "@/lib/tg";
+import { getCdekClient } from "@/lib/cdek-client";
 
 function b64urlDecodeToString(s: string) {
   s = s.replace(/-/g, "+").replace(/_/g, "/");
@@ -17,6 +18,102 @@ function statusLabel(status: string) {
   if (s === "SHIPPED") return "В доставке 🚚";
   if (s === "DELIVERED") return "Доставлен ✅";
   return s;
+}
+
+function normalizePhone(phone: string) {
+  const raw = String(phone ?? "").trim();
+  if (!raw) return "";
+
+  const digits = raw.replace(/\D/g, "");
+  if (!digits) return "";
+
+  return `+${digits}`;
+}
+
+function safeNumber(value: unknown, fallback: number) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+function extractCdekError(err: any) {
+  return {
+    message: err?.message || "CDEK request failed",
+    response: err?.response ?? null,
+    data: err?.data ?? null,
+    body: err?.body ?? null,
+    errors: err?.errors ?? null,
+    cause: err?.cause ?? null,
+  };
+}
+
+async function registerCdekOrder(params: {
+  orderId: string;
+  recipientName: string;
+  recipientPhone: string;
+  pvzCode: string;
+}) {
+  const fromCity = String(process.env.CDEK_FROM_CITY ?? "").trim();
+  if (!fromCity) {
+    throw new Error("CDEK_FROM_CITY env required");
+  }
+
+  const tariffCode = safeNumber(process.env.CDEK_DEFAULT_TARIFF_CODE, 11);
+  const weight = safeNumber(process.env.CDEK_DEFAULT_WEIGHT_GR, 400);
+  const length = safeNumber(process.env.CDEK_DEFAULT_LENGTH_CM, 20);
+  const width = safeNumber(process.env.CDEK_DEFAULT_WIDTH_CM, 15);
+  const height = safeNumber(process.env.CDEK_DEFAULT_HEIGHT_CM, 10);
+
+  const client = getCdekClient();
+
+  const payload = {
+    type: 1,
+    number: params.orderId,
+    tariff_code: tariffCode,
+    recipient: {
+      name: params.recipientName,
+      phones: [{ number: normalizePhone(params.recipientPhone) }],
+    },
+    from_location: {
+      city: fromCity,
+    },
+    delivery_point: params.pvzCode,
+    packages: [
+      {
+        number: `PKG-${params.orderId}`,
+        weight,
+        length,
+        width,
+        height,
+        items: [
+          {
+            name: "SATL item",
+            ware_key: `ORDER-${params.orderId}`,
+            payment: { value: 0 },
+            cost: 1000,
+            amount: 1,
+            weight,
+          },
+        ],
+      },
+    ],
+  };
+
+  console.log("[CDEK_WEBHOOK] register payload:", JSON.stringify(payload, null, 2));
+
+  const created = await client.addOrder(payload);
+
+  console.log("[CDEK_WEBHOOK] register success:", JSON.stringify(created, null, 2));
+
+  const uuid = String(created?.entity?.uuid ?? created?.uuid ?? "").trim();
+  const cdekNumber = String(
+    created?.entity?.cdek_number ?? created?.cdek_number ?? ""
+  ).trim();
+
+  return {
+    uuid: uuid || null,
+    cdekNumber: cdekNumber || null,
+    raw: created,
+  };
 }
 
 async function notifyUserOrderStatus(params: {
@@ -60,8 +157,9 @@ async function handleStatusWebhook(req: Request) {
   }
 
   const body = await req.json().catch(() => null);
-  if (!body)
+  if (!body) {
     return Response.json({ ok: false, error: "Bad JSON" }, { status: 400 });
+  }
 
   const orderId = String(body?.orderId ?? "").trim();
   const newStatus = String(body?.status ?? "").trim().toUpperCase();
@@ -229,7 +327,6 @@ async function handleYaPayWebhook(req: Request) {
         phone: draft.phone,
         address: draft.address,
 
-        // ✅ переносим доставку из draft → order
         pvzCity: draft.pvzCity ?? null,
         pvzCode: draft.pvzCode ?? null,
         pvzAddress: draft.pvzAddress ?? null,
@@ -237,7 +334,7 @@ async function handleYaPayWebhook(req: Request) {
         deliveryPrice: draft.deliveryPrice ?? null,
         deliveryDays: draft.deliveryDays ?? null,
 
-        trackNumber: draft.trackNumber ?? null, // ✅ если есть
+        trackNumber: draft.trackNumber ?? null,
         items: {
           create: items.map((it: any) => ({
             productId: String(it.productId),
@@ -248,7 +345,14 @@ async function handleYaPayWebhook(req: Request) {
           })),
         },
       },
-      select: { id: true },
+      select: {
+        id: true,
+        userId: true,
+        trackNumber: true,
+        pvzCode: true,
+        name: true,
+        phone: true,
+      },
     });
 
     for (const it of items) {
@@ -269,6 +373,41 @@ async function handleYaPayWebhook(req: Request) {
 
     return order;
   });
+
+  let effectiveTrackNumber = createdOrder.trackNumber ?? null;
+
+  if (createdOrder.pvzCode) {
+    try {
+      const cdek = await registerCdekOrder({
+        orderId: createdOrder.id,
+        recipientName: createdOrder.name,
+        recipientPhone: createdOrder.phone,
+        pvzCode: createdOrder.pvzCode,
+      });
+
+      if (cdek.cdekNumber && cdek.cdekNumber !== createdOrder.trackNumber) {
+        await prisma.order.update({
+          where: { id: createdOrder.id },
+          data: { trackNumber: cdek.cdekNumber },
+        });
+
+        effectiveTrackNumber = cdek.cdekNumber;
+      }
+
+      console.log("✅ CDEK order registered:", {
+        orderId: createdOrder.id,
+        uuid: cdek.uuid,
+        cdekNumber: cdek.cdekNumber,
+      });
+    } catch (e: any) {
+      console.log(
+        "❌ CDEK REGISTER ERROR:",
+        JSON.stringify(extractCdekError(e), null, 2)
+      );
+    }
+  } else {
+    console.log("ℹ️ CDEK skipped: no pvzCode for order", createdOrder.id);
+  }
 
   const adminChatIds = parseChatIds(process.env.TG_ADMIN_CHAT_IDS);
 
@@ -303,7 +442,7 @@ async function handleYaPayWebhook(req: Request) {
       .join("\n") +
     `\n\n<b>Итого:</b> ${rubFromCents(draft.total)}\n` +
     `Статус оплаты: <b>Оплачено ✅</b>\n` +
-    `Трек номер: <code>${draft.trackNumber ?? "Не назначен"}</code>\n` +
+    `Трек номер: <code>${effectiveTrackNumber ?? "Не назначен"}</code>\n` +
     `Ссылка на заказ в админке: <a href="https://satl.shop/admin/orders/${createdOrder.id}" target="_blank">Перейти к заказу</a>\n` +
     `\n\n<b>Внимание!</b> Проверьте остатки товара и своевременно отправьте заказ клиенту.`;
 
@@ -324,7 +463,7 @@ async function handleYaPayWebhook(req: Request) {
         `Сумма: ${rubFromCents(draft.total)}\n\n` +
         `<b>Спасибо за покупку! 🎉</b>\n` +
         `Ваш заказ находится в обработке. Ожидайте уведомлений о доставке.\n\n` +
-        `<b>Трек номер:</b> <code>${draft.trackNumber ?? "Не назначен"}</code>\n` +
+        `<b>Трек номер:</b> <code>${effectiveTrackNumber ?? "Не назначен"}</code>\n` +
         `Вы можете отслеживать статус: <a href="https://satl.shop/account/orders" target="_blank">Мои заказы</a>.`;
 
       tgSendMessage(u.tgChatId, userText).catch(() => {});
