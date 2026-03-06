@@ -14,7 +14,6 @@ const BASE_URL =
 function statusLabel(status: string) {
   const s = String(status || "").toUpperCase();
   if (s === "SHIPPED") return "В доставке 🚚";
-  if (s === "READY_FOR_PICKUP") return "Готов к выдаче 📦";
   if (s === "DELIVERED") return "Доставлен ✅";
   return s;
 }
@@ -47,13 +46,6 @@ async function notifyUserOrderStatus(params: {
       `${track}\n\n` +
       `Вы можете отслеживать его в личном кабинете:\n` +
       `<a href="https://satl.shop/account/orders" target="_blank">Мои заказы</a>`;
-  } else if (status === "READY_FOR_PICKUP") {
-    text =
-      `<b>Ваш заказ готов к выдаче 📦</b>\n` +
-      `Заказ: <code>${params.orderId}</code>` +
-      `${track}\n\n` +
-      `Проверьте детали в личном кабинете:\n` +
-      `<a href="https://satl.shop/account/orders" target="_blank">Мои заказы</a>`;
   } else if (status === "DELIVERED") {
     text =
       `<b>Ваш заказ доставлен ✅</b>\n` +
@@ -83,6 +75,8 @@ function mapCdekStatusToOrderStatus(rawStatus: string) {
     return "DELIVERED";
   }
 
+  // Пока в Prisma enum нет READY_FOR_PICKUP,
+  // статусы готовности к выдаче считаем как SHIPPED
   if (
     s.includes("READY_FOR_PICKUP") ||
     s.includes("READY TO BE ISSUED") ||
@@ -90,7 +84,7 @@ function mapCdekStatusToOrderStatus(rawStatus: string) {
     s.includes("ПРИБЫЛ В ПУНКТ ВЫДАЧИ") ||
     s.includes("ПОСТУПИЛ В ПУНКТ ВЫДАЧИ")
   ) {
-    return "READY_FOR_PICKUP";
+    return "SHIPPED";
   }
 
   if (
@@ -239,12 +233,7 @@ export async function GET(req: Request) {
     const orders = await prisma.order.findMany({
       where: {
         cdekUuid: { not: null },
-        OR: [
-          { trackNumber: null },
-          { status: "NEW" },
-          { status: "SHIPPED" },
-          { status: "READY_FOR_PICKUP" },
-        ],
+        OR: [{ trackNumber: null }, { status: "NEW" }, { status: "SHIPPED" }],
       },
       select: {
         id: true,
@@ -312,9 +301,7 @@ export async function GET(req: Request) {
         if (
           updatedOrder &&
           prevStatus !== newStatus &&
-          (newStatus === "SHIPPED" ||
-            newStatus === "READY_FOR_PICKUP" ||
-            newStatus === "DELIVERED")
+          (newStatus === "SHIPPED" || newStatus === "DELIVERED")
         ) {
           await notifyUserOrderStatus({
             userId: updatedOrder.userId,
