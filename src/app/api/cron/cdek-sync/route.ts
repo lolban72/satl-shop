@@ -35,37 +35,46 @@ function mapCdekStatusToOrderStatus(rawStatus: string) {
   return null;
 }
 
-function getFirstEntity(raw: any) {
-  if (Array.isArray(raw?.entities) && raw.entities.length > 0) {
-    return raw.entities[0];
+function getEntity(raw: any) {
+  if (raw?.entity && typeof raw.entity === "object" && !Array.isArray(raw.entity)) {
+    return raw.entity;
   }
+
   if (Array.isArray(raw?.entity) && raw.entity.length > 0) {
     return raw.entity[0];
   }
-  if (raw?.entity && typeof raw.entity === "object") {
-    return raw.entity;
+
+  if (Array.isArray(raw?.entities) && raw.entities.length > 0) {
+    return raw.entities[0];
   }
+
   return null;
 }
 
 function extractTrackNumber(raw: any): string | null {
-  const entity = getFirstEntity(raw);
+  const entity = getEntity(raw);
   return String(entity?.cdek_number ?? entity?.number ?? "").trim() || null;
 }
 
 function extractStatus(raw: any): string | null {
-  const entity = getFirstEntity(raw);
+  const entity = getEntity(raw);
   return (
-    String(entity?.statuses?.[0]?.code ?? entity?.status?.code ?? "").trim() ||
-    null
+    String(
+      entity?.statuses?.[0]?.code ??
+      entity?.status?.code ??
+      ""
+    ).trim() || null
   );
 }
 
 function extractStatusName(raw: any): string | null {
-  const entity = getFirstEntity(raw);
+  const entity = getEntity(raw);
   return (
-    String(entity?.statuses?.[0]?.name ?? entity?.status?.name ?? "").trim() ||
-    null
+    String(
+      entity?.statuses?.[0]?.name ??
+      entity?.status?.name ??
+      ""
+    ).trim() || null
   );
 }
 
@@ -118,7 +127,7 @@ async function fetchCdekOrderByUuid(uuid: string) {
   const token = await getCdekAccessToken();
 
   const res = await fetch(
-    `${BASE_URL}/orders?uuid=${encodeURIComponent(uuid)}`,
+    `${BASE_URL}/orders/${encodeURIComponent(uuid)}`,
     {
       method: "GET",
       headers: {
@@ -162,7 +171,11 @@ export async function GET(req: Request) {
     const orders = await prisma.order.findMany({
       where: {
         cdekUuid: { not: null },
-        OR: [{ trackNumber: null }, { status: "NEW" }, { status: "SHIPPED" }],
+        OR: [
+          { trackNumber: null },
+          { status: "NEW" },
+          { status: "SHIPPED" },
+        ],
       },
       select: {
         id: true,
