@@ -16,6 +16,7 @@ function rubFromCents(cents: number) {
 function statusLabel(status: string) {
   const s = String(status || "").toUpperCase();
   if (s === "SHIPPED") return "В доставке 🚚";
+  if (s === "READY_FOR_PICKUP") return "Готов к выдаче 📦";
   if (s === "DELIVERED") return "Доставлен ✅";
   return s;
 }
@@ -130,22 +131,48 @@ async function notifyUserOrderStatus(params: {
   });
   if (!u?.tgChatId) return;
 
+  const status = String(params.status || "").toUpperCase();
   const track = params.trackNumber
     ? `\nТрек номер: <code>${params.trackNumber}</code>`
     : "";
-  const text =
-    `<b>Статус заказа изменён</b>\n` +
-    `Заказ: <code>${params.orderId}</code>\n` +
-    `Статус: <b>${statusLabel(params.status)}</b>` +
-    `${track}\n\n` +
-    `Ссылка: <a href="https://satl.shop/account/orders" target="_blank">Мои заказы</a>`;
+
+  let text = "";
+
+  if (status === "SHIPPED") {
+    text =
+      `<b>Ваш заказ передан в доставку 🚚</b>\n` +
+      `Заказ: <code>${params.orderId}</code>` +
+      `${track}\n\n` +
+      `Вы можете отслеживать его в личном кабинете:\n` +
+      `<a href="https://satl.shop/account/orders" target="_blank">Мои заказы</a>`;
+  } else if (status === "READY_FOR_PICKUP") {
+    text =
+      `<b>Ваш заказ готов к выдаче 📦</b>\n` +
+      `Заказ: <code>${params.orderId}</code>` +
+      `${track}\n\n` +
+      `Проверьте детали в личном кабинете:\n` +
+      `<a href="https://satl.shop/account/orders" target="_blank">Мои заказы</a>`;
+  } else if (status === "DELIVERED") {
+    text =
+      `<b>Ваш заказ доставлен ✅</b>\n` +
+      `Заказ: <code>${params.orderId}</code>` +
+      `${track}\n\n` +
+      `Спасибо за покупку 💛`;
+  } else {
+    text =
+      `<b>Статус заказа изменён</b>\n` +
+      `Заказ: <code>${params.orderId}</code>\n` +
+      `Статус: <b>${statusLabel(status)}</b>` +
+      `${track}\n\n` +
+      `Ссылка: <a href="https://satl.shop/account/orders" target="_blank">Мои заказы</a>`;
+  }
 
   await tgSendMessage(u.tgChatId, text).catch(() => {});
 }
 
 /**
  * JSON вебхук статусов — вызывается из админки.
- * Тело: { orderId: string, status: "SHIPPED" | "DELIVERED" | ..., trackNumber?: string }
+ * Тело: { orderId: string, status: "SHIPPED" | "READY_FOR_PICKUP" | "DELIVERED" | ..., trackNumber?: string }
  * Заголовок: x-webhook-secret: <ORDER_STATUS_WEBHOOK_SECRET>
  */
 async function handleStatusWebhook(req: Request) {
@@ -218,7 +245,12 @@ async function handleStatusWebhook(req: Request) {
   const prevS = String((result as any).prevStatus ?? "").toUpperCase();
   const currS = String((result as any).newStatus ?? "").toUpperCase();
 
-  if (prevS !== currS && (currS === "SHIPPED" || currS === "DELIVERED")) {
+  if (
+    prevS !== currS &&
+    (currS === "SHIPPED" ||
+      currS === "READY_FOR_PICKUP" ||
+      currS === "DELIVERED")
+  ) {
     const order = (result as any).order as {
       id: string;
       userId: string | null;

@@ -1,6 +1,7 @@
 // src/app/api/cron/cdek-sync/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { tgSendMessage } from "@/lib/tg";
 
 export const runtime = "nodejs";
 
@@ -9,6 +10,67 @@ const BASE_URL =
   ENV === "PROD"
     ? "https://api.cdek.ru/v2"
     : "https://api.edu.cdek.ru/v2";
+
+function statusLabel(status: string) {
+  const s = String(status || "").toUpperCase();
+  if (s === "SHIPPED") return "В доставке 🚚";
+  if (s === "READY_FOR_PICKUP") return "Готов к выдаче 📦";
+  if (s === "DELIVERED") return "Доставлен ✅";
+  return s;
+}
+
+async function notifyUserOrderStatus(params: {
+  userId: string | null;
+  orderId: string;
+  status: string;
+  trackNumber?: string | null;
+}) {
+  if (!params.userId) return;
+
+  const u = await prisma.user.findUnique({
+    where: { id: params.userId },
+    select: { tgChatId: true },
+  });
+  if (!u?.tgChatId) return;
+
+  const status = String(params.status || "").toUpperCase();
+  const track = params.trackNumber
+    ? `\nТрек номер: <code>${params.trackNumber}</code>`
+    : "";
+
+  let text = "";
+
+  if (status === "SHIPPED") {
+    text =
+      `<b>Ваш заказ передан в доставку 🚚</b>\n` +
+      `Заказ: <code>${params.orderId}</code>` +
+      `${track}\n\n` +
+      `Вы можете отслеживать его в личном кабинете:\n` +
+      `<a href="https://satl.shop/account/orders" target="_blank">Мои заказы</a>`;
+  } else if (status === "READY_FOR_PICKUP") {
+    text =
+      `<b>Ваш заказ готов к выдаче 📦</b>\n` +
+      `Заказ: <code>${params.orderId}</code>` +
+      `${track}\n\n` +
+      `Проверьте детали в личном кабинете:\n` +
+      `<a href="https://satl.shop/account/orders" target="_blank">Мои заказы</a>`;
+  } else if (status === "DELIVERED") {
+    text =
+      `<b>Ваш заказ доставлен ✅</b>\n` +
+      `Заказ: <code>${params.orderId}</code>` +
+      `${track}\n\n` +
+      `Спасибо за покупку 💛`;
+  } else {
+    text =
+      `<b>Статус заказа изменён</b>\n` +
+      `Заказ: <code>${params.orderId}</code>\n` +
+      `Статус: <b>${statusLabel(status)}</b>` +
+      `${track}\n\n` +
+      `Ссылка: <a href="https://satl.shop/account/orders" target="_blank">Мои заказы</a>`;
+  }
+
+  await tgSendMessage(u.tgChatId, text).catch(() => {});
+}
 
 function mapCdekStatusToOrderStatus(rawStatus: string) {
   const s = String(rawStatus ?? "").toUpperCase();
@@ -22,12 +84,23 @@ function mapCdekStatusToOrderStatus(rawStatus: string) {
   }
 
   if (
+    s.includes("READY_FOR_PICKUP") ||
+    s.includes("READY TO BE ISSUED") ||
+    s.includes("ГОТОВ К ВЫДАЧЕ") ||
+    s.includes("ПРИБЫЛ В ПУНКТ ВЫДАЧИ") ||
+    s.includes("ПОСТУПИЛ В ПУНКТ ВЫДАЧИ")
+  ) {
+    return "READY_FOR_PICKUP";
+  }
+
+  if (
     s.includes("IN_TRANSIT") ||
     s.includes("TRANSIT") ||
     s.includes("ОТПРАВЛЕН") ||
     s.includes("В ПУТИ") ||
-    s.includes("ГОТОВ К ВЫДАЧЕ") ||
-    s.includes("ПРИНЯТ")
+    s.includes("ПРИНЯТ") ||
+    s.includes("ACCEPTED") ||
+    s.includes("RECEIVED_AT_SHIPMENT_WAREHOUSE")
   ) {
     return "SHIPPED";
   }
@@ -36,7 +109,11 @@ function mapCdekStatusToOrderStatus(rawStatus: string) {
 }
 
 function getEntity(raw: any) {
-  if (raw?.entity && typeof raw.entity === "object" && !Array.isArray(raw.entity)) {
+  if (
+    raw?.entity &&
+    typeof raw.entity === "object" &&
+    !Array.isArray(raw.entity)
+  ) {
     return raw.entity;
   }
 
@@ -59,22 +136,16 @@ function extractTrackNumber(raw: any): string | null {
 function extractStatus(raw: any): string | null {
   const entity = getEntity(raw);
   return (
-    String(
-      entity?.statuses?.[0]?.code ??
-      entity?.status?.code ??
-      ""
-    ).trim() || null
+    String(entity?.statuses?.[0]?.code ?? entity?.status?.code ?? "").trim() ||
+    null
   );
 }
 
 function extractStatusName(raw: any): string | null {
   const entity = getEntity(raw);
   return (
-    String(
-      entity?.statuses?.[0]?.name ??
-      entity?.status?.name ??
-      ""
-    ).trim() || null
+    String(entity?.statuses?.[0]?.name ?? entity?.status?.name ?? "").trim() ||
+    null
   );
 }
 
@@ -126,16 +197,13 @@ async function getCdekAccessToken() {
 async function fetchCdekOrderByUuid(uuid: string) {
   const token = await getCdekAccessToken();
 
-  const res = await fetch(
-    `${BASE_URL}/orders/${encodeURIComponent(uuid)}`,
-    {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      cache: "no-store",
-    }
-  );
+  const res = await fetch(`${BASE_URL}/orders/${encodeURIComponent(uuid)}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: "no-store",
+  });
 
   const text = await res.text();
   let data: any = null;
@@ -175,10 +243,12 @@ export async function GET(req: Request) {
           { trackNumber: null },
           { status: "NEW" },
           { status: "SHIPPED" },
+          { status: "READY_FOR_PICKUP" },
         ],
       },
       select: {
         id: true,
+        userId: true,
         cdekUuid: true,
         trackNumber: true,
         status: true,
@@ -202,23 +272,55 @@ export async function GET(req: Request) {
           statusCode || statusName || ""
         );
 
+        const prevStatus = String(order.status).toUpperCase();
         const updateData: Record<string, any> = {};
 
         if (cdekNumber && cdekNumber !== order.trackNumber) {
           updateData.trackNumber = cdekNumber;
         }
 
-        if (
-          mappedStatus &&
-          mappedStatus !== String(order.status).toUpperCase()
-        ) {
+        if (mappedStatus && mappedStatus !== prevStatus) {
           updateData.status = mappedStatus;
         }
 
+        let updatedOrder:
+          | {
+              id: string;
+              userId: string | null;
+              status: string;
+              trackNumber: string | null;
+            }
+          | null = null;
+
         if (Object.keys(updateData).length > 0) {
-          await prisma.order.update({
+          updatedOrder = await prisma.order.update({
             where: { id: order.id },
             data: updateData,
+            select: {
+              id: true,
+              userId: true,
+              status: true,
+              trackNumber: true,
+            },
+          });
+        }
+
+        const newStatus = String(
+          updatedOrder?.status ?? order.status ?? ""
+        ).toUpperCase();
+
+        if (
+          updatedOrder &&
+          prevStatus !== newStatus &&
+          (newStatus === "SHIPPED" ||
+            newStatus === "READY_FOR_PICKUP" ||
+            newStatus === "DELIVERED")
+        ) {
+          await notifyUserOrderStatus({
+            userId: updatedOrder.userId,
+            orderId: updatedOrder.id,
+            status: updatedOrder.status,
+            trackNumber: updatedOrder.trackNumber,
           });
         }
 
