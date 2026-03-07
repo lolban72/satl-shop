@@ -8,6 +8,15 @@ const CDEK_BASE_URL =
     ? "https://api.cdek.ru/v2"
     : "https://api.edu.cdek.ru/v2";
 
+type DraftItem = {
+  productId?: string;
+  variantId?: string | null;
+  qty?: number;
+  quantity?: number;
+  title?: string;
+  price?: number;
+};
+
 function b64urlDecodeToString(s: string) {
   s = s.replace(/-/g, "+").replace(/_/g, "/");
   const pad = s.length % 4;
@@ -42,6 +51,11 @@ function safeNumber(value: unknown, fallback: number) {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+function toInt(v: any, def: number) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : def;
+}
+
 function extractCdekError(err: any) {
   return {
     message: err?.message || "CDEK request failed",
@@ -55,6 +69,86 @@ function extractCdekError(err: any) {
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getEntity(raw: any) {
+  if (
+    raw?.entity &&
+    typeof raw.entity === "object" &&
+    !Array.isArray(raw.entity)
+  ) {
+    return raw.entity;
+  }
+
+  if (Array.isArray(raw?.entity) && raw.entity.length > 0) {
+    return raw.entity[0];
+  }
+
+  if (Array.isArray(raw?.entities) && raw.entities.length > 0) {
+    return raw.entities[0];
+  }
+
+  return null;
+}
+
+function getPackageForOrder(params: {
+  itemsCount: number;
+  totalWeightGr: number;
+}) {
+  const itemsCount = Math.max(1, Number(params.itemsCount || 0));
+  const totalWeightGr = Math.max(1, Number(params.totalWeightGr || 0));
+
+  if (itemsCount <= 1 && totalWeightGr <= 500) {
+    return {
+      weight: Math.max(300, totalWeightGr),
+      length: 20,
+      width: 15,
+      height: 10,
+      packageType: "S",
+    };
+  }
+
+  if (itemsCount <= 3 && totalWeightGr <= 1500) {
+    return {
+      weight: Math.max(700, totalWeightGr),
+      length: 30,
+      width: 20,
+      height: 12,
+      packageType: "M",
+    };
+  }
+
+  return {
+    weight: Math.max(1500, totalWeightGr),
+    length: 40,
+    width: 30,
+    height: 15,
+    packageType: "L",
+  };
+}
+
+function buildOrderPackage(items: DraftItem[]) {
+  const defaultUnitWeightGr = toInt(process.env.CDEK_DEFAULT_WEIGHT_GR, 500);
+
+  const itemsCount = Math.max(
+    1,
+    items.reduce((sum, it) => {
+      const qty = toInt(it?.qty ?? it?.quantity, 1);
+      return sum + qty;
+    }, 0)
+  );
+
+  const totalWeightGr = Math.max(1, itemsCount * defaultUnitWeightGr);
+  const pack = getPackageForOrder({ itemsCount, totalWeightGr });
+
+  const firstTitle = String(items?.[0]?.title ?? "SATL item").trim() || "SATL item";
+  const itemName = itemsCount > 1 ? `${firstTitle} и др.` : firstTitle;
+
+  return {
+    itemsCount,
+    itemName,
+    pack,
+  };
 }
 
 async function getCdekAccessToken() {
@@ -89,9 +183,7 @@ async function getCdekAccessToken() {
   }
 
   if (!res.ok) {
-    throw new Error(
-      `CDEK auth failed: ${res.status} ${JSON.stringify(data)}`
-    );
+    throw new Error(`CDEK auth failed: ${res.status} ${JSON.stringify(data)}`);
   }
 
   const accessToken = String(data?.access_token ?? "").trim();
@@ -100,26 +192,6 @@ async function getCdekAccessToken() {
   }
 
   return accessToken;
-}
-
-function getEntity(raw: any) {
-  if (
-    raw?.entity &&
-    typeof raw.entity === "object" &&
-    !Array.isArray(raw.entity)
-  ) {
-    return raw.entity;
-  }
-
-  if (Array.isArray(raw?.entity) && raw.entity.length > 0) {
-    return raw.entity[0];
-  }
-
-  if (Array.isArray(raw?.entities) && raw.entities.length > 0) {
-    return raw.entities[0];
-  }
-
-  return null;
 }
 
 async function fetchCdekOrderByUuid(uuid: string) {
@@ -176,7 +248,6 @@ async function enrichCdekOrderAfterCreate(params: {
   try {
     const raw = await fetchCdekOrderByUuid(params.uuid);
     const entity = getEntity(raw);
-
     const cdekNumber = String(entity?.cdek_number ?? entity?.number ?? "").trim();
 
     return {
@@ -203,6 +274,7 @@ async function registerCdekOrder(params: {
   recipientName: string;
   recipientPhone: string;
   pvzCode: string;
+  items: DraftItem[];
 }) {
   const fromCity = String(process.env.CDEK_FROM_CITY ?? "").trim();
   if (!fromCity) {
@@ -210,12 +282,9 @@ async function registerCdekOrder(params: {
   }
 
   const tariffCode = safeNumber(process.env.CDEK_DEFAULT_TARIFF_CODE, 11);
-  const weight = safeNumber(process.env.CDEK_DEFAULT_WEIGHT_GR, 400);
-  const length = safeNumber(process.env.CDEK_DEFAULT_LENGTH_CM, 20);
-  const width = safeNumber(process.env.CDEK_DEFAULT_WIDTH_CM, 15);
-  const height = safeNumber(process.env.CDEK_DEFAULT_HEIGHT_CM, 10);
-
   const client = getCdekClient();
+
+  const { itemName, pack } = buildOrderPackage(params.items);
 
   const payload = {
     type: 1,
@@ -232,18 +301,18 @@ async function registerCdekOrder(params: {
     packages: [
       {
         number: `PKG-${params.orderId}`,
-        weight,
-        length,
-        width,
-        height,
+        weight: pack.weight,
+        length: pack.length,
+        width: pack.width,
+        height: pack.height,
         items: [
           {
-            name: "SATL item",
+            name: itemName,
             ware_key: `ORDER-${params.orderId}`,
             payment: { value: 0 },
             cost: 1000,
             amount: 1,
-            weight,
+            weight: pack.weight,
           },
         ],
       },
@@ -263,7 +332,6 @@ async function registerCdekOrder(params: {
   );
 
   const entity = (created as any)?.entity ?? null;
-
   const uuid = String(entity?.uuid ?? "").trim() || null;
   const cdekNumber = String(entity?.cdek_number ?? "").trim() || null;
 
@@ -275,6 +343,13 @@ async function registerCdekOrder(params: {
   return {
     uuid: enriched.uuid,
     cdekNumber: enriched.cdekNumber,
+    package: {
+      type: pack.packageType,
+      weightGr: pack.weight,
+      lengthCm: pack.length,
+      widthCm: pack.width,
+      heightCm: pack.height,
+    },
     raw: created,
     lookupRaw: enriched.raw,
   };
@@ -502,8 +577,8 @@ async function handleYaPayWebhook(req: Request) {
     return Response.json({ ok: true });
   }
 
-  const items: any[] = Array.isArray(draft.itemsJson)
-    ? (draft.itemsJson as any[])
+  const items: DraftItem[] = Array.isArray(draft.itemsJson)
+    ? (draft.itemsJson as DraftItem[])
     : [];
 
   const createdOrder = await prisma.$transaction(async (tx) => {
@@ -570,6 +645,15 @@ async function handleYaPayWebhook(req: Request) {
   });
 
   let effectiveTrackNumber = createdOrder.trackNumber ?? null;
+  let cdekPackageInfo:
+    | {
+        type: string;
+        weightGr: number;
+        lengthCm: number;
+        widthCm: number;
+        heightCm: number;
+      }
+    | null = null;
 
   if (createdOrder.pvzCode) {
     try {
@@ -578,7 +662,10 @@ async function handleYaPayWebhook(req: Request) {
         recipientName: createdOrder.name,
         recipientPhone: createdOrder.phone,
         pvzCode: createdOrder.pvzCode,
+        items,
       });
+
+      cdekPackageInfo = cdek.package;
 
       const updateData: any = {};
 
@@ -602,6 +689,7 @@ async function handleYaPayWebhook(req: Request) {
         orderId: createdOrder.id,
         uuid: cdek.uuid,
         cdekNumber: cdek.cdekNumber,
+        package: cdek.package,
       });
     } catch (e: any) {
       console.log(
@@ -626,6 +714,10 @@ async function handleYaPayWebhook(req: Request) {
         }\n`
       : "";
 
+  const packageLine = cdekPackageInfo
+    ? `Упаковка: ${cdekPackageInfo.type} (${cdekPackageInfo.lengthCm}×${cdekPackageInfo.widthCm}×${cdekPackageInfo.heightCm} см, ${cdekPackageInfo.weightGr} г)\n`
+    : "";
+
   const adminTrackLine = effectiveTrackNumber
     ? `Трек номер: <code>${effectiveTrackNumber}</code>\n`
     : `Трек номер: будет присвоен автоматически после обработки в СДЭК\n`;
@@ -641,6 +733,7 @@ async function handleYaPayWebhook(req: Request) {
     `Телефон: ${draft.phone}\n` +
     `${pvzLine}` +
     `${deliveryLine}` +
+    `${packageLine}` +
     `Адрес: ${draft.address}\n` +
     `Пользователь: ${draft.email || "Не указан (клиент не авторизован)"}\n\n` +
     `<b>Состав заказа:</b>\n` +
