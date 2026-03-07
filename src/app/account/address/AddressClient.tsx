@@ -82,7 +82,7 @@ export default function AddressClient({
           city: String(x?.city ?? data?.city ?? s.addressCity ?? ""),
           workTime: String(x?.workTime ?? x?.work_time ?? ""),
         }))
-        .filter((x) => x.code && x.address);
+        .filter((x: { code: any; address: any; }) => x.code && x.address);
 
       setPvzList(items);
 
