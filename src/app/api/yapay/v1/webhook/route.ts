@@ -99,11 +99,17 @@ async function registerCdekOrder(params: {
     ],
   };
 
-  console.log("[CDEK_WEBHOOK] register payload:", JSON.stringify(payload, null, 2));
+  console.log(
+    "[CDEK_WEBHOOK] register payload:",
+    JSON.stringify(payload, null, 2)
+  );
 
   const created = await client.addOrder(payload);
 
-  console.log("[CDEK_WEBHOOK] register success:", JSON.stringify(created, null, 2));
+  console.log(
+    "[CDEK_WEBHOOK] register success:",
+    JSON.stringify(created, null, 2)
+  );
 
   const entity = (created as any)?.entity ?? null;
 
@@ -463,6 +469,14 @@ async function handleYaPayWebhook(req: Request) {
         }\n`
       : "";
 
+  const adminTrackLine = effectiveTrackNumber
+    ? `Трек номер: <code>${effectiveTrackNumber}</code>\n`
+    : `Трек номер: будет присвоен автоматически после обработки в СДЭК\n`;
+
+  const userTrackLine = effectiveTrackNumber
+    ? `<b>Трек номер:</b> <code>${effectiveTrackNumber}</code>\n`
+    : `<b>Трек номер:</b> будет присвоен автоматически после обработки в СДЭК\n`;
+
   const adminText =
     `<b>Новый заказ ✅ (оплачен)</b>\n` +
     `ID: <code>${createdOrder.id}</code>\n` +
@@ -483,7 +497,7 @@ async function handleYaPayWebhook(req: Request) {
       .join("\n") +
     `\n\n<b>Итого:</b> ${rubFromCents(draft.total)}\n` +
     `Статус оплаты: <b>Оплачено ✅</b>\n` +
-    `Трек номер: <code>${effectiveTrackNumber ?? "Не назначен"}</code>\n` +
+    `${adminTrackLine}` +
     `Ссылка на заказ в админке: <a href="https://satl.shop/admin/orders/${createdOrder.id}" target="_blank">Перейти к заказу</a>\n` +
     `\n\n<b>Внимание!</b> Проверьте остатки товара и своевременно отправьте заказ клиенту.`;
 
@@ -504,7 +518,7 @@ async function handleYaPayWebhook(req: Request) {
         `Сумма: ${rubFromCents(draft.total)}\n\n` +
         `<b>Спасибо за покупку! 🎉</b>\n` +
         `Ваш заказ находится в обработке. Ожидайте уведомлений о доставке.\n\n` +
-        `<b>Трек номер:</b> <code>${effectiveTrackNumber ?? "Не назначен"}</code>\n` +
+        `${userTrackLine}` +
         `Вы можете отслеживать статус: <a href="https://satl.shop/account/orders" target="_blank">Мои заказы</a>.`;
 
       tgSendMessage(u.tgChatId, userText).catch(() => {});
