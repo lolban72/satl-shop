@@ -157,7 +157,6 @@ export default function AddressClient({
           </label>
 
           <PrimaryButton
-            type="button"
             disabled={loadingPvz}
             onClick={loadPvz}
             className="h-[35px] w-full"
