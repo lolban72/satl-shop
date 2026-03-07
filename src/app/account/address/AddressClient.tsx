@@ -52,28 +52,44 @@ export default function AddressClient({
     setPvzList([]);
 
     try {
-      // 🔁 Если у тебя другой route для ПВЗ — замени URL здесь
       const res = await fetch(`/api/cdek/pvz?city=${encodeURIComponent(city)}`, {
         method: "GET",
         cache: "no-store",
       });
 
       const data = await res.json();
+      console.log("PVZ response:", data);
 
       if (!res.ok) {
         throw new Error(data?.error || "Не удалось загрузить пункты выдачи");
       }
 
-      const items: PvzItem[] = Array.isArray(data)
-        ? data
+      const raw = Array.isArray(data?.points)
+        ? data.points
         : Array.isArray(data?.items)
         ? data.items
+        : Array.isArray(data?.pvz)
+        ? data.pvz
+        : Array.isArray(data)
+        ? data
         : [];
+
+      const items: PvzItem[] = raw
+        .map((x: any) => ({
+          code: String(x?.code ?? ""),
+          name: String(x?.name ?? "ПВЗ"),
+          address: String(x?.address ?? x?.location?.address_full ?? ""),
+          city: String(x?.city ?? data?.city ?? s.addressCity ?? ""),
+          workTime: String(x?.workTime ?? x?.work_time ?? ""),
+        }))
+        .filter((x) => x.code && x.address);
 
       setPvzList(items);
 
       if (!items.length) {
         setErr("Пункты выдачи не найдены");
+      } else {
+        setErr(null);
       }
     } catch (e: any) {
       setErr(e?.message || "Ошибка загрузки ПВЗ");
@@ -90,6 +106,7 @@ export default function AddressClient({
       pvzName: pvz.name || "",
       addressCity: pvz.city || prev.addressCity,
     }));
+
     setOk(null);
     setErr(null);
   }
@@ -138,7 +155,7 @@ export default function AddressClient({
   }
 
   const selectedLabel = useMemo(() => {
-    if (!s.pvzCode && !s.pvzAddress) return null;
+    if (!s.pvzCode && !s.pvzAddress) return "";
     return `${s.pvzCode}${s.pvzAddress ? ` — ${s.pvzAddress}` : ""}`;
   }, [s.pvzCode, s.pvzAddress]);
 
@@ -179,15 +196,19 @@ export default function AddressClient({
                       onClick={() => selectPvz(pvz)}
                       className={[
                         "w-full border-b border-black/10 px-[10px] py-[10px] text-left transition",
-                        active ? "bg-black text-white" : "bg-white hover:bg-black/[0.04]",
+                        active
+                          ? "bg-black text-white"
+                          : "bg-white hover:bg-black/[0.04]",
                       ].join(" ")}
                     >
                       <div className="text-[12px] font-semibold">
                         {pvz.name || `ПВЗ ${pvz.code}`}
                       </div>
+
                       <div className="mt-[2px] text-[11px] opacity-80">
                         {pvz.address}
                       </div>
+
                       {pvz.workTime ? (
                         <div className="mt-[4px] text-[10px] opacity-70">
                           {pvz.workTime}
@@ -203,19 +224,10 @@ export default function AddressClient({
           <label className="block w-full">
             <Label>Выбранный пункт</Label>
             <input
-              value={selectedLabel || ""}
+              value={selectedLabel}
               readOnly
               className="h-[35px] w-full border border-black/15 bg-black/[0.03] px-[10px] font-semibold text-[12px] outline-none"
               placeholder="Пункт выдачи не выбран"
-            />
-          </label>
-
-          <label className="block w-full">
-            <Label>Комментарий</Label>
-            <input
-              value={s.addressComment}
-              onChange={(e) => setField("addressComment", e.target.value)}
-              className="h-[35px] w-full border border-black/15 px-[10px] font-semibold text-[12px] outline-none focus:border-black/40"
             />
           </label>
 
