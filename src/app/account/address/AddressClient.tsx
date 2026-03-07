@@ -223,10 +223,11 @@ export default function AddressClient({
 
           <label className="block w-full">
             <Label>Выбранный пункт</Label>
-            <input
+            <textarea
               value={selectedLabel}
               readOnly
-              className="h-[35px] w-full border border-black/15 bg-black/[0.03] px-[10px] font-semibold text-[12px] outline-none"
+              rows={2}
+              className="w-full border border-black/15 bg-black/[0.03] px-[10px] py-[6px] font-semibold text-[12px] outline-none resize-none leading-[16px]"
               placeholder="Пункт выдачи не выбран"
             />
           </label>
