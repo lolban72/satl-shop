@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCdekClient } from "@/lib/cdek-client";
+import { buildPackageFromItemsCount } from "@/lib/cdek-package";
 
 export const runtime = "nodejs";
 
@@ -48,42 +49,6 @@ function extractCdekError(err: any) {
   return out;
 }
 
-function getPackageForOrder(params: {
-  itemsCount: number;
-  totalWeightGr: number;
-}) {
-  const itemsCount = Math.max(1, Number(params.itemsCount || 0));
-  const totalWeightGr = Math.max(1, Number(params.totalWeightGr || 0));
-
-  if (itemsCount <= 1 && totalWeightGr <= 500) {
-    return {
-      weight: Math.max(300, totalWeightGr),
-      length: 20,
-      width: 15,
-      height: 10,
-      packageType: "S",
-    };
-  }
-
-  if (itemsCount <= 3 && totalWeightGr <= 1500) {
-    return {
-      weight: Math.max(700, totalWeightGr),
-      length: 30,
-      width: 20,
-      height: 12,
-      packageType: "M",
-    };
-  }
-
-  return {
-    weight: Math.max(1500, totalWeightGr),
-    length: 40,
-    width: 30,
-    height: 15,
-    packageType: "L",
-  };
-}
-
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
@@ -123,13 +88,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const defaultUnitWeightGr = toInt(
-      process.env.CDEK_DEFAULT_WEIGHT_GR,
-      500
-    );
-
     let itemsCount = 1;
-    let totalWeightGr = defaultUnitWeightGr;
     let itemName = "SATL item";
 
     if (items.length > 0) {
@@ -152,7 +111,6 @@ export async function POST(req: Request) {
 
         const byId = new Map(products.map((p) => [p.id, p]));
         itemsCount = normalizedItems.reduce((sum, it) => sum + it.qty, 0);
-        totalWeightGr = Math.max(1, itemsCount * defaultUnitWeightGr);
 
         const firstProduct = normalizedItems
           .map((it) => byId.get(it.productId))
@@ -167,10 +125,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const pack = getPackageForOrder({
-      itemsCount,
-      totalWeightGr,
-    });
+    const { pack } = buildPackageFromItemsCount(itemsCount);
 
     const ts = Date.now();
     const orderNumber = String(body?.number ?? `TEST-${ts}`).trim();

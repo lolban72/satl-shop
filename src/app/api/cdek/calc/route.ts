@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { cdekResolveCityCode, cdekTariffList } from "@/lib/cdek";
+import { buildPackageFromItemsCount } from "@/lib/cdek-package";
 
 export const runtime = "nodejs";
 
@@ -40,45 +41,6 @@ function pickBestTariff(raw: any) {
   };
 }
 
-function getPackageForOrder(params: {
-  itemsCount: number;
-  totalWeightGr: number;
-}) {
-  const itemsCount = Math.max(1, Number(params.itemsCount || 0));
-  const totalWeightGr = Math.max(1, Number(params.totalWeightGr || 0));
-
-  // S — 1 легкая вещь
-  if (itemsCount <= 1 && totalWeightGr <= 500) {
-    return {
-      weight: Math.max(300, totalWeightGr),
-      length: 20,
-      width: 15,
-      height: 10,
-      packageType: "S",
-    };
-  }
-
-  // M — 2-3 вещи / средний заказ
-  if (itemsCount <= 3 && totalWeightGr <= 1500) {
-    return {
-      weight: Math.max(700, totalWeightGr),
-      length: 30,
-      width: 20,
-      height: 12,
-      packageType: "M",
-    };
-  }
-
-  // L — крупный заказ
-  return {
-    weight: Math.max(1500, totalWeightGr),
-    length: 40,
-    width: 30,
-    height: 15,
-    packageType: "L",
-  };
-}
-
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => null);
@@ -101,17 +63,13 @@ export async function POST(req: Request) {
     const fromCity = String(process.env.CDEK_FROM_CITY ?? "Краснодар").trim();
     const fromPvz = String(process.env.CDEK_FROM_PVZ_CODE ?? "").trim();
 
-    // усреднённый вес одной вещи, пока нет веса в карточке товара
-    const defaultUnitWeightGr = toInt(
-      process.env.CDEK_DEFAULT_WEIGHT_GR,
-      500
-    );
-
     const normalizedItems: NormalizedItem[] = items
-      .map((it: any): NormalizedItem => ({
-        productId: String(it?.productId ?? "").trim(),
-        qty: toInt(it?.qty, 1),
-      }))
+      .map(
+        (it: any): NormalizedItem => ({
+          productId: String(it?.productId ?? "").trim(),
+          qty: toInt(it?.qty, 1),
+        })
+      )
       .filter((x: NormalizedItem) => x.productId.length > 0 && x.qty > 0);
 
     if (normalizedItems.length === 0) {
@@ -121,7 +79,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Проверяем, что товары существуют
     const productIds = Array.from(
       new Set(normalizedItems.map((x: NormalizedItem) => x.productId))
     );
@@ -146,12 +103,7 @@ export async function POST(req: Request) {
       0
     );
 
-    const totalWeightGr = Math.max(1, itemsCount * defaultUnitWeightGr);
-
-    const pack = getPackageForOrder({
-      itemsCount,
-      totalWeightGr,
-    });
+    const { totalWeightGr, pack } = buildPackageFromItemsCount(itemsCount);
 
     const [fromCode, toCode] = await Promise.all([
       cdekResolveCityCode(fromCity),
@@ -196,7 +148,7 @@ export async function POST(req: Request) {
       itemsCount,
       package: {
         type: pack.packageType,
-        weightGr: pack.weight,
+        weightGr: totalWeightGr,
         lengthCm: pack.length,
         widthCm: pack.width,
         heightCm: pack.height,

@@ -25,12 +25,45 @@ declare global {
 
 function loadYmaps(apiKey: string) {
   return new Promise<void>((resolve, reject) => {
-    if (window.ymaps) return resolve();
+    // API уже полностью загружен
+    if (window.ymaps && window.ymaps.Map) {
+      resolve();
+      return;
+    }
 
+    // Скрипт уже добавлен на страницу
+    const existingScript = document.querySelector(
+      'script[src*="api-maps.yandex.ru"]'
+    ) as HTMLScriptElement | null;
+
+    if (existingScript) {
+      const check = () => {
+        if (window.ymaps && window.ymaps.ready) {
+          window.ymaps.ready(() => resolve());
+        } else {
+          setTimeout(check, 50);
+        }
+      };
+
+      check();
+      return;
+    }
+
+    // Загружаем API только один раз
     const s = document.createElement("script");
-    s.src = `https://api-maps.yandex.ru/2.1/?apikey=${encodeURIComponent(apiKey)}&lang=ru_RU`;
+    s.src = `https://api-maps.yandex.ru/2.1/?apikey=${encodeURIComponent(
+      apiKey
+    )}&lang=ru_RU`;
     s.async = true;
-    s.onload = () => resolve();
+
+    s.onload = () => {
+      if (window.ymaps && window.ymaps.ready) {
+        window.ymaps.ready(() => resolve());
+      } else {
+        resolve();
+      }
+    };
+
     s.onerror = () => reject(new Error("Failed to load Yandex Maps"));
     document.head.appendChild(s);
   });
@@ -103,7 +136,9 @@ export default function PvzPickerYmaps({
 
     setLoading(true);
     try {
-      const r = await fetch(`/api/cdek/pvz?city=${encodeURIComponent(c)}`, { cache: "no-store" });
+      const r = await fetch(`/api/cdek/pvz?city=${encodeURIComponent(c)}`, {
+        cache: "no-store",
+      });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error || "Не удалось получить ПВЗ");
 
@@ -160,14 +195,19 @@ export default function PvzPickerYmaps({
 
       setSuggestLoading(true);
       try {
-        const r = await fetch(`/api/cdek/cities?q=${encodeURIComponent(q)}&limit=10`, {
-          cache: "no-store",
-          signal: ac.signal,
-        });
+        const r = await fetch(
+          `/api/cdek/cities?q=${encodeURIComponent(q)}&limit=10`,
+          {
+            cache: "no-store",
+            signal: ac.signal,
+          }
+        );
         const data = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(data?.error || "cities error");
 
-        const items = Array.isArray(data?.items) ? (data.items as CitySuggest[]) : [];
+        const items = Array.isArray(data?.items)
+          ? (data.items as CitySuggest[])
+          : [];
         setSuggest(items);
         setSuggestOpen(true);
       } catch (e: any) {
@@ -219,7 +259,6 @@ export default function PvzPickerYmaps({
     setSuggestOpen(false);
     setActiveIdx(-1);
 
-    // вернуть карту к дефолтному центру (если уже создана)
     try {
       mapRef.current?.setCenter?.([55.751244, 37.618423], 10);
     } catch {}
@@ -284,7 +323,7 @@ export default function PvzPickerYmaps({
 
         placemark.events.add("click", () => {
           setSelected(p);
-          setShowAddressInCityInput(true); // ✅ адрес в поле
+          setShowAddressInCityInput(true);
           setSuggestOpen(false);
           onSelect({ code: p.code, address: p.address, city: effectiveCity });
         });
@@ -320,19 +359,24 @@ export default function PvzPickerYmaps({
   return (
     <span>
       {!apiKey ? (
-        <div className="mt-2 text-[12px] text-red-600">NEXT_PUBLIC_YMAPS_API_KEY не задан</div>
+        <div className="mt-2 text-[12px] text-red-600">
+          NEXT_PUBLIC_YMAPS_API_KEY не задан
+        </div>
       ) : null}
 
       {err ? <div className="mt-2 text-[12px] text-red-600">{err}</div> : null}
 
-      {/* ✅ этот же input: сначала город, потом адрес ПВЗ + кнопка "Изменить" */}
       {!hideCityInput ? (
         <div className="relative z-[9999]">
           <div className="flex gap-2">
             <input
               ref={cityInputRef}
               className="h-[46px] w-full border border-black/15 px-[14px] text-[14px] outline-none focus:border-black transition bg-white"
-              placeholder={showAddressInCityInput ? "Адрес пункта выдачи" : "Начните вводить город…"}
+              placeholder={
+                showAddressInCityInput
+                  ? "Адрес пункта выдачи"
+                  : "Начните вводить город…"
+              }
               style={{ fontFamily: "Brygada" }}
               value={cityInputValue}
               readOnly={cityInputReadOnly}
@@ -340,8 +384,6 @@ export default function PvzPickerYmaps({
                 if (showAddressInCityInput) return;
 
                 setCityLocal(e.target.value);
-
-                // снимаем подтверждение — ПВЗ не грузим
                 setConfirmedCity("");
                 setPoints([]);
                 setSelected(null);
@@ -390,13 +432,16 @@ export default function PvzPickerYmaps({
             ) : null}
           </div>
 
-          {/* dropdown */}
           {!showAddressInCityInput && suggestOpen ? (
             <div className="absolute z-[10000] mt-[6px] w-full border border-black/15 bg-white shadow-sm">
               {suggestLoading ? (
-                <div className="px-[14px] py-[10px] text-[12px] text-black/50">Ищем города…</div>
+                <div className="px-[14px] py-[10px] text-[12px] text-black/50">
+                  Ищем города…
+                </div>
               ) : suggestErr ? (
-                <div className="px-[14px] py-[10px] text-[12px] text-red-600">{suggestErr}</div>
+                <div className="px-[14px] py-[10px] text-[12px] text-red-600">
+                  {suggestErr}
+                </div>
               ) : suggest.length ? (
                 suggest.map((s, idx) => {
                   const line = [s.city, s.region].filter(Boolean).join(", ");
@@ -417,7 +462,9 @@ export default function PvzPickerYmaps({
                   );
                 })
               ) : (
-                <div className="px-[14px] py-[10px] text-[12px] text-black/50">Ничего не найдено</div>
+                <div className="px-[14px] py-[10px] text-[12px] text-black/50">
+                  Ничего не найдено
+                </div>
               )}
             </div>
           ) : null}
@@ -434,10 +481,12 @@ export default function PvzPickerYmaps({
             <button
               key={p.code}
               className={`block w-full border-b border-black/10 px-[14px] py-[12px] text-left text-[12px]
-                          hover:bg-black/5 transition ${selected?.code === p.code ? "bg-black/5" : ""}`}
+                          hover:bg-black/5 transition ${
+                            selected?.code === p.code ? "bg-black/5" : ""
+                          }`}
               onClick={() => {
                 setSelected(p);
-                setShowAddressInCityInput(true); // ✅ адрес в поле
+                setShowAddressInCityInput(true);
                 setSuggestOpen(false);
                 onSelect({ code: p.code, address: p.address, city: effectiveCity });
               }}
@@ -447,7 +496,11 @@ export default function PvzPickerYmaps({
                 {p.name}
               </div>
               <div className="mt-[6px] text-black/70">{p.address}</div>
-              {p.workTime ? <div className="mt-[6px] text-[11px] text-black/50">{p.workTime}</div> : null}
+              {p.workTime ? (
+                <div className="mt-[6px] text-[11px] text-black/50">
+                  {p.workTime}
+                </div>
+              ) : null}
             </button>
           ))}
 

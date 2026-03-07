@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { tgSendMessage, parseChatIds } from "@/lib/tg";
 import { getCdekClient } from "@/lib/cdek-client";
+import { buildPackageFromItemsCount } from "@/lib/cdek-package";
 
 const CDEK_ENV = String(process.env.CDEK_ENV ?? "TEST").toUpperCase();
 const CDEK_BASE_URL =
@@ -51,11 +52,6 @@ function safeNumber(value: unknown, fallback: number) {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-function toInt(v: any, def: number) {
-  const n = Number(v);
-  return Number.isFinite(n) && n > 0 ? Math.round(n) : def;
-}
-
 function extractCdekError(err: any) {
   return {
     message: err?.message || "CDEK request failed",
@@ -91,61 +87,25 @@ function getEntity(raw: any) {
   return null;
 }
 
-function getPackageForOrder(params: {
-  itemsCount: number;
-  totalWeightGr: number;
-}) {
-  const itemsCount = Math.max(1, Number(params.itemsCount || 0));
-  const totalWeightGr = Math.max(1, Number(params.totalWeightGr || 0));
-
-  if (itemsCount <= 1 && totalWeightGr <= 500) {
-    return {
-      weight: Math.max(300, totalWeightGr),
-      length: 20,
-      width: 15,
-      height: 10,
-      packageType: "S",
-    };
-  }
-
-  if (itemsCount <= 3 && totalWeightGr <= 1500) {
-    return {
-      weight: Math.max(700, totalWeightGr),
-      length: 30,
-      width: 20,
-      height: 12,
-      packageType: "M",
-    };
-  }
-
-  return {
-    weight: Math.max(1500, totalWeightGr),
-    length: 40,
-    width: 30,
-    height: 15,
-    packageType: "L",
-  };
-}
-
 function buildOrderPackage(items: DraftItem[]) {
-  const defaultUnitWeightGr = toInt(process.env.CDEK_DEFAULT_WEIGHT_GR, 500);
-
   const itemsCount = Math.max(
     1,
     items.reduce((sum, it) => {
-      const qty = toInt(it?.qty ?? it?.quantity, 1);
-      return sum + qty;
+      const qty = Number(it?.qty ?? it?.quantity ?? 1);
+      return sum + (Number.isFinite(qty) && qty > 0 ? Math.round(qty) : 1);
     }, 0)
   );
 
-  const totalWeightGr = Math.max(1, itemsCount * defaultUnitWeightGr);
-  const pack = getPackageForOrder({ itemsCount, totalWeightGr });
+  const { totalWeightGr, pack } = buildPackageFromItemsCount(itemsCount);
 
-  const firstTitle = String(items?.[0]?.title ?? "SATL item").trim() || "SATL item";
+  const firstTitle =
+    String(items?.[0]?.title ?? "SATL item").trim() || "SATL item";
+
   const itemName = itemsCount > 1 ? `${firstTitle} и др.` : firstTitle;
 
   return {
     itemsCount,
+    totalWeightGr,
     itemName,
     pack,
   };
@@ -197,13 +157,16 @@ async function getCdekAccessToken() {
 async function fetchCdekOrderByUuid(uuid: string) {
   const token = await getCdekAccessToken();
 
-  const res = await fetch(`${CDEK_BASE_URL}/orders/${encodeURIComponent(uuid)}`, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    cache: "no-store",
-  });
+  const res = await fetch(
+    `${CDEK_BASE_URL}/orders/${encodeURIComponent(uuid)}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    }
+  );
 
   const text = await res.text();
   let data: any = null;
@@ -248,7 +211,9 @@ async function enrichCdekOrderAfterCreate(params: {
   try {
     const raw = await fetchCdekOrderByUuid(params.uuid);
     const entity = getEntity(raw);
-    const cdekNumber = String(entity?.cdek_number ?? entity?.number ?? "").trim();
+    const cdekNumber = String(
+      entity?.cdek_number ?? entity?.number ?? ""
+    ).trim();
 
     return {
       uuid: params.uuid,
@@ -637,7 +602,10 @@ async function handleYaPayWebhook(req: Request) {
       });
 
       if (updated.count === 0) {
-        console.log("⚠️ Stock not decremented (not enough):", { variantId, qty });
+        console.log("⚠️ Stock not decremented (not enough):", {
+          variantId,
+          qty,
+        });
       }
     }
 
@@ -704,7 +672,11 @@ async function handleYaPayWebhook(req: Request) {
   const adminChatIds = parseChatIds(process.env.TG_ADMIN_CHAT_IDS);
 
   const pvzLine = draft.pvzCode
-    ? `ПВЗ: ${draft.pvzCity ? draft.pvzCity + ", " : ""}<code>${draft.pvzCode}</code>\nАдрес ПВЗ: ${draft.pvzAddress ?? "—"}\n`
+    ? `ПВЗ: ${
+        draft.pvzCity ? draft.pvzCity + ", " : ""
+      }<code>${draft.pvzCode}</code>\nАдрес ПВЗ: ${
+        draft.pvzAddress ?? "—"
+      }\n`
     : "";
 
   const deliveryLine =
@@ -735,7 +707,9 @@ async function handleYaPayWebhook(req: Request) {
     `${deliveryLine}` +
     `${packageLine}` +
     `Адрес: ${draft.address}\n` +
-    `Пользователь: ${draft.email || "Не указан (клиент не авторизован)"}\n\n` +
+    `Пользователь: ${
+      draft.email || "Не указан (клиент не авторизован)"
+    }\n\n` +
     `<b>Состав заказа:</b>\n` +
     items
       .map((i) => {
