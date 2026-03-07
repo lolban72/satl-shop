@@ -1,24 +1,32 @@
-// src/app/api/cdek/register/route.ts
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { getCdekClient } from "@/lib/cdek-client";
 
 export const runtime = "nodejs";
 
+interface NormalizedItem {
+  productId: string;
+  qty: number;
+}
+
 function normalizePhone(phone: string) {
   const raw = String(phone ?? "").trim();
-
   if (!raw) return "";
 
-  const hasPlus = raw.startsWith("+");
   const digits = raw.replace(/\D/g, "");
-
   if (!digits) return "";
-  return hasPlus ? `+${digits}` : `+${digits}`;
+
+  return `+${digits}`;
 }
 
 function safeNumber(value: unknown, fallback: number) {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+function toInt(v: any, def: number) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : def;
 }
 
 function extractCdekError(err: any) {
@@ -32,13 +40,48 @@ function extractCdekError(err: any) {
   if (err?.errors) out.errors = err.errors;
   if (err?.cause) out.cause = err.cause;
 
-  // иногда библиотеки кладут полезное внутрь
   if (err?.response?.data) out.responseData = err.response.data;
   if (err?.response?.body) out.responseBody = err.response.body;
   if (err?.response?.errors) out.responseErrors = err.response.errors;
   if (err?.response?.status) out.responseStatus = err.response.status;
 
   return out;
+}
+
+function getPackageForOrder(params: {
+  itemsCount: number;
+  totalWeightGr: number;
+}) {
+  const itemsCount = Math.max(1, Number(params.itemsCount || 0));
+  const totalWeightGr = Math.max(1, Number(params.totalWeightGr || 0));
+
+  if (itemsCount <= 1 && totalWeightGr <= 500) {
+    return {
+      weight: Math.max(300, totalWeightGr),
+      length: 20,
+      width: 15,
+      height: 10,
+      packageType: "S",
+    };
+  }
+
+  if (itemsCount <= 3 && totalWeightGr <= 1500) {
+    return {
+      weight: Math.max(700, totalWeightGr),
+      length: 30,
+      width: 20,
+      height: 12,
+      packageType: "M",
+    };
+  }
+
+  return {
+    weight: Math.max(1500, totalWeightGr),
+    length: 40,
+    width: 30,
+    height: 15,
+    packageType: "L",
+  };
 }
 
 export async function POST(req: Request) {
@@ -49,6 +92,8 @@ export async function POST(req: Request) {
     const pvzCode = String(body?.pvzCode ?? "").trim();
     const name = String(body?.name ?? "").trim();
     const phone = normalizePhone(body?.phone ?? "");
+    const items: any[] = Array.isArray(body?.items) ? body.items : [];
+
     const tariffCode = safeNumber(
       body?.tariffCode ?? process.env.CDEK_DEFAULT_TARIFF_CODE ?? 11,
       11
@@ -70,11 +115,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "phone required" }, { status: 400 });
     }
 
-    const weight = safeNumber(process.env.CDEK_DEFAULT_WEIGHT_GR, 400);
-    const length = safeNumber(process.env.CDEK_DEFAULT_LENGTH_CM, 20);
-    const width = safeNumber(process.env.CDEK_DEFAULT_WIDTH_CM, 15);
-    const height = safeNumber(process.env.CDEK_DEFAULT_HEIGHT_CM, 10);
-
     const fromCity = String(process.env.CDEK_FROM_CITY ?? "").trim();
     if (!fromCity) {
       return NextResponse.json(
@@ -83,11 +123,61 @@ export async function POST(req: Request) {
       );
     }
 
+    const defaultUnitWeightGr = toInt(
+      process.env.CDEK_DEFAULT_WEIGHT_GR,
+      500
+    );
+
+    let itemsCount = 1;
+    let totalWeightGr = defaultUnitWeightGr;
+    let itemName = "SATL item";
+
+    if (items.length > 0) {
+      const normalizedItems: NormalizedItem[] = items
+        .map((it: any): NormalizedItem => ({
+          productId: String(it?.productId ?? "").trim(),
+          qty: toInt(it?.qty, 1),
+        }))
+        .filter((x: NormalizedItem) => x.productId.length > 0 && x.qty > 0);
+
+      if (normalizedItems.length > 0) {
+        const productIds = Array.from(
+          new Set(normalizedItems.map((x) => x.productId))
+        );
+
+        const products = await prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, title: true },
+        });
+
+        const byId = new Map(products.map((p) => [p.id, p]));
+        itemsCount = normalizedItems.reduce((sum, it) => sum + it.qty, 0);
+        totalWeightGr = Math.max(1, itemsCount * defaultUnitWeightGr);
+
+        const firstProduct = normalizedItems
+          .map((it) => byId.get(it.productId))
+          .find(Boolean);
+
+        if (firstProduct?.title) {
+          itemName =
+            itemsCount > 1
+              ? `${firstProduct.title} и др.`
+              : String(firstProduct.title);
+        }
+      }
+    }
+
+    const pack = getPackageForOrder({
+      itemsCount,
+      totalWeightGr,
+    });
+
     const ts = Date.now();
+    const orderNumber = String(body?.number ?? `TEST-${ts}`).trim();
 
     const payload = {
       type: 1,
-      number: `TEST-${ts}`,
+      number: orderNumber,
       tariff_code: tariffCode,
       recipient: {
         name,
@@ -100,18 +190,18 @@ export async function POST(req: Request) {
       packages: [
         {
           number: `PKG-${ts}`,
-          weight,
-          length,
-          width,
-          height,
+          weight: pack.weight,
+          length: pack.length,
+          width: pack.width,
+          height: pack.height,
           items: [
             {
-              name: "SATL item",
-              ware_key: "SKU-TEST",
+              name: itemName,
+              ware_key: `ORDER-${orderNumber}`,
               payment: { value: 0 },
               cost: 1000,
               amount: 1,
-              weight,
+              weight: pack.weight,
             },
           ],
         },
@@ -144,13 +234,9 @@ export async function POST(req: Request) {
 
     console.log("[CDEK_REGISTER] success:", JSON.stringify(created, null, 2));
 
-    const uuid = String(
-      created?.entity?.uuid ?? created?.uuid ?? ""
-    ).trim();
-
-    const cdekNumber = String(
-      created?.entity?.cdek_number ?? created?.cdek_number ?? ""
-    ).trim();
+    const entity = (created as any)?.entity ?? null;
+    const uuid = String(entity?.uuid ?? "").trim();
+    const cdekNumber = String(entity?.cdek_number ?? "").trim();
 
     if (!uuid) {
       return NextResponse.json(
@@ -167,6 +253,13 @@ export async function POST(req: Request) {
       ok: true,
       uuid,
       cdekNumber: cdekNumber || null,
+      package: {
+        type: pack.packageType,
+        weightGr: pack.weight,
+        lengthCm: pack.length,
+        widthCm: pack.width,
+        heightCm: pack.height,
+      },
       raw: created,
     });
   } catch (e: any) {

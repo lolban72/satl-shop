@@ -40,10 +40,51 @@ function pickBestTariff(raw: any) {
   };
 }
 
+function getPackageForOrder(params: {
+  itemsCount: number;
+  totalWeightGr: number;
+}) {
+  const itemsCount = Math.max(1, Number(params.itemsCount || 0));
+  const totalWeightGr = Math.max(1, Number(params.totalWeightGr || 0));
+
+  // S — 1 легкая вещь
+  if (itemsCount <= 1 && totalWeightGr <= 500) {
+    return {
+      weight: Math.max(300, totalWeightGr),
+      length: 20,
+      width: 15,
+      height: 10,
+      packageType: "S",
+    };
+  }
+
+  // M — 2-3 вещи / средний заказ
+  if (itemsCount <= 3 && totalWeightGr <= 1500) {
+    return {
+      weight: Math.max(700, totalWeightGr),
+      length: 30,
+      width: 20,
+      height: 12,
+      packageType: "M",
+    };
+  }
+
+  // L — крупный заказ
+  return {
+    weight: Math.max(1500, totalWeightGr),
+    length: 40,
+    width: 30,
+    height: 15,
+    packageType: "L",
+  };
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => null);
-    if (!body) return Response.json({ error: "Bad JSON" }, { status: 400 });
+    if (!body) {
+      return Response.json({ error: "Bad JSON" }, { status: 400 });
+    }
 
     const city = String(body?.city ?? "").trim();
     const pvzCode = String(body?.pvzCode ?? "").trim();
@@ -52,21 +93,20 @@ export async function POST(req: Request) {
     if (!city || !pvzCode) {
       return Response.json({ error: "city/pvzCode required" }, { status: 400 });
     }
+
     if (items.length === 0) {
       return Response.json({ error: "items required" }, { status: 400 });
     }
 
-    // Откуда отправляем (фикс)
     const fromCity = String(process.env.CDEK_FROM_CITY ?? "Краснодар").trim();
     const fromPvz = String(process.env.CDEK_FROM_PVZ_CODE ?? "").trim();
 
-    // Дефолт для товара, если у него не заполнены габариты/вес
-    const defaultWeightGr = toInt(process.env.CDEK_DEFAULT_WEIGHT_GR, 500);
-    const defaultLengthCm = toInt(process.env.CDEK_DEFAULT_LENGTH_CM, 20);
-    const defaultWidthCm = toInt(process.env.CDEK_DEFAULT_WIDTH_CM, 15);
-    const defaultHeightCm = toInt(process.env.CDEK_DEFAULT_HEIGHT_CM, 10);
+    // усреднённый вес одной вещи, пока нет веса в карточке товара
+    const defaultUnitWeightGr = toInt(
+      process.env.CDEK_DEFAULT_WEIGHT_GR,
+      500
+    );
 
-    // 1) Нормализуем items -> строго типизированный массив
     const normalizedItems: NormalizedItem[] = items
       .map((it: any): NormalizedItem => ({
         productId: String(it?.productId ?? "").trim(),
@@ -81,55 +121,43 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2) Тянем товары из БД (габариты/вес)
+    // Проверяем, что товары существуют
     const productIds = Array.from(
       new Set(normalizedItems.map((x: NormalizedItem) => x.productId))
     );
 
     const products = await prisma.product.findMany({
       where: { id: { in: productIds } },
-      select: {
-        id: true,
-        weightGr: true,
-        lengthCm: true,
-        widthCm: true,
-        heightCm: true,
-      },
+      select: { id: true },
     });
 
-    const byId = new Map(products.map((p) => [p.id, p]));
+    const existingIds = new Set(products.map((p) => p.id));
+    const missing = productIds.filter((id) => !existingIds.has(id));
 
-    // 3) Считаем общий вес и габариты посылки
-    // Вес суммируем (по qty), габариты берём максимум по товарам (упрощённо, но стабильно)
-    let totalWeightGr = 0;
-    let packL = defaultLengthCm;
-    let packW = defaultWidthCm;
-    let packH = defaultHeightCm;
-
-    for (const it of normalizedItems) {
-      const p = byId.get(it.productId);
-
-      const w = toInt(p?.weightGr, defaultWeightGr);
-      const l = toInt(p?.lengthCm, defaultLengthCm);
-      const ww = toInt(p?.widthCm, defaultWidthCm);
-      const h = toInt(p?.heightCm, defaultHeightCm);
-
-      totalWeightGr += w * it.qty;
-
-      // берём максимум, чтобы не занижать габариты
-      packL = Math.max(packL, l);
-      packW = Math.max(packW, ww);
-      packH = Math.max(packH, h);
+    if (missing.length > 0) {
+      return Response.json(
+        { error: "Some products not found", missingProductIds: missing },
+        { status: 400 }
+      );
     }
 
-    totalWeightGr = Math.max(1, totalWeightGr);
+    const itemsCount = normalizedItems.reduce(
+      (sum, it) => sum + Math.max(1, it.qty),
+      0
+    );
+
+    const totalWeightGr = Math.max(1, itemsCount * defaultUnitWeightGr);
+
+    const pack = getPackageForOrder({
+      itemsCount,
+      totalWeightGr,
+    });
 
     const [fromCode, toCode] = await Promise.all([
       cdekResolveCityCode(fromCity),
       cdekResolveCityCode(city),
     ]);
 
-    // 4) Запрос тариффлиста (PVZ -> PVZ)
     const payload: any = {
       type: 1,
       lang: "rus",
@@ -137,22 +165,27 @@ export async function POST(req: Request) {
       to_location: { code: toCode },
       packages: [
         {
-          weight: totalWeightGr,
-          length: packL,
-          width: packW,
-          height: packH,
+          weight: pack.weight,
+          length: pack.length,
+          width: pack.width,
+          height: pack.height,
         },
       ],
       delivery_point: pvzCode,
     };
 
-    if (fromPvz) payload.shipment_point = fromPvz;
+    if (fromPvz) {
+      payload.shipment_point = fromPvz;
+    }
 
     const data = await cdekTariffList(payload);
     const { best, variants } = pickBestTariff(data);
 
     if (!best) {
-      return Response.json({ error: "No tariffs", details: data }, { status: 400 });
+      return Response.json(
+        { error: "No tariffs", details: data, payload },
+        { status: 400 }
+      );
     }
 
     return Response.json({
@@ -160,7 +193,14 @@ export async function POST(req: Request) {
       fromCity,
       toCity: city,
       pvzCode,
-      package: { weightGr: totalWeightGr, lengthCm: packL, widthCm: packW, heightCm: packH },
+      itemsCount,
+      package: {
+        type: pack.packageType,
+        weightGr: pack.weight,
+        lengthCm: pack.length,
+        widthCm: pack.width,
+        heightCm: pack.height,
+      },
       best,
       variants,
     });
