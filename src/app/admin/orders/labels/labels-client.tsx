@@ -9,10 +9,8 @@ function val(v: any) {
   return s ? s : "—";
 }
 
-// короткое значение для штрих-кода
-function barcodeValueFromOrderId(id: any) {
-  const s = String(id ?? "");
-  return s.length > 10 ? s.slice(0, 10) : s;
+function cleanTrackNumber(v: any) {
+  return String(v ?? "").trim();
 }
 
 function OneLabelHTML({
@@ -29,40 +27,42 @@ function OneLabelHTML({
     return items[0] ?? null;
   }, [order?.items]);
 
-  const barcodeValue = useMemo(() => {
-    return barcodeValueFromOrderId(order?.id);
-  }, [order?.id]);
-
   const productTitle = val(firstItem?.title);
   const size = val(firstItem?.variant?.size);
-  const pvz = val(order?.pvz || order?.pickupPoint || "СДЭК");
-  const trackNumber = val(order?.trackNumber || "-");
+  const pvz = val(order?.pvzName || order?.pvzAddress || order?.pvz || order?.pickupPoint || "СДЭК");
+  const trackNumber = useMemo(() => cleanTrackNumber(order?.trackNumber), [order?.trackNumber]);
 
   useEffect(() => {
     if (!barcodeRef.current) return;
 
-    // ✅ штрих-код больше + выше
-    JsBarcode(barcodeRef.current, barcodeValue, {
+    if (!trackNumber) {
+      barcodeRef.current.innerHTML = "";
+      return;
+    }
+
+    JsBarcode(barcodeRef.current, trackNumber, {
       format: "CODE128",
-      width: 1.25,   // толще линии (больше сам barcode)
-      height: 26,    // выше
+      width: 1.35,
+      height: 28,
       displayValue: false,
       margin: 0,
     });
-  }, [barcodeValue]);
+  }, [trackNumber]);
 
   return (
     <div ref={htmlRef} className="label-58x40">
-      {/* ✅ по центру сверху */}
       <div className="barcode-wrap">
-        <svg ref={barcodeRef} className="barcode" />
+        {trackNumber ? (
+          <svg ref={barcodeRef} className="barcode" />
+        ) : (
+          <div className="barcode-empty">НЕТ ТРЕК-НОМЕРА</div>
+        )}
       </div>
 
-      {/* ✅ весь текст слева */}
       <div className="meta">
-        <div className="row">
+        <div className="row row-top">
           <span className="k">Товар:</span>
-          <span className="v">{productTitle}</span>
+          <span className="v v-wrap">{productTitle}</span>
         </div>
 
         <div className="row">
@@ -70,19 +70,14 @@ function OneLabelHTML({
           <span className="v">{size}</span>
         </div>
 
-        <div className="row">
+        <div className="row row-top">
           <span className="k">ПВЗ:</span>
-          <span className="v">{pvz}</span>
-        </div>
-
-        <div className="row">
-          <span className="k">№ заказа:</span>
-          <span className="v mono">{barcodeValue}</span>
+          <span className="v v-wrap">{pvz}</span>
         </div>
 
         <div className="row">
           <span className="k">Трек:</span>
-          <span className="v mono">{trackNumber}</span>
+          <span className="v mono">{trackNumber || "—"}</span>
         </div>
       </div>
     </div>
@@ -149,18 +144,19 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
           width: 58mm;
           height: 40mm;
           box-sizing: border-box;
-          padding: 1.5mm;
+          padding: 1.4mm 1.5mm 1.2mm;
           display: flex;
           flex-direction: column;
-          gap: 1.2mm;
+          gap: 1mm;
           background: #fff;
           color: #000;
           font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+          overflow: hidden;
         }
 
-        /* ✅ штрих-код по центру сверху */
         .barcode-wrap {
           width: 100%;
+          min-height: 9.5mm;
           display: flex;
           justify-content: center;
           align-items: flex-start;
@@ -168,25 +164,43 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
         }
 
         .barcode {
-          width: 54mm; /* ✅ делаем шире, но с отступами */
+          width: 54mm;
           height: auto;
+          display: block;
         }
 
-        /* ✅ весь текст слева */
+        .barcode-empty {
+          width: 54mm;
+          height: 9mm;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 0.2mm dashed #999;
+          font-size: 7px;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+        }
+
         .meta {
           font-size: 7px;
-          line-height: 1.1;
+          line-height: 1.08;
           display: flex;
           flex-direction: column;
-          gap: 0.7mm;
+          gap: 0.65mm;
           text-align: left;
+          min-height: 0;
         }
 
         .row {
           display: flex;
-          gap: 2mm;
+          gap: 1.6mm;
           align-items: baseline;
-          justify-content: flex-start; /* ✅ не раздвигаем */
+          justify-content: flex-start;
+          min-width: 0;
+        }
+
+        .row-top {
+          align-items: flex-start;
         }
 
         .k {
@@ -198,22 +212,41 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
         .v {
           flex: 1 1 auto;
           min-width: 0;
-          text-align: left; /* ✅ значения тоже слева */
+          text-align: left;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
         }
 
+        .v-wrap {
+          white-space: normal;
+          overflow: hidden;
+          text-overflow: clip;
+          display: -webkit-box;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 2;
+          line-clamp: 2;
+          word-break: break-word;
+        }
+
         .mono {
           font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
-          letter-spacing: 0.02em;
+          letter-spacing: 0.01em;
+          font-size: 6.8px;
         }
 
         @media print {
-          body * { visibility: hidden !important; }
-          .label-root, .label-root * { visibility: visible !important; }
+          body * {
+            visibility: hidden !important;
+          }
 
-          html, body {
+          .label-root,
+          .label-root * {
+            visibility: visible !important;
+          }
+
+          html,
+          body {
             margin: 0 !important;
             padding: 0 !important;
           }
@@ -245,9 +278,11 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
       <div className="hidden-render">
         {orders.map((o, i) => (
           <OneLabelHTML
-            key={o.id}
+            key={o.id ?? i}
             order={o}
-            htmlRef={(el) => (refs.current[i] = el)}
+            htmlRef={(el) => {
+              refs.current[i] = el;
+            }}
           />
         ))}
       </div>
