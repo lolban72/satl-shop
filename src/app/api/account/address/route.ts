@@ -5,49 +5,69 @@ import { prisma } from "@/lib/prisma";
 export async function PATCH(req: Request) {
   const session = await auth();
   const userId = (session?.user as any)?.id as string | undefined;
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const body = await req.json();
 
   const pick = (v: any) => (typeof v === "string" ? v.trim() : "");
 
-  const addressCountry = pick(body.addressCountry);
-  const addressRegion = pick(body.addressRegion);
+  const deliveryType = pick(body.deliveryType) || "pickup";
   const addressCity = pick(body.addressCity);
-  const addressStreet = pick(body.addressStreet);
-  const addressHouse = pick(body.addressHouse);
-  const addressApartment = pick(body.addressApartment);
-  const addressPostcode = pick(body.addressPostcode);
+  const pvzCode = pick(body.pvzCode);
+  const pvzAddress = pick(body.pvzAddress);
+  const pvzName = pick(body.pvzName);
   const addressComment = pick(body.addressComment);
 
-  // ✅ (опционально) соберём красивую строку в старое поле address
-  const combined = [
-    addressPostcode,
-    addressCountry,
-    addressRegion,
-    addressCity,
-    [addressStreet, addressHouse].filter(Boolean).join(" "),
-    addressApartment ? `кв. ${addressApartment}` : "",
-  ]
+  if (!addressCity) {
+    return NextResponse.json({ error: "Укажите город" }, { status: 400 });
+  }
+
+  if (!pvzCode || !pvzAddress) {
+    return NextResponse.json(
+      { error: "Выберите пункт выдачи" },
+      { status: 400 }
+    );
+  }
+
+  const combined = [addressCity, pvzName, pvzAddress, pvzCode ? `ПВЗ ${pvzCode}` : ""]
     .filter(Boolean)
     .join(", ");
 
   await prisma.user.update({
     where: { id: userId },
     data: {
-      addressCountry: addressCountry || null,
-      addressRegion: addressRegion || null,
       addressCity: addressCity || null,
-      addressStreet: addressStreet || null,
-      addressHouse: addressHouse || null,
-      addressApartment: addressApartment || null,
-      addressPostcode: addressPostcode || null,
       addressComment: addressComment || null,
 
-      // ✅ сохраняем совместимость со старым полем
+      pvzCode: pvzCode || null,
+      pvzAddress: pvzAddress || null,
+      pvzName: pvzName || null,
+
+      // очищаем старые поля обычного адреса
+      addressCountry: null,
+      addressRegion: null,
+      addressStreet: null,
+      addressHouse: null,
+      addressApartment: null,
+      addressPostcode: null,
+
+      // для совместимости
       address: combined || null,
     },
   });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    ok: true,
+    saved: {
+      deliveryType,
+      addressCity,
+      pvzCode,
+      pvzAddress,
+      pvzName,
+      addressComment,
+    },
+  });
 }

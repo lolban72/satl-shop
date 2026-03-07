@@ -5,7 +5,7 @@ import AccountShell from "../ui/AccountShell";
 import AddressClient from "./AddressClient";
 
 export const metadata = {
-  title: "Адрес доставки | SATL",
+  title: "Пункт выдачи | SATL",
 };
 
 export default async function AddressPage() {
@@ -16,14 +16,11 @@ export default async function AddressPage() {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
-      addressCountry: true,
-      addressRegion: true,
       addressCity: true,
-      addressStreet: true,
-      addressHouse: true,
-      addressApartment: true,
-      addressPostcode: true,
       addressComment: true,
+      pvzCode: true,
+      pvzAddress: true,
+      pvzName: true,
     },
   });
 
@@ -31,13 +28,10 @@ export default async function AddressPage() {
     <AccountShell active="address">
       <AddressClient
         initial={{
-          addressCountry: user?.addressCountry ?? "",
-          addressRegion: user?.addressRegion ?? "",
           addressCity: user?.addressCity ?? "",
-          addressStreet: user?.addressStreet ?? "",
-          addressHouse: user?.addressHouse ?? "",
-          addressApartment: user?.addressApartment ?? "",
-          addressPostcode: user?.addressPostcode ?? "",
+          pvzCode: user?.pvzCode ?? "",
+          pvzAddress: user?.pvzAddress ?? "",
+          pvzName: user?.pvzName ?? "",
           addressComment: user?.addressComment ?? "",
         }}
       />

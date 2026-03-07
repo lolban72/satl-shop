@@ -1,43 +1,135 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Title, Label, Input, PrimaryButton } from "../ui/Fields";
 
-type AddressState = {
-  addressCountry: string;
-  addressRegion: string;
+type PvzItem = {
+  code: string;
+  name?: string;
+  address: string;
+  city?: string;
+  workTime?: string;
+};
+
+type PickupState = {
   addressCity: string;
-  addressStreet: string;
-  addressHouse: string;
-  addressApartment: string;
-  addressPostcode: string;
+  pvzCode: string;
+  pvzAddress: string;
+  pvzName: string;
   addressComment: string;
 };
 
-export default function AddressClient({ initial }: { initial: AddressState }) {
-  const [s, setS] = useState<AddressState>(initial);
+export default function AddressClient({
+  initial,
+}: {
+  initial: PickupState;
+}) {
+  const [s, setS] = useState<PickupState>(initial);
 
+  const [loadingPvz, setLoadingPvz] = useState(false);
+  const [pvzList, setPvzList] = useState<PvzItem[]>([]);
   const [saving, setSaving] = useState(false);
+
   const [ok, setOk] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  function setField<K extends keyof AddressState>(key: K, value: string) {
+  function setField<K extends keyof PickupState>(key: K, value: string) {
     setS((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function loadPvz() {
+    const city = s.addressCity.trim();
+
+    setOk(null);
+    setErr(null);
+
+    if (!city) {
+      setErr("Введите город");
+      return;
+    }
+
+    setLoadingPvz(true);
+    setPvzList([]);
+
+    try {
+      // 🔁 Если у тебя другой route для ПВЗ — замени URL здесь
+      const res = await fetch(`/api/cdek/pvz?city=${encodeURIComponent(city)}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Не удалось загрузить пункты выдачи");
+      }
+
+      const items: PvzItem[] = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.items)
+        ? data.items
+        : [];
+
+      setPvzList(items);
+
+      if (!items.length) {
+        setErr("Пункты выдачи не найдены");
+      }
+    } catch (e: any) {
+      setErr(e?.message || "Ошибка загрузки ПВЗ");
+    } finally {
+      setLoadingPvz(false);
+    }
+  }
+
+  function selectPvz(pvz: PvzItem) {
+    setS((prev) => ({
+      ...prev,
+      pvzCode: pvz.code,
+      pvzAddress: pvz.address,
+      pvzName: pvz.name || "",
+      addressCity: pvz.city || prev.addressCity,
+    }));
+    setOk(null);
+    setErr(null);
   }
 
   async function save() {
     setSaving(true);
     setOk(null);
     setErr(null);
+
     try {
+      if (!s.addressCity.trim()) {
+        throw new Error("Укажите город");
+      }
+
+      if (!s.pvzCode.trim() || !s.pvzAddress.trim()) {
+        throw new Error("Выберите пункт выдачи");
+      }
+
+      const payload = {
+        deliveryType: "pickup",
+        addressCity: s.addressCity,
+        pvzCode: s.pvzCode,
+        pvzAddress: s.pvzAddress,
+        pvzName: s.pvzName,
+        addressComment: s.addressComment,
+      };
+
       const res = await fetch("/api/account/address", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(s),
+        body: JSON.stringify(payload),
       });
+
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Не удалось сохранить");
-      setOk("Сохранено ✅");
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Не удалось сохранить");
+      }
+
+      setOk("Пункт выдачи сохранён ✅");
     } catch (e: any) {
       setErr(e?.message || "Ошибка");
     } finally {
@@ -45,59 +137,82 @@ export default function AddressClient({ initial }: { initial: AddressState }) {
     }
   }
 
+  const selectedLabel = useMemo(() => {
+    if (!s.pvzCode && !s.pvzAddress) return null;
+    return `${s.pvzCode}${s.pvzAddress ? ` — ${s.pvzAddress}` : ""}`;
+  }, [s.pvzCode, s.pvzAddress]);
+
   return (
     <div className="w-full">
-      <Title>Адрес доставки</Title>
+      <Title>Пункт выдачи</Title>
 
       <div className="mt-[20px] flex flex-col items-center gap-[14px] px-[14px] sm:px-0">
         <div className="w-full max-w-[330px] flex flex-col gap-[14px]">
           <label className="block w-full">
-            <Label>Страна</Label>
-            <Input value={s.addressCountry} onChange={(v) => setField("addressCountry", v)} />
-          </label>
-
-          <label className="block w-full">
-            <Label>Регион / Область</Label>
-            <Input value={s.addressRegion} onChange={(v) => setField("addressRegion", v)} />
-          </label>
-
-          <label className="block w-full">
             <Label>Город</Label>
-            <Input value={s.addressCity} onChange={(v) => setField("addressCity", v)} />
+            <Input
+              value={s.addressCity}
+              onChange={(v) => setField("addressCity", v)}
+            />
+          </label>
+
+          <PrimaryButton
+            type="button"
+            disabled={loadingPvz}
+            onClick={loadPvz}
+            className="h-[35px] w-full"
+          >
+            {loadingPvz ? "Загрузка..." : "Показать пункты выдачи"}
+          </PrimaryButton>
+
+          {pvzList.length > 0 ? (
+            <div className="flex flex-col gap-[8px]">
+              <Label>Выберите пункт выдачи</Label>
+
+              <div className="max-h-[260px] overflow-auto border border-black/15">
+                {pvzList.map((pvz) => {
+                  const active = s.pvzCode === pvz.code;
+
+                  return (
+                    <button
+                      key={pvz.code}
+                      type="button"
+                      onClick={() => selectPvz(pvz)}
+                      className={[
+                        "w-full border-b border-black/10 px-[10px] py-[10px] text-left transition",
+                        active ? "bg-black text-white" : "bg-white hover:bg-black/[0.04]",
+                      ].join(" ")}
+                    >
+                      <div className="text-[12px] font-semibold">
+                        {pvz.name || `ПВЗ ${pvz.code}`}
+                      </div>
+                      <div className="mt-[2px] text-[11px] opacity-80">
+                        {pvz.address}
+                      </div>
+                      {pvz.workTime ? (
+                        <div className="mt-[4px] text-[10px] opacity-70">
+                          {pvz.workTime}
+                        </div>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          <label className="block w-full">
+            <Label>Выбранный пункт</Label>
+            <input
+              value={selectedLabel || ""}
+              readOnly
+              className="h-[35px] w-full border border-black/15 bg-black/[0.03] px-[10px] font-semibold text-[12px] outline-none"
+              placeholder="Пункт выдачи не выбран"
+            />
           </label>
 
           <label className="block w-full">
-            <Label>Улица</Label>
-            <Input value={s.addressStreet} onChange={(v) => setField("addressStreet", v)} />
-          </label>
-
-          <div className="flex flex-col sm:flex-row w-full gap-[10px]">
-            <label className="block w-full sm:flex-1">
-              <Label>Дом</Label>
-              <input
-                value={s.addressHouse}
-                onChange={(e) => setField("addressHouse", e.target.value)}
-                className="h-[35px] w-full border border-black/15 px-[10px] font-semibold text-[12px] outline-none focus:border-black/40"
-              />
-            </label>
-
-            <label className="block w-full sm:flex-1">
-              <Label>Квартира</Label>
-              <input
-                value={s.addressApartment}
-                onChange={(e) => setField("addressApartment", e.target.value)}
-                className="h-[35px] w-full border border-black/15 px-[10px] font-semibold text-[12px] outline-none focus:border-black/40"
-              />
-            </label>
-          </div>
-
-          <label className="block w-full">
-            <Label>Индекс</Label>
-            <Input value={s.addressPostcode} onChange={(v) => setField("addressPostcode", v)} />
-          </label>
-
-          <label className="block w-full">
-            <Label>Комментарий курьеру</Label>
+            <Label>Комментарий</Label>
             <input
               value={s.addressComment}
               onChange={(e) => setField("addressComment", e.target.value)}
@@ -105,14 +220,13 @@ export default function AddressClient({ initial }: { initial: AddressState }) {
             />
           </label>
 
-          {/* ✅ Кнопка как "Выход" по размеру */}
           <div className="pt-[6px]">
             <PrimaryButton
               disabled={saving}
               onClick={save}
               className="h-[35px] w-full"
             >
-              {saving ? "Сохранение..." : "Сохранить"}
+              {saving ? "Сохранение..." : "Сохранить пункт выдачи"}
             </PrimaryButton>
           </div>
 
