@@ -2,6 +2,12 @@ import { prisma } from "@/lib/prisma";
 import { tgSendMessage, parseChatIds } from "@/lib/tg";
 import { getCdekClient } from "@/lib/cdek-client";
 
+const CDEK_ENV = String(process.env.CDEK_ENV ?? "TEST").toUpperCase();
+const CDEK_BASE_URL =
+  CDEK_ENV === "PROD"
+    ? "https://api.cdek.ru/v2"
+    : "https://api.edu.cdek.ru/v2";
+
 function b64urlDecodeToString(s: string) {
   s = s.replace(/-/g, "+").replace(/_/g, "/");
   const pad = s.length % 4;
@@ -45,6 +51,151 @@ function extractCdekError(err: any) {
     errors: err?.errors ?? null,
     cause: err?.cause ?? null,
   };
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function getCdekAccessToken() {
+  const clientId = process.env.CDEK_CLIENT_ID;
+  const clientSecret = process.env.CDEK_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error("CDEK_CLIENT_ID/CDEK_CLIENT_SECRET не заданы");
+  }
+
+  const form = new URLSearchParams();
+  form.set("grant_type", "client_credentials");
+  form.set("client_id", clientId);
+  form.set("client_secret", clientSecret);
+
+  const res = await fetch(`${CDEK_BASE_URL}/oauth/token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: form.toString(),
+    cache: "no-store",
+  });
+
+  const text = await res.text();
+  let data: any = null;
+
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = { raw: text };
+  }
+
+  if (!res.ok) {
+    throw new Error(
+      `CDEK auth failed: ${res.status} ${JSON.stringify(data)}`
+    );
+  }
+
+  const accessToken = String(data?.access_token ?? "").trim();
+  if (!accessToken) {
+    throw new Error(`CDEK auth: access_token not returned: ${text}`);
+  }
+
+  return accessToken;
+}
+
+function getEntity(raw: any) {
+  if (
+    raw?.entity &&
+    typeof raw.entity === "object" &&
+    !Array.isArray(raw.entity)
+  ) {
+    return raw.entity;
+  }
+
+  if (Array.isArray(raw?.entity) && raw.entity.length > 0) {
+    return raw.entity[0];
+  }
+
+  if (Array.isArray(raw?.entities) && raw.entities.length > 0) {
+    return raw.entities[0];
+  }
+
+  return null;
+}
+
+async function fetchCdekOrderByUuid(uuid: string) {
+  const token = await getCdekAccessToken();
+
+  const res = await fetch(`${CDEK_BASE_URL}/orders/${encodeURIComponent(uuid)}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: "no-store",
+  });
+
+  const text = await res.text();
+  let data: any = null;
+
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = { raw: text };
+  }
+
+  if (!res.ok) {
+    throw new Error(
+      `CDEK get order failed: ${res.status} ${JSON.stringify(data)}`
+    );
+  }
+
+  return data;
+}
+
+async function enrichCdekOrderAfterCreate(params: {
+  uuid: string | null;
+  cdekNumber: string | null;
+}) {
+  if (!params.uuid) {
+    return {
+      uuid: null,
+      cdekNumber: params.cdekNumber ?? null,
+      raw: null,
+    };
+  }
+
+  if (params.cdekNumber) {
+    return {
+      uuid: params.uuid,
+      cdekNumber: params.cdekNumber,
+      raw: null,
+    };
+  }
+
+  await sleep(3000);
+
+  try {
+    const raw = await fetchCdekOrderByUuid(params.uuid);
+    const entity = getEntity(raw);
+
+    const cdekNumber = String(entity?.cdek_number ?? entity?.number ?? "").trim();
+
+    return {
+      uuid: params.uuid,
+      cdekNumber: cdekNumber || null,
+      raw,
+    };
+  } catch (e) {
+    console.log(
+      "⚠️ CDEK delayed fetch after create failed:",
+      JSON.stringify(extractCdekError(e), null, 2)
+    );
+
+    return {
+      uuid: params.uuid,
+      cdekNumber: null,
+      raw: null,
+    };
+  }
 }
 
 async function registerCdekOrder(params: {
@@ -113,13 +264,19 @@ async function registerCdekOrder(params: {
 
   const entity = (created as any)?.entity ?? null;
 
-  const uuid = String(entity?.uuid ?? "").trim();
-  const cdekNumber = String(entity?.cdek_number ?? "").trim();
+  const uuid = String(entity?.uuid ?? "").trim() || null;
+  const cdekNumber = String(entity?.cdek_number ?? "").trim() || null;
+
+  const enriched = await enrichCdekOrderAfterCreate({
+    uuid,
+    cdekNumber,
+  });
 
   return {
-    uuid: uuid || null,
-    cdekNumber: cdekNumber || null,
+    uuid: enriched.uuid,
+    cdekNumber: enriched.cdekNumber,
     raw: created,
+    lookupRaw: enriched.raw,
   };
 }
 
