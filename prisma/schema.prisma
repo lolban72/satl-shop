@@ -27,6 +27,11 @@ model User {
   addressPostcode  String?
   addressComment   String?
 
+  // ✅ ПВЗ
+  pvzCode    String?
+  pvzAddress String?
+  pvzName    String?
+
   role String @default("user")
 
   // ✅ общий флаг подтверждения аккаунта
@@ -37,7 +42,7 @@ model User {
   tgChatId     String?   @unique
   tgUsername   String?
   tgLinkedAt   DateTime?
-  tgVerifiedAt DateTime? // оставил, если хочешь отдельно фиксировать "верификацию" через TG
+  tgVerifiedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -157,10 +162,10 @@ model Product {
   sizeChartImage  String?
   categoryId      String?
   category        Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  weightGr Int?   // вес товара в граммах
-  lengthCm Int?
-  widthCm  Int?
-  heightCm Int?
+  weightGr        Int?
+  lengthCm        Int?
+  widthCm         Int?
+  heightCm        Int?
 }
 
 model Variant {
@@ -198,13 +203,12 @@ model Order {
   phone   String
   address String
 
-
   pvzCode    String?
   pvzAddress String?
   pvzName    String?
   pvzCity    String?
 
-  cdekUuid      String?  // uuid заказа в СДЭК
+  cdekUuid      String?
   cdekStatus    String?
   cdekStatusAt  DateTime?
   deliveryPrice Int?
@@ -237,19 +241,19 @@ model PaymentDraft {
   address String
 
   itemsJson Json
-  total     Int // в копейках
+  total     Int
 
-  status String @default("PENDING") // PENDING | PAID | FAILED | CANCELED
-  trackNumber  String?
+  status      String @default("PENDING")
+  trackNumber String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   pvzCode       String?
   pvzAddress    String?
-  pvzName    String?
-  pvzCity    String?
-  deliveryPrice Int?   // копейки
+  pvzName       String?
+  pvzCity       String?
+  deliveryPrice Int?
   deliveryDays  Int?
 
   @@index([status])
