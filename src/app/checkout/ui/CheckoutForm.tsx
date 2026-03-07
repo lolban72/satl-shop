@@ -1,11 +1,9 @@
-// ✅ src/app/checkout/ui/CheckoutForm.tsx
 "use client";
 
 import { useMemo, useRef, useState } from "react";
 import { useCart } from "@/lib/cart-store";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import PvzPickerYmaps from "@/components/PvzPickerYmaps";
 
 export const metadata = {
   title: "Оформление заказа | SATL",
@@ -19,6 +17,14 @@ function clsx(...v: Array<string | false | null | undefined>) {
   return v.filter(Boolean).join(" ");
 }
 
+type PvzItem = {
+  code: string;
+  name?: string;
+  address: string;
+  city?: string;
+  workTime?: string;
+};
+
 export default function CheckoutForm(props: {
   initial: {
     name: string;
@@ -31,17 +37,25 @@ export default function CheckoutForm(props: {
   const router = useRouter();
   const { items } = useCart();
 
-  const itemsTotal = useMemo(() => items.reduce((s, i) => s + i.price * i.qty, 0), [items]);
-  const itemsCount = useMemo(() => items.reduce((s, i) => s + i.qty, 0), [items]);
+  const itemsTotal = useMemo(
+    () => items.reduce((s, i) => s + i.price * i.qty, 0),
+    [items]
+  );
+
+  const itemsCount = useMemo(
+    () => items.reduce((s, i) => s + i.qty, 0),
+    [items]
+  );
 
   const [name, setName] = useState(props.initial.name);
   const [phone, setPhone] = useState(props.initial.phone);
 
-  // ✅ тут храним адрес выбранного ПВЗ для submit
-  const [address, setAddress] = useState(props.initial.address);
-
+  const [address, setAddress] = useState(props.initial.address || "");
   const [city, setCity] = useState(props.initial.city ?? "");
-  const [pvz, setPvz] = useState<{ code: string; address: string } | null>(null);
+  const [pvz, setPvz] = useState<{ code: string; address: string; name?: string } | null>(null);
+
+  const [pvzList, setPvzList] = useState<PvzItem[]>([]);
+  const [pvzLoading, setPvzLoading] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -59,7 +73,68 @@ export default function CheckoutForm(props: {
 
   const deliveryAbortRef = useRef<AbortController | null>(null);
 
-  async function recalcDelivery(nextCity: string, nextPvz: { code: string; address: string } | null) {
+  async function loadPvz() {
+    const cityTrim = String(city ?? "").trim();
+
+    setErr(null);
+    setPvzList([]);
+    setPvz(null);
+    setAddress("");
+    setDelivery(null);
+
+    if (!cityTrim) {
+      setErr("Укажите город.");
+      return;
+    }
+
+    setPvzLoading(true);
+
+    try {
+      const res = await fetch(`/api/cdek/pvz?city=${encodeURIComponent(cityTrim)}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Не удалось загрузить пункты выдачи");
+      }
+
+      const raw = Array.isArray(data?.points)
+        ? data.points
+        : Array.isArray(data?.items)
+        ? data.items
+        : Array.isArray(data)
+        ? data
+        : [];
+
+      const normalized: PvzItem[] = raw
+        .map((x: any) => ({
+          code: String(x?.code ?? "").trim(),
+          name: String(x?.name ?? "ПВЗ").trim(),
+          address: String(x?.address ?? "").trim(),
+          city: String(x?.city ?? data?.city ?? cityTrim).trim(),
+          workTime: String(x?.workTime ?? "").trim(),
+        }))
+        .filter((x: { code: any; address: any; }) => x.code && x.address);
+
+      setPvzList(normalized);
+
+      if (!normalized.length) {
+        setErr("Пункты выдачи не найдены.");
+      }
+    } catch (e: any) {
+      setErr(e?.message || "Ошибка загрузки ПВЗ");
+    } finally {
+      setPvzLoading(false);
+    }
+  }
+
+  async function recalcDelivery(
+    nextCity: string,
+    nextPvz: { code: string; address: string } | null
+  ) {
     setErr(null);
     setDelivery(null);
 
@@ -71,6 +146,7 @@ export default function CheckoutForm(props: {
     deliveryAbortRef.current = ac;
 
     setDeliveryLoading(true);
+
     try {
       const res = await fetch("/api/cdek/calc", {
         method: "POST",
@@ -79,16 +155,24 @@ export default function CheckoutForm(props: {
         body: JSON.stringify({
           city: c,
           pvzCode: nextPvz.code,
-          items: items.map((i: any) => ({ productId: i.productId, qty: i.qty })),
+          items: items.map((i: any) => ({
+            productId: i.productId,
+            qty: i.qty,
+          })),
         }),
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Не удалось рассчитать доставку");
+      if (!res.ok) {
+        throw new Error(data?.error || "Не удалось рассчитать доставку");
+      }
 
       const best = data?.best;
       const priceRub = Number(best?.delivery_sum);
-      if (!Number.isFinite(priceRub)) throw new Error("СДЭК не вернул цену доставки");
+
+      if (!Number.isFinite(priceRub)) {
+        throw new Error("СДЭК не вернул цену доставки");
+      }
 
       const priceCents = Math.round(priceRub * 100);
 
@@ -109,6 +193,24 @@ export default function CheckoutForm(props: {
     }
   }
 
+  function selectPvz(item: PvzItem) {
+    const next = {
+      code: item.code,
+      address: item.address,
+      name: item.name || "ПВЗ",
+    };
+
+    setErr(null);
+    setPvz(next);
+    setAddress(item.address);
+    setCity(item.city || city);
+
+    recalcDelivery(item.city || city, {
+      code: item.code,
+      address: item.address,
+    });
+  }
+
   async function submit() {
     setErr(null);
 
@@ -118,13 +220,14 @@ export default function CheckoutForm(props: {
     if (!phone.trim()) return setErr("Укажите телефон.");
 
     const cityTrim = String(city ?? "").trim();
-    if (!cityTrim) return setErr("Выберите город из подсказок (в выборе ПВЗ).");
-    if (!pvz?.code || !pvz?.address) return setErr("Выберите ПВЗ СДЭК на карте.");
+    if (!cityTrim) return setErr("Укажите город.");
+    if (!pvz?.code || !pvz?.address) return setErr("Выберите пункт выдачи СДЭК.");
 
     if (deliveryLoading) return setErr("Считаем доставку... подождите.");
     if (!delivery) return setErr("Не удалось рассчитать доставку. Выберите ПВЗ ещё раз.");
 
     setLoading(true);
+
     try {
       const res = await fetch("/api/pay/draft", {
         method: "POST",
@@ -138,6 +241,7 @@ export default function CheckoutForm(props: {
           city: cityTrim,
           pvzCode: pvz.code,
           pvzAddress: pvz.address,
+          pvzName: pvz.name ?? null,
 
           deliveryPrice: delivery.priceCents,
           deliveryDays: delivery.daysMax ?? delivery.daysMin ?? null,
@@ -178,7 +282,9 @@ export default function CheckoutForm(props: {
     <div className="mx-auto max-w-[1440px] px-[65px] pt-[70px] pb-[140px] text-black bg-white">
       <div className="flex items-end justify-between">
         <div>
-          <div className="text-[26px] font-semibold tracking-[-0.02em]">Оформление</div>
+          <div className="text-[26px] font-semibold tracking-[-0.02em]">
+            Оформление
+          </div>
         </div>
 
         <button
@@ -192,26 +298,33 @@ export default function CheckoutForm(props: {
 
       {err ? (
         <div className="mt-[22px] border border-black/20 bg-white p-[14px] text-[12px] text-black">
-          <div className="font-semibold uppercase tracking-[0.08em] text-[10px] mb-[6px]">Ошибка</div>
+          <div className="font-semibold uppercase tracking-[0.08em] text-[10px] mb-[6px]">
+            Ошибка
+          </div>
           {err}
         </div>
       ) : null}
 
       <div className="mt-[36px] grid gap-[28px] lg:grid-cols-[1fr_420px] lg:items-start">
         <div className={clsx(card, "p-[18px] md:p-[22px]")}>
-          <div className="text-[18px] font-semibold tracking-[-0.01em]">Данные получателя</div>
+          <div className="text-[18px] font-semibold tracking-[-0.01em]">
+            Данные получателя
+          </div>
 
           {isTelegramNotLinked ? (
             <>
               <div className={clsx("mt-[12px]", hint)}>
-                Для оформления заказа нужно привязать телеграм — туда будут приходить уведомления
-                о заказе и восстановление пароля.
+                Для оформления заказа нужно привязать телеграм — туда будут
+                приходить уведомления о заказе и восстановление пароля.
               </div>
 
               <div className="mt-[18px] border border-black/20 p-[16px]">
-                <div className="text-[10px] uppercase tracking-[0.12em] text-black/55 mb-[6px]">Важно</div>
+                <div className="text-[10px] uppercase tracking-[0.12em] text-black/55 mb-[6px]">
+                  Важно
+                </div>
                 <div className="text-[12px] text-black/75">
-                  Перейдите в профиль и нажмите «Привязать телеграм». Это займёт 10–20 секунд.
+                  Перейдите в профиль и нажмите «Привязать телеграм». Это займёт
+                  10–20 секунд.
                 </div>
 
                 <button
@@ -248,45 +361,83 @@ export default function CheckoutForm(props: {
                   />
                 </label>
 
-                {/* DELIVERY */}
-                <div className="grid gap-[4px]">
-                  <span className={label}>Адрес пункт выдачи</span>
+                <div className="grid gap-[10px]">
+                  <span className={label}>Пункт выдачи СДЭК</span>
 
-                  <PvzPickerYmaps
-                    hideCityInput={false}
-                    autoLoad={false}
-                    onSelect={(p: { code: string; address: string; city: string }) => {
-                      setErr(null);
+                  <label className="grid gap-[4px]">
+                    <span className="text-[11px] text-black/55">Город</span>
+                    <input
+                      className={input}
+                      value={city}
+                      style={{ fontFamily: "Brygada" }}
+                      onChange={(e) => setCity(e.target.value)}
+                      placeholder="Например: Москва"
+                    />
+                  </label>
 
-                      const pickedCity = String(p?.city ?? "").trim();
-                      const next = {
-                        code: String(p?.code ?? "").trim(),
-                        address: String(p?.address ?? "").trim(),
-                      };
+                  <button
+                    type="button"
+                    onClick={loadPvz}
+                    disabled={pvzLoading || !city.trim()}
+                    className={btn}
+                  >
+                    {pvzLoading ? "Загружаем пункты выдачи..." : "Показать пункты выдачи"}
+                  </button>
 
-                      if (!pickedCity) {
-                        setErr("Не удалось определить город. Выберите город из подсказок ещё раз.");
-                        return;
-                      }
-                      if (!next.code || !next.address) {
-                        setErr("Не удалось прочитать выбранный ПВЗ (нет code/address)");
-                        return;
-                      }
+                  {pvzList.length > 0 ? (
+                    <div className="border border-black/10">
+                      <div className="max-h-[320px] overflow-auto">
+                        {pvzList.map((item) => {
+                          const active = pvz?.code === item.code;
 
-                      setCity(pickedCity);
-                      setPvz(next);
+                          return (
+                            <button
+                              key={item.code}
+                              type="button"
+                              onClick={() => selectPvz(item)}
+                              className={clsx(
+                                "w-full border-b border-black/10 px-[14px] py-[12px] text-left transition last:border-b-0",
+                                active
+                                  ? "bg-black text-white"
+                                  : "bg-white hover:bg-black/[0.03]"
+                              )}
+                            >
+                              <div className="text-[12px] font-semibold uppercase tracking-[0.04em]">
+                                {item.name || `ПВЗ ${item.code}`}
+                              </div>
 
-                      // ✅ сохраняем адрес для submit (на экране адрес уже показывается в поле компонента)
-                      setAddress(next.address);
+                              <div className="mt-[4px] text-[12px] leading-[1.45] opacity-80">
+                                {item.address}
+                              </div>
 
-                      recalcDelivery(pickedCity, next);
-                    }}
-                  />
+                              {item.workTime ? (
+                                <div className="mt-[6px] text-[10px] uppercase tracking-[0.08em] opacity-60">
+                                  {item.workTime}
+                                </div>
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <label className="grid gap-[4px]">
+                    <span className="text-[11px] text-black/55">Выбранный пункт</span>
+                    <textarea
+                      value={address}
+                      readOnly
+                      rows={3}
+                      style={{ fontFamily: "Brygada" }}
+                      className="w-full border border-black/15 px-[14px] py-[10px] text-[14px] outline-none bg-black/[0.03] resize-none leading-[1.45]"
+                      placeholder="Пункт выдачи не выбран"
+                    />
+                  </label>
                 </div>
               </div>
 
               <button
-                className={btn}
+                className={clsx(btn, "mt-[18px]")}
                 disabled={loading || items.length === 0 || deliveryLoading}
                 onClick={submit}
                 type="button"
@@ -312,11 +463,13 @@ export default function CheckoutForm(props: {
           )}
         </div>
 
-        {/* RIGHT */}
         <aside className={clsx(card, "p-[18px] lg:sticky lg:top-[110px]")}>
           <div className="flex items-end justify-between">
             <div className="text-[20px] font-semibold">Ваш заказ</div>
-            <div style={{ fontFamily: "Brygada" }} className="text-[12px] text-black/55">
+            <div
+              style={{ fontFamily: "Brygada" }}
+              className="text-[12px] text-black/55"
+            >
               {itemsCount} шт.
             </div>
           </div>
@@ -328,8 +481,10 @@ export default function CheckoutForm(props: {
               </div>
             ) : (
               items.map((i: any) => (
-                <div key={`${i.productId}-${i.variantId ?? "na"}`} className="flex gap-[12px]">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                <div
+                  key={`${i.productId}-${i.variantId ?? "na"}`}
+                  className="flex gap-[12px]"
+                >
                   <img
                     src={i.image ?? "https://picsum.photos/seed/cart/140/140"}
                     alt={i.title}
@@ -357,7 +512,10 @@ export default function CheckoutForm(props: {
                     </div>
                   </div>
 
-                  <div style={{ fontFamily: "Brygada" }} className="text-[12px] font-semibold whitespace-nowrap">
+                  <div
+                    style={{ fontFamily: "Brygada" }}
+                    className="text-[12px] font-semibold whitespace-nowrap"
+                  >
                     {moneyRub(i.price * i.qty)}
                   </div>
                 </div>
@@ -399,7 +557,10 @@ export default function CheckoutForm(props: {
 
             <div className="flex items-center justify-between">
               <span className="text-black/70">К оплате</span>
-              <span style={{ fontFamily: "Brygada" }} className="text-[16px] font-semibold text-black">
+              <span
+                style={{ fontFamily: "Brygada" }}
+                className="text-[16px] font-semibold text-black"
+              >
                 {moneyRub(payTotal)}
               </span>
             </div>
