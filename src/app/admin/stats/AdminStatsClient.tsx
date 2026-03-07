@@ -37,7 +37,7 @@ function Block({
 }) {
   return (
     <div className="rounded-3xl border border-black/15 bg-white p-5">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="text-[14px] font-semibold tracking-[-0.01em]">{title}</div>
         {actions}
       </div>
@@ -70,7 +70,9 @@ function Badge({
       : "bg-white text-black border-black/15";
 
   return (
-    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium ${cls}`}>
+    <span
+      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium ${cls}`}
+    >
       {children}
     </span>
   );
@@ -89,6 +91,24 @@ function MiniCard({
     <div className="rounded-3xl border border-black/15 bg-white p-5">
       <div className="text-[11px] uppercase tracking-[0.08em] text-black/45">{label}</div>
       <div className="mt-2 text-[28px] font-semibold tracking-[-0.03em]">{value}</div>
+      {hint ? <div className="mt-1 text-[12px] text-black/50">{hint}</div> : null}
+    </div>
+  );
+}
+
+function KpiTile({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: React.ReactNode;
+  hint?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-black/10 bg-black/[0.015] p-4">
+      <div className="text-[11px] uppercase tracking-[0.08em] text-black/45">{label}</div>
+      <div className="mt-2 text-[22px] font-semibold tracking-[-0.02em]">{value}</div>
       {hint ? <div className="mt-1 text-[12px] text-black/50">{hint}</div> : null}
     </div>
   );
@@ -149,7 +169,9 @@ export default function AdminStatsClient({
   topCanceled: ProductRow[];
 }) {
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"all" | "verified" | "unverified" | "telegram" | "no-telegram">("all");
+  const [filter, setFilter] = useState<
+    "all" | "verified" | "unverified" | "telegram" | "no-telegram"
+  >("all");
   const [sortBy, setSortBy] = useState<"newest" | "orders" | "revenue">("newest");
 
   const filteredUsers = useMemo(() => {
@@ -185,7 +207,17 @@ export default function AdminStatsClient({
     return rows;
   }, [users, query, filter, sortBy]);
 
-  const latestUsers = useMemo(() => users.slice(0, 10), [users]);
+  const latestUsers = useMemo(() => users.slice(0, 12), [users]);
+
+  const latest7 = useMemo(() => {
+    const since = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    return users.filter((u) => new Date(u.createdAt).getTime() >= since);
+  }, [users]);
+
+  const latest30 = useMemo(() => {
+    const since = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    return users.filter((u) => new Date(u.createdAt).getTime() >= since);
+  }, [users]);
 
   const verifiedPercent =
     summary.usersTotal > 0
@@ -199,6 +231,11 @@ export default function AdminStatsClient({
 
   const avgOrdersPerUser =
     summary.usersTotal > 0 ? (summary.ordersTotal / summary.usersTotal).toFixed(2) : "0";
+
+  const latest7Verified = latest7.filter((u) => u.isVerified).length;
+  const latest7Telegram = latest7.filter((u) => u.hasTelegram).length;
+  const latest30Verified = latest30.filter((u) => u.isVerified).length;
+  const latest30Telegram = latest30.filter((u) => u.hasTelegram).length;
 
   return (
     <div className="space-y-8">
@@ -218,7 +255,7 @@ export default function AdminStatsClient({
         <MiniCard label="Средний чек" value={rub(summary.avgCheck)} hint={`Доставленных: ${summary.ordersDelivered}`} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-6 xl:grid-cols-4">
         <Block title="Пользователи">
           <StatLine label="Всего" value={summary.usersTotal} />
           <StatLine label="Верифицированные" value={summary.verifiedUsers} />
@@ -255,56 +292,123 @@ export default function AdminStatsClient({
         </Block>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Block title="Последние зарегистрированные пользователи">
-          <div className="overflow-x-auto rounded-2xl border border-black/15">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-black/10 bg-black/[0.02]">
-                <tr className="[&>th]:px-4 [&>th]:py-3 [&>th]:font-semibold">
-                  <th>Пользователь</th>
-                  <th>Email</th>
-                  <th>Дата</th>
+      <Block title="Последние зарегистрированные пользователи">
+        <div className="grid gap-4 xl:grid-cols-4">
+          <KpiTile
+            label="Новые за 7 дней"
+            value={summary.users7}
+            hint={`Верифицировано: ${latest7Verified}, Telegram: ${latest7Telegram}`}
+          />
+          <KpiTile
+            label="Новые за 30 дней"
+            value={summary.users30}
+            hint={`Верифицировано: ${latest30Verified}, Telegram: ${latest30Telegram}`}
+          />
+          <KpiTile
+            label="Доля верификации среди новых"
+            value={
+              summary.users30 > 0
+                ? `${Math.round((latest30Verified / summary.users30) * 100)}%`
+                : "0%"
+            }
+            hint="За последние 30 дней"
+          />
+          <KpiTile
+            label="Доля Telegram среди новых"
+            value={
+              summary.users30 > 0
+                ? `${Math.round((latest30Telegram / summary.users30) * 100)}%`
+                : "0%"
+            }
+            hint="За последние 30 дней"
+          />
+        </div>
+
+        <div className="mt-5 overflow-x-auto rounded-2xl border border-black/15">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-black/10 bg-black/[0.02]">
+              <tr className="[&>th]:px-4 [&>th]:py-3 [&>th]:font-semibold">
+                <th>Пользователь</th>
+                <th>Email</th>
+                <th>Телефон</th>
+                <th>Статус</th>
+                <th>Telegram</th>
+                <th>Регистрация</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-black/10">
+              {latestUsers.map((u) => (
+                <tr key={u.id} className="[&>td]:px-4 [&>td]:py-3 align-top">
+                  <td className="font-medium whitespace-nowrap">{u.name}</td>
+                  <td>{u.email}</td>
+                  <td className="whitespace-nowrap">{u.phone}</td>
+                  <td>
+                    {u.isVerified ? (
+                      <Badge tone="green">Верифицирован</Badge>
+                    ) : (
+                      <Badge tone="gray">Не верифицирован</Badge>
+                    )}
+                  </td>
+                  <td>
+                    {u.hasTelegram ? (
+                      <Badge tone="green">Привязан</Badge>
+                    ) : (
+                      <Badge tone="gray">Нет</Badge>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap">{dt(u.createdAt)}</td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-black/10">
-                {latestUsers.map((u) => (
-                  <tr key={u.id} className="[&>td]:px-4 [&>td]:py-3 align-top">
-                    <td>
-                      <div className="font-medium">{u.name}</div>
-                      <div className="mt-1 flex flex-wrap gap-2">
-                        <Badge tone={u.isVerified ? "green" : "gray"}>
-                          {u.isVerified ? "Верифицирован" : "Не верифицирован"}
-                        </Badge>
-                        <Badge tone={u.hasTelegram ? "green" : "gray"}>
-                          {u.hasTelegram ? "Telegram привязан" : "Без Telegram"}
-                        </Badge>
-                      </div>
-                    </td>
-                    <td>{u.email}</td>
-                    <td className="whitespace-nowrap">{dt(u.createdAt)}</td>
-                  </tr>
-                ))}
+              ))}
 
-                {latestUsers.length === 0 && (
-                  <tr>
-                    <td colSpan={3} className="px-4 py-8 text-center text-black/50">
-                      Пользователей пока нет
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Block>
+              {latestUsers.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-black/50">
+                    Пользователей пока нет
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Block>
 
-        <Block title="Сводка по клиентской базе">
-          <StatLine label="Не верифицированные" value={summary.usersTotal - summary.verifiedUsers} />
-          <StatLine label="Без Telegram" value={summary.usersTotal - summary.telegramUsers} />
-          <StatLine label="Конверсия в верификацию" value={verifiedPercent} />
-          <StatLine label="Конверсия в Telegram" value={telegramPercent} />
-          <StatLine label="Среднее кол-во заказов на пользователя" value={avgOrdersPerUser} />
-        </Block>
-      </div>
+      <Block title="Сводка по клиентской базе">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <KpiTile
+            label="Не верифицированные"
+            value={summary.usersTotal - summary.verifiedUsers}
+            hint={`Доля: ${
+              summary.usersTotal > 0
+                ? `${Math.round(((summary.usersTotal - summary.verifiedUsers) / summary.usersTotal) * 100)}%`
+                : "0%"
+            }`}
+          />
+          <KpiTile
+            label="Без Telegram"
+            value={summary.usersTotal - summary.telegramUsers}
+            hint={`Доля: ${
+              summary.usersTotal > 0
+                ? `${Math.round(((summary.usersTotal - summary.telegramUsers) / summary.usersTotal) * 100)}%`
+                : "0%"
+            }`}
+          />
+          <KpiTile
+            label="Конверсия в верификацию"
+            value={verifiedPercent}
+            hint={`${summary.verifiedUsers} из ${summary.usersTotal}`}
+          />
+          <KpiTile
+            label="Конверсия в Telegram"
+            value={telegramPercent}
+            hint={`${summary.telegramUsers} из ${summary.usersTotal}`}
+          />
+          <KpiTile
+            label="Среднее заказов на пользователя"
+            value={avgOrdersPerUser}
+            hint={`Всего заказов: ${summary.ordersTotal}`}
+          />
+        </div>
+      </Block>
 
       <Block
         title="Пользователи сайта"
