@@ -1,7 +1,6 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import CheckoutForm from "./ui/CheckoutForm";
-import { redirect } from "next/navigation";
 
 export const metadata = {
   title: "Оформление заказа | SATL",
@@ -11,9 +10,6 @@ export default async function CheckoutPage() {
   const session = await auth();
   const userId = (session?.user as any)?.id as string | undefined;
 
-  // если оформление только для авторизованных
-  // if (!userId) redirect("/auth/login?next=/checkout");
-
   const defaults = userId
     ? await prisma.user
         .findUnique({
@@ -21,22 +17,34 @@ export default async function CheckoutPage() {
           select: {
             name: true,
             phone: true,
-            address: true,
             email: true,
-            tgChatId: true, // ✅ ДОБАВИЛИ
+            address: true,
+            addressCity: true,
+            tgChatId: true,
+            pvzCode: true,
+            pvzAddress: true,
+            pvzName: true,
           },
         })
         .then((user) => ({
           name: user?.name ?? user?.email ?? "",
           phone: user?.phone ?? "",
-          address: user?.address ?? "",
-          tgChatId: user?.tgChatId ?? null, // ✅ ДОБАВИЛИ
+          address: user?.pvzAddress ?? user?.address ?? "",
+          city: user?.addressCity ?? "",
+          tgChatId: user?.tgChatId ?? null,
+          pvzCode: user?.pvzCode ?? "",
+          pvzAddress: user?.pvzAddress ?? "",
+          pvzName: user?.pvzName ?? "",
         }))
     : {
         name: "",
         phone: "",
         address: "",
-        tgChatId: null, // ✅ ДОБАВИЛИ
+        city: "",
+        tgChatId: null,
+        pvzCode: "",
+        pvzAddress: "",
+        pvzName: "",
       };
 
   return <CheckoutForm initial={defaults} />;

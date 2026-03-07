@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useCart } from "@/lib/cart-store";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -25,6 +25,12 @@ type PvzItem = {
   workTime?: string;
 };
 
+type SelectedPvz = {
+  code: string;
+  address: string;
+  name?: string;
+};
+
 export default function CheckoutForm(props: {
   initial: {
     name: string;
@@ -32,6 +38,11 @@ export default function CheckoutForm(props: {
     address: string;
     tgChatId?: string | null;
     city?: string;
+
+    // ✅ добавили данные ПВЗ из профиля
+    pvzCode?: string | null;
+    pvzAddress?: string | null;
+    pvzName?: string | null;
   };
 }) {
   const router = useRouter();
@@ -50,9 +61,24 @@ export default function CheckoutForm(props: {
   const [name, setName] = useState(props.initial.name);
   const [phone, setPhone] = useState(props.initial.phone);
 
-  const [address, setAddress] = useState(props.initial.address || "");
-  const [city, setCity] = useState(props.initial.city ?? "");
-  const [pvz, setPvz] = useState<{ code: string; address: string; name?: string } | null>(null);
+  const initialCity = String(props.initial.city ?? "").trim();
+  const initialPvzCode = String(props.initial.pvzCode ?? "").trim();
+  const initialPvzAddress = String(props.initial.pvzAddress ?? props.initial.address ?? "").trim();
+  const initialPvzName = String(props.initial.pvzName ?? "").trim();
+
+  const [address, setAddress] = useState(initialPvzAddress);
+  const [city, setCity] = useState(initialCity);
+
+  // ✅ если ПВЗ уже сохранён в профиле — считаем его выбранным сразу
+  const [pvz, setPvz] = useState<SelectedPvz | null>(
+    initialPvzCode && initialPvzAddress
+      ? {
+          code: initialPvzCode,
+          address: initialPvzAddress,
+          name: initialPvzName || undefined,
+        }
+      : null
+  );
 
   const [pvzList, setPvzList] = useState<PvzItem[]>([]);
   const [pvzLoading, setPvzLoading] = useState(false);
@@ -78,8 +104,6 @@ export default function CheckoutForm(props: {
 
     setErr(null);
     setPvzList([]);
-    setPvz(null);
-    setAddress("");
     setDelivery(null);
 
     if (!cityTrim) {
@@ -200,15 +224,50 @@ export default function CheckoutForm(props: {
       name: item.name || "ПВЗ",
     };
 
+    const nextCity = String(item.city || city).trim();
+
     setErr(null);
     setPvz(next);
     setAddress(item.address);
-    setCity(item.city || city);
+    setCity(nextCity);
 
-    recalcDelivery(item.city || city, {
+    recalcDelivery(nextCity, {
       code: item.code,
       address: item.address,
     });
+  }
+
+  // ✅ если ПВЗ уже был сохранён в профиле — сразу считаем доставку
+  useEffect(() => {
+    if (!pvz?.code || !pvz?.address) return;
+    if (!city.trim()) return;
+    recalcDelivery(city, { code: pvz.code, address: pvz.address });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ✅ best effort: сохраняем ПВЗ из checkout в профиль
+  async function persistPickupToAccount() {
+    const cityTrim = String(city ?? "").trim();
+    if (!cityTrim) return;
+    if (!pvz?.code || !pvz?.address) return;
+
+    try {
+      await fetch("/api/account/address", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deliveryType: "pickup",
+          addressCity: cityTrim,
+          pvzCode: pvz.code,
+          pvzAddress: pvz.address,
+          pvzName: pvz.name ?? "",
+          addressComment: "",
+        }),
+      });
+    } catch {
+      // молча игнорируем — оформление заказа не должно ломаться,
+      // даже если профиль не обновился
+    }
   }
 
   async function submit() {
@@ -229,6 +288,9 @@ export default function CheckoutForm(props: {
     setLoading(true);
 
     try {
+      // ✅ сохраняем ПВЗ в профиль перед созданием draft
+      await persistPickupToAccount();
+
       const res = await fetch("/api/pay/draft", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
