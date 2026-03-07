@@ -14,6 +14,7 @@ function rub(cents: number) {
 function dt(v: string) {
   const d = new Date(v);
   return new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "Europe/Moscow",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
