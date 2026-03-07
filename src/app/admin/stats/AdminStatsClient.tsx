@@ -22,10 +22,6 @@ function dt(v: string) {
   }).format(d);
 }
 
-function clsx(...v: Array<string | false | null | undefined>) {
-  return v.filter(Boolean).join(" ");
-}
-
 function Block({
   title,
   actions,
@@ -38,7 +34,9 @@ function Block({
   return (
     <div className="rounded-3xl border border-black/15 bg-white p-5">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="text-[14px] font-semibold tracking-[-0.01em]">{title}</div>
+        <div className="text-[14px] font-semibold tracking-[-0.01em]">
+          {title}
+        </div>
         {actions}
       </div>
       <div className="mt-4">{children}</div>
@@ -89,8 +87,12 @@ function MiniCard({
 }) {
   return (
     <div className="rounded-3xl border border-black/15 bg-white p-5">
-      <div className="text-[11px] uppercase tracking-[0.08em] text-black/45">{label}</div>
-      <div className="mt-2 text-[28px] font-semibold tracking-[-0.03em]">{value}</div>
+      <div className="text-[11px] uppercase tracking-[0.08em] text-black/45">
+        {label}
+      </div>
+      <div className="mt-2 text-[28px] font-semibold tracking-[-0.03em]">
+        {value}
+      </div>
       {hint ? <div className="mt-1 text-[12px] text-black/50">{hint}</div> : null}
     </div>
   );
@@ -107,8 +109,12 @@ function KpiTile({
 }) {
   return (
     <div className="rounded-2xl border border-black/10 bg-black/[0.015] p-4">
-      <div className="text-[11px] uppercase tracking-[0.08em] text-black/45">{label}</div>
-      <div className="mt-2 text-[22px] font-semibold tracking-[-0.02em]">{value}</div>
+      <div className="text-[11px] uppercase tracking-[0.08em] text-black/45">
+        {label}
+      </div>
+      <div className="mt-2 text-[22px] font-semibold tracking-[-0.02em]">
+        {value}
+      </div>
       {hint ? <div className="mt-1 text-[12px] text-black/50">{hint}</div> : null}
     </div>
   );
@@ -120,7 +126,7 @@ type UserRow = {
   email: string;
   phone: string;
   isVerified: boolean;
-  hasTelegram: boolean;
+  newsletterEnabled: boolean;
   createdAt: string;
   ordersCount: number;
   deliveredCount: number;
@@ -142,7 +148,7 @@ export default function AdminStatsClient({
   summary: {
     usersTotal: number;
     verifiedUsers: number;
-    telegramUsers: number;
+    newsletterUsers: number;
     users7: number;
     users30: number;
     ordersTotal: number;
@@ -170,7 +176,7 @@ export default function AdminStatsClient({
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<
-    "all" | "verified" | "unverified" | "telegram" | "no-telegram"
+    "all" | "verified" | "unverified" | "newsletter" | "no-newsletter"
   >("all");
   const [sortBy, setSortBy] = useState<"newest" | "orders" | "revenue">("newest");
 
@@ -191,9 +197,9 @@ export default function AdminStatsClient({
           ? u.isVerified
           : filter === "unverified"
           ? !u.isVerified
-          : filter === "telegram"
-          ? u.hasTelegram
-          : !u.hasTelegram;
+          : filter === "newsletter"
+          ? u.newsletterEnabled
+          : !u.newsletterEnabled;
 
       return matchesQuery && matchesFilter;
     });
@@ -224,18 +230,18 @@ export default function AdminStatsClient({
       ? `${Math.round((summary.verifiedUsers / summary.usersTotal) * 100)}%`
       : "0%";
 
-  const telegramPercent =
+  const newsletterPercent =
     summary.usersTotal > 0
-      ? `${Math.round((summary.telegramUsers / summary.usersTotal) * 100)}%`
+      ? `${Math.round((summary.newsletterUsers / summary.usersTotal) * 100)}%`
       : "0%";
 
   const avgOrdersPerUser =
     summary.usersTotal > 0 ? (summary.ordersTotal / summary.usersTotal).toFixed(2) : "0";
 
   const latest7Verified = latest7.filter((u) => u.isVerified).length;
-  const latest7Telegram = latest7.filter((u) => u.hasTelegram).length;
+  const latest7Newsletter = latest7.filter((u) => u.newsletterEnabled).length;
   const latest30Verified = latest30.filter((u) => u.isVerified).length;
-  const latest30Telegram = latest30.filter((u) => u.hasTelegram).length;
+  const latest30Newsletter = latest30.filter((u) => u.newsletterEnabled).length;
 
   return (
     <div className="space-y-8">
@@ -249,17 +255,33 @@ export default function AdminStatsClient({
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MiniCard label="Пользователи" value={summary.usersTotal} hint={`Верифицировано: ${summary.verifiedUsers}`} />
-        <MiniCard label="Заказы" value={summary.ordersTotal} hint={`Новых: ${summary.ordersNew}`} />
-        <MiniCard label="Выручка" value={rub(summary.revenueAll)} hint={`За 30 дней: ${rub(summary.revenue30)}`} />
-        <MiniCard label="Средний чек" value={rub(summary.avgCheck)} hint={`Доставленных: ${summary.ordersDelivered}`} />
+        <MiniCard
+          label="Пользователи"
+          value={summary.usersTotal}
+          hint={`Верифицировано: ${summary.verifiedUsers}`}
+        />
+        <MiniCard
+          label="Заказы"
+          value={summary.ordersTotal}
+          hint={`Новых: ${summary.ordersNew}`}
+        />
+        <MiniCard
+          label="Выручка"
+          value={rub(summary.revenueAll)}
+          hint={`За 30 дней: ${rub(summary.revenue30)}`}
+        />
+        <MiniCard
+          label="Средний чек"
+          value={rub(summary.avgCheck)}
+          hint={`Доставленных: ${summary.ordersDelivered}`}
+        />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-4">
         <Block title="Пользователи">
           <StatLine label="Всего" value={summary.usersTotal} />
           <StatLine label="Верифицированные" value={summary.verifiedUsers} />
-          <StatLine label="С Telegram" value={summary.telegramUsers} />
+          <StatLine label="Подписаны на рассылку" value={summary.newsletterUsers} />
           <StatLine label="За 7 дней" value={summary.users7} />
           <StatLine label="За 30 дней" value={summary.users30} />
         </Block>
@@ -297,12 +319,12 @@ export default function AdminStatsClient({
           <KpiTile
             label="Новые за 7 дней"
             value={summary.users7}
-            hint={`Верифицировано: ${latest7Verified}, Telegram: ${latest7Telegram}`}
+            hint={`Верифицировано: ${latest7Verified}, Рассылка: ${latest7Newsletter}`}
           />
           <KpiTile
             label="Новые за 30 дней"
             value={summary.users30}
-            hint={`Верифицировано: ${latest30Verified}, Telegram: ${latest30Telegram}`}
+            hint={`Верифицировано: ${latest30Verified}, Рассылка: ${latest30Newsletter}`}
           />
           <KpiTile
             label="Доля верификации среди новых"
@@ -314,10 +336,10 @@ export default function AdminStatsClient({
             hint="За последние 30 дней"
           />
           <KpiTile
-            label="Доля Telegram среди новых"
+            label="Доля подписки на рассылку"
             value={
               summary.users30 > 0
-                ? `${Math.round((latest30Telegram / summary.users30) * 100)}%`
+                ? `${Math.round((latest30Newsletter / summary.users30) * 100)}%`
                 : "0%"
             }
             hint="За последние 30 дней"
@@ -332,7 +354,7 @@ export default function AdminStatsClient({
                 <th>Email</th>
                 <th>Телефон</th>
                 <th>Статус</th>
-                <th>Telegram</th>
+                <th>Рассылка</th>
                 <th>Регистрация</th>
               </tr>
             </thead>
@@ -350,8 +372,8 @@ export default function AdminStatsClient({
                     )}
                   </td>
                   <td>
-                    {u.hasTelegram ? (
-                      <Badge tone="green">Привязан</Badge>
+                    {u.newsletterEnabled ? (
+                      <Badge tone="green">Да</Badge>
                     ) : (
                       <Badge tone="gray">Нет</Badge>
                     )}
@@ -379,16 +401,20 @@ export default function AdminStatsClient({
             value={summary.usersTotal - summary.verifiedUsers}
             hint={`Доля: ${
               summary.usersTotal > 0
-                ? `${Math.round(((summary.usersTotal - summary.verifiedUsers) / summary.usersTotal) * 100)}%`
+                ? `${Math.round(
+                    ((summary.usersTotal - summary.verifiedUsers) / summary.usersTotal) * 100
+                  )}%`
                 : "0%"
             }`}
           />
           <KpiTile
-            label="Без Telegram"
-            value={summary.usersTotal - summary.telegramUsers}
+            label="Не подписаны на рассылку"
+            value={summary.usersTotal - summary.newsletterUsers}
             hint={`Доля: ${
               summary.usersTotal > 0
-                ? `${Math.round(((summary.usersTotal - summary.telegramUsers) / summary.usersTotal) * 100)}%`
+                ? `${Math.round(
+                    ((summary.usersTotal - summary.newsletterUsers) / summary.usersTotal) * 100
+                  )}%`
                 : "0%"
             }`}
           />
@@ -398,9 +424,9 @@ export default function AdminStatsClient({
             hint={`${summary.verifiedUsers} из ${summary.usersTotal}`}
           />
           <KpiTile
-            label="Конверсия в Telegram"
-            value={telegramPercent}
-            hint={`${summary.telegramUsers} из ${summary.usersTotal}`}
+            label="Конверсия в рассылку"
+            value={newsletterPercent}
+            hint={`${summary.newsletterUsers} из ${summary.usersTotal}`}
           />
           <KpiTile
             label="Среднее заказов на пользователя"
@@ -434,8 +460,8 @@ export default function AdminStatsClient({
             <option value="all">Все пользователи</option>
             <option value="verified">Только верифицированные</option>
             <option value="unverified">Только не верифицированные</option>
-            <option value="telegram">Только с Telegram</option>
-            <option value="no-telegram">Только без Telegram</option>
+            <option value="newsletter">Только с рассылкой</option>
+            <option value="no-newsletter">Только без рассылки</option>
           </select>
 
           <select
@@ -457,7 +483,7 @@ export default function AdminStatsClient({
                 <th>Email</th>
                 <th>Телефон</th>
                 <th>Статус</th>
-                <th>Telegram</th>
+                <th>Рассылка</th>
                 <th>Заказов</th>
                 <th>Доставлено</th>
                 <th>Сумма заказов</th>
@@ -478,15 +504,17 @@ export default function AdminStatsClient({
                     )}
                   </td>
                   <td>
-                    {u.hasTelegram ? (
-                      <Badge tone="green">Привязан</Badge>
+                    {u.newsletterEnabled ? (
+                      <Badge tone="green">Да</Badge>
                     ) : (
                       <Badge tone="gray">Нет</Badge>
                     )}
                   </td>
                   <td className="font-semibold">{u.ordersCount}</td>
                   <td className="font-semibold">{u.deliveredCount}</td>
-                  <td className="font-semibold whitespace-nowrap">{rub(u.ordersTotalSum)}</td>
+                  <td className="font-semibold whitespace-nowrap">
+                    {rub(u.ordersTotalSum)}
+                  </td>
                   <td className="whitespace-nowrap">{dt(u.createdAt)}</td>
                 </tr>
               ))}

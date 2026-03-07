@@ -16,7 +16,7 @@ export default async function AdminStatsPage() {
     canceledOrders,
     usersTotal,
     verifiedUsers,
-    telegramUsers,
+    newsletterUsers,
     users7,
     users30,
     users,
@@ -44,7 +44,7 @@ export default async function AdminStatsPage() {
     }),
     prisma.user.count(),
     prisma.user.count({ where: { isVerified: true } }),
-    prisma.user.count({ where: { tgChatId: { not: null } } }),
+    prisma.user.count({ where: { newsletterEnabled: true } }),
     prisma.user.count({
       where: {
         createdAt: { gte: d7 },
@@ -64,7 +64,7 @@ export default async function AdminStatsPage() {
         email: true,
         phone: true,
         isVerified: true,
-        tgChatId: true,
+        newsletterEnabled: true,
         createdAt: true,
         orders: {
           select: {
@@ -179,7 +179,7 @@ export default async function AdminStatsPage() {
       email: u.email,
       phone: u.phone || "—",
       isVerified: u.isVerified,
-      hasTelegram: !!u.tgChatId,
+      newsletterEnabled: u.newsletterEnabled,
       createdAt: u.createdAt.toISOString(),
       ordersCount: u.orders.length,
       deliveredCount: deliveredOnly.length,
@@ -192,7 +192,7 @@ export default async function AdminStatsPage() {
       summary={{
         usersTotal,
         verifiedUsers,
-        telegramUsers,
+        newsletterUsers,
         users7,
         users30,
         ordersTotal,
