@@ -38,10 +38,6 @@ async function getToken(): Promise<string> {
   return data.access_token;
 }
 
-/**
- * Универсальный запрос к CDEK API (GET/POST/etc).
- * Всегда JSON, всегда Bearer token.
- */
 async function cdekFetchJson(path: string, init?: RequestInit) {
   const token = await getToken();
 
@@ -62,31 +58,68 @@ async function cdekFetchJson(path: string, init?: RequestInit) {
   return data;
 }
 
-// Город -> city_code
 export async function cdekResolveCityCode(city: string): Promise<number> {
   const q = encodeURIComponent(city);
   const data = await cdekFetchJson(
     `/v2/location/cities?city=${q}&size=1&country_codes=RU`,
     { method: "GET" }
   );
+
   const first = Array.isArray(data) ? data[0] : data?.[0];
   const code = first?.code;
+
   if (!code) throw new Error(`CDEK city not found: ${city}`);
   return Number(code);
 }
 
-// ПВЗ по коду города
-export async function cdekDeliveryPoints(cityCode: number) {
-  return await cdekFetchJson(
-    `/v2/deliverypoints?city_code=${cityCode}&type=PVZ`,
+export async function cdekSuggestCities(query: string) {
+  const q = String(query || "").trim();
+  if (!q) return [];
+
+  const data = await cdekFetchJson(
+    `/v2/location/cities?city=${encodeURIComponent(q)}&size=20&country_codes=RU`,
     { method: "GET" }
   );
+
+  const arr = Array.isArray(data) ? data : [];
+
+  return arr.map((x: any) => ({
+    code: Number(x?.code),
+    city: String(x?.city ?? "").trim(),
+    region: String(x?.region ?? "").trim(),
+    country: String(x?.country ?? "").trim(),
+    full: [
+      String(x?.city ?? "").trim(),
+      String(x?.region ?? "").trim(),
+      String(x?.country ?? "").trim(),
+    ]
+      .filter(Boolean)
+      .join(", "),
+  }));
 }
 
-/**
- * Калькулятор: список доступных тарифов (цена/сроки).
- * POST /v2/calculator/tarifflist
- */
+export async function cdekDeliveryPoints(cityCode: number) {
+  const all: any[] = [];
+  const size = 500;
+
+  for (let page = 0; page < 20; page++) {
+    const data = await cdekFetchJson(
+      `/v2/deliverypoints?city_code=${cityCode}&type=PVZ&page=${page}&size=${size}`,
+      { method: "GET" }
+    );
+
+    const chunk = Array.isArray(data) ? data : [];
+
+    if (!chunk.length) break;
+
+    all.push(...chunk);
+
+    if (chunk.length < size) break;
+  }
+
+  return all;
+}
+
 export async function cdekTariffList(payload: any) {
   return await cdekFetchJson(`/v2/calculator/tarifflist`, {
     method: "POST",

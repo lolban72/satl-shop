@@ -31,6 +31,14 @@ type SelectedPvz = {
   name?: string;
 };
 
+type CitySuggest = {
+  code: number;
+  city: string;
+  region?: string;
+  country?: string;
+  full: string;
+};
+
 export default function CheckoutForm(props: {
   initial: {
     name: string;
@@ -38,8 +46,6 @@ export default function CheckoutForm(props: {
     address: string;
     tgChatId?: string | null;
     city?: string;
-
-    // ✅ добавили данные ПВЗ из профиля
     pvzCode?: string | null;
     pvzAddress?: string | null;
     pvzName?: string | null;
@@ -63,13 +69,18 @@ export default function CheckoutForm(props: {
 
   const initialCity = String(props.initial.city ?? "").trim();
   const initialPvzCode = String(props.initial.pvzCode ?? "").trim();
-  const initialPvzAddress = String(props.initial.pvzAddress ?? props.initial.address ?? "").trim();
+  const initialPvzAddress = String(
+    props.initial.pvzAddress ?? props.initial.address ?? ""
+  ).trim();
   const initialPvzName = String(props.initial.pvzName ?? "").trim();
 
   const [address, setAddress] = useState(initialPvzAddress);
   const [city, setCity] = useState(initialCity);
+  const [cityQuery, setCityQuery] = useState(initialCity);
+  const [citySuggestions, setCitySuggestions] = useState<CitySuggest[]>([]);
+  const [citySuggestLoading, setCitySuggestLoading] = useState(false);
+  const [cityDropdownOpen, setCityDropdownOpen] = useState(false);
 
-  // ✅ если ПВЗ уже сохранён в профиле — считаем его выбранным сразу
   const [pvz, setPvz] = useState<SelectedPvz | null>(
     initialPvzCode && initialPvzAddress
       ? {
@@ -82,6 +93,7 @@ export default function CheckoutForm(props: {
 
   const [pvzList, setPvzList] = useState<PvzItem[]>([]);
   const [pvzLoading, setPvzLoading] = useState(false);
+  const [pvzQuery, setPvzQuery] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -98,13 +110,70 @@ export default function CheckoutForm(props: {
   const payTotal = itemsTotal + (delivery?.priceCents ?? 0);
 
   const deliveryAbortRef = useRef<AbortController | null>(null);
+  const cityAbortRef = useRef<AbortController | null>(null);
+  const cityBoxRef = useRef<HTMLDivElement | null>(null);
 
-  async function loadPvz() {
-    const cityTrim = String(city ?? "").trim();
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (!cityBoxRef.current) return;
+      if (!cityBoxRef.current.contains(e.target as Node)) {
+        setCityDropdownOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+
+  useEffect(() => {
+    const q = String(cityQuery || "").trim();
+
+    if (q.length < 2) {
+      setCitySuggestions([]);
+      setCitySuggestLoading(false);
+      return;
+    }
+
+    const t = setTimeout(async () => {
+      cityAbortRef.current?.abort();
+      const ac = new AbortController();
+      cityAbortRef.current = ac;
+
+      setCitySuggestLoading(true);
+
+      try {
+        const res = await fetch(`/api/cdek/cities?query=${encodeURIComponent(q)}`, {
+          method: "GET",
+          cache: "no-store",
+          signal: ac.signal,
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || "Не удалось загрузить города");
+
+        const items = Array.isArray(data?.items) ? data.items : [];
+        setCitySuggestions(items);
+        setCityDropdownOpen(true);
+      } catch (e: any) {
+        if (String(e?.name) === "AbortError") return;
+        setCitySuggestions([]);
+      } finally {
+        setCitySuggestLoading(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(t);
+  }, [cityQuery]);
+
+  async function loadPvz(nextCity?: string) {
+    const cityTrim = String(nextCity ?? city ?? "").trim();
 
     setErr(null);
     setPvzList([]);
+    setPvzQuery("");
     setDelivery(null);
+    setPvz(null);
+    setAddress("");
 
     if (!cityTrim) {
       setErr("Укажите город.");
@@ -141,7 +210,7 @@ export default function CheckoutForm(props: {
           city: String(x?.city ?? data?.city ?? cityTrim).trim(),
           workTime: String(x?.workTime ?? "").trim(),
         }))
-        .filter((x: { code: any; address: any; }) => x.code && x.address);
+        .filter((x: { code: string; address: string }) => x.code && x.address);
 
       setPvzList(normalized);
 
@@ -199,7 +268,6 @@ export default function CheckoutForm(props: {
       }
 
       const priceCents = Math.round(priceRub * 100);
-
       const dMin = best?.period_min != null ? Number(best.period_min) : null;
       const dMax = best?.period_max != null ? Number(best.period_max) : null;
 
@@ -230,6 +298,7 @@ export default function CheckoutForm(props: {
     setPvz(next);
     setAddress(item.address);
     setCity(nextCity);
+    setCityQuery(nextCity);
 
     recalcDelivery(nextCity, {
       code: item.code,
@@ -237,7 +306,6 @@ export default function CheckoutForm(props: {
     });
   }
 
-  // ✅ если ПВЗ уже был сохранён в профиле — сразу считаем доставку
   useEffect(() => {
     if (!pvz?.code || !pvz?.address) return;
     if (!city.trim()) return;
@@ -245,7 +313,6 @@ export default function CheckoutForm(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ best effort: сохраняем ПВЗ из checkout в профиль
   async function persistPickupToAccount() {
     const cityTrim = String(city ?? "").trim();
     if (!cityTrim) return;
@@ -264,10 +331,7 @@ export default function CheckoutForm(props: {
           addressComment: "",
         }),
       });
-    } catch {
-      // молча игнорируем — оформление заказа не должно ломаться,
-      // даже если профиль не обновился
-    }
+    } catch {}
   }
 
   async function submit() {
@@ -288,7 +352,6 @@ export default function CheckoutForm(props: {
     setLoading(true);
 
     try {
-      // ✅ сохраняем ПВЗ в профиль перед созданием draft
       await persistPickupToAccount();
 
       const res = await fetch("/api/pay/draft", {
@@ -297,17 +360,13 @@ export default function CheckoutForm(props: {
         body: JSON.stringify({
           name: name.trim(),
           phone: phone.trim(),
-
           address: pvz.address,
-
           city: cityTrim,
           pvzCode: pvz.code,
           pvzAddress: pvz.address,
           pvzName: pvz.name ?? null,
-
           deliveryPrice: delivery.priceCents,
           deliveryDays: delivery.daysMax ?? delivery.daysMin ?? null,
-
           items: items.map((i: any) => ({
             productId: i.productId,
             variantId: i.variantId ?? null,
@@ -331,6 +390,26 @@ export default function CheckoutForm(props: {
       setLoading(false);
     }
   }
+
+  const filteredPvz = useMemo(() => {
+    const q = String(pvzQuery || "").trim().toLowerCase();
+    if (!q) return pvzList;
+
+    return pvzList.filter((item) => {
+      const hay = [
+        item.code,
+        item.name,
+        item.address,
+        item.city,
+        item.workTime,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return hay.includes(q);
+    });
+  }, [pvzList, pvzQuery]);
 
   const card = "border border-black/10 bg-white";
   const input =
@@ -426,20 +505,61 @@ export default function CheckoutForm(props: {
                 <div className="grid gap-[10px]">
                   <span className={label}>Пункт выдачи СДЭК</span>
 
-                  <label className="grid gap-[4px]">
+                  <div className="grid gap-[4px]" ref={cityBoxRef}>
                     <span className="text-[11px] text-black/55">Город</span>
-                    <input
-                      className={input}
-                      value={city}
-                      style={{ fontFamily: "Brygada" }}
-                      onChange={(e) => setCity(e.target.value)}
-                      placeholder="Например: Москва"
-                    />
-                  </label>
+                    <div className="relative">
+                      <input
+                        className={input}
+                        value={cityQuery}
+                        style={{ fontFamily: "Brygada" }}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setCityQuery(v);
+                          setCity(v);
+                          setCityDropdownOpen(true);
+                        }}
+                        onFocus={() => {
+                          if (citySuggestions.length > 0) setCityDropdownOpen(true);
+                        }}
+                        placeholder="Начните вводить город"
+                      />
+
+                      {cityDropdownOpen && (citySuggestions.length > 0 || citySuggestLoading) ? (
+                        <div className="absolute z-20 mt-[6px] w-full border border-black/10 bg-white shadow-sm max-h-[260px] overflow-auto">
+                          {citySuggestLoading ? (
+                            <div className="px-[14px] py-[12px] text-[12px] text-black/55">
+                              Ищем города...
+                            </div>
+                          ) : (
+                            citySuggestions.map((item) => (
+                              <button
+                                key={`${item.code}-${item.city}`}
+                                type="button"
+                                onClick={() => {
+                                  setCity(item.city);
+                                  setCityQuery(item.city);
+                                  setCityDropdownOpen(false);
+                                  loadPvz(item.city);
+                                }}
+                                className="block w-full border-b border-black/10 px-[14px] py-[12px] text-left last:border-b-0 hover:bg-black/[0.03]"
+                              >
+                                <div className="text-[12px] font-semibold">
+                                  {item.city}
+                                </div>
+                                <div className="mt-[2px] text-[11px] text-black/55">
+                                  {item.full}
+                                </div>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
 
                   <button
                     type="button"
-                    onClick={loadPvz}
+                    onClick={() => loadPvz()}
                     disabled={pvzLoading || !city.trim()}
                     className={btn}
                   >
@@ -447,41 +567,62 @@ export default function CheckoutForm(props: {
                   </button>
 
                   {pvzList.length > 0 ? (
-                    <div className="border border-black/10">
-                      <div className="max-h-[320px] overflow-auto">
-                        {pvzList.map((item) => {
-                          const active = pvz?.code === item.code;
+                    <>
+                      <label className="grid gap-[4px]">
+                        <span className="text-[11px] text-black/55">
+                          Поиск ПВЗ по улице, дому, адресу или коду
+                        </span>
+                        <input
+                          className={input}
+                          value={pvzQuery}
+                          style={{ fontFamily: "Brygada" }}
+                          onChange={(e) => setPvzQuery(e.target.value)}
+                          placeholder="Например: Карнацевича 6"
+                        />
+                      </label>
 
-                          return (
-                            <button
-                              key={item.code}
-                              type="button"
-                              onClick={() => selectPvz(item)}
-                              className={clsx(
-                                "w-full border-b border-black/10 px-[14px] py-[12px] text-left transition last:border-b-0",
-                                active
-                                  ? "bg-black text-white"
-                                  : "bg-white hover:bg-black/[0.03]"
-                              )}
-                            >
-                              <div className="text-[12px] font-semibold uppercase tracking-[0.04em]">
-                                {item.name || `ПВЗ ${item.code}`}
-                              </div>
+                      <div className="border border-black/10">
+                        <div className="max-h-[320px] overflow-auto">
+                          {filteredPvz.length > 0 ? (
+                            filteredPvz.map((item) => {
+                              const active = pvz?.code === item.code;
 
-                              <div className="mt-[4px] text-[12px] leading-[1.45] opacity-80">
-                                {item.address}
-                              </div>
+                              return (
+                                <button
+                                  key={item.code}
+                                  type="button"
+                                  onClick={() => selectPvz(item)}
+                                  className={clsx(
+                                    "w-full border-b border-black/10 px-[14px] py-[12px] text-left transition last:border-b-0",
+                                    active
+                                      ? "bg-black text-white"
+                                      : "bg-white hover:bg-black/[0.03]"
+                                  )}
+                                >
+                                  <div className="text-[12px] font-semibold uppercase tracking-[0.04em]">
+                                    {item.name || `ПВЗ ${item.code}`}
+                                  </div>
 
-                              {item.workTime ? (
-                                <div className="mt-[6px] text-[10px] uppercase tracking-[0.08em] opacity-60">
-                                  {item.workTime}
-                                </div>
-                              ) : null}
-                            </button>
-                          );
-                        })}
+                                  <div className="mt-[4px] text-[12px] leading-[1.45] opacity-80">
+                                    {item.address}
+                                  </div>
+
+                                  {item.workTime ? (
+                                    <div className="mt-[6px] text-[10px] uppercase tracking-[0.08em] opacity-60">
+                                      {item.workTime}
+                                    </div>
+                                  ) : null}
+                                </button>
+                              );
+                            })
+                          ) : (
+                            <div className="px-[14px] py-[12px] text-[12px] text-black/55">
+                              Ничего не найдено. Попробуйте улицу, дом, часть адреса или код ПВЗ.
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    </>
                   ) : null}
 
                   <label className="grid gap-[4px]">
