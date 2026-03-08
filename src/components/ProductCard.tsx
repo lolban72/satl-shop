@@ -8,6 +8,7 @@ export default function ProductCard({
   imageUrl,
   isSoon = false,
   discountPercent = 0,
+  isSoldOut = false,
 }: {
   slug: string;
   title: string;
@@ -16,6 +17,7 @@ export default function ProductCard({
   imageUrl?: string | null;
   isSoon?: boolean;
   discountPercent?: number; // ✅ только для плашки, на цену НЕ влияет
+  isSoldOut?: boolean; // ✅ нет товара в наличии
 }) {
   const Wrapper: any = isSoon ? "div" : Link;
   const wrapperProps = isSoon ? {} : { href: `/product/${slug}` };
@@ -111,6 +113,33 @@ export default function ProductCard({
             draggable={false}
           />
         </div>
+
+        {/* ===== SOLD OUT OVERLAY ===== */}
+        {isSoldOut && !isSoon && (
+          <div className="absolute inset-0 z-20">
+            <div
+              className="
+                absolute inset-0
+                rounded-[24px] sm:rounded-[34px] md:rounded-[50px]
+                bg-black/18 backdrop-blur-[20px] md:backdrop-blur-[24px]
+              "
+            />
+            <div className="absolute inset-0 grid place-items-center">
+              <div
+                className="text-[24px] sm:text-[30px] md:text-[46px] tracking-[0.08em] text-white uppercase"
+                style={{
+                  fontFamily: "Montserrat",
+                  fontWeight: 800,
+                  fontSynthesis: "none",
+                  textShadow: "0 6px 12px rgba(0,0,0,0.55)",
+                  WebkitTextStroke: "1.5px rgba(255,255,255,0.95)",
+                }}
+              >
+                Sold out
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ===== СКОРО OVERLAY ===== */}
         {isSoon && (

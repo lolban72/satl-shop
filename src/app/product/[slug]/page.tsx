@@ -27,6 +27,14 @@ function calcPayPrice(basePrice: number, discountPrice?: number | null) {
   return base;
 }
 
+// ✅ есть ли товар в наличии
+function hasStock(
+  variants: Array<{ stock: number | null }> | null | undefined
+): boolean {
+  if (!Array.isArray(variants) || variants.length === 0) return false;
+  return variants.some((v) => Number(v?.stock ?? 0) > 0);
+}
+
 // ✅ Динамический title/description для каждой карточки товара
 export async function generateMetadata({
   params,
@@ -103,10 +111,16 @@ export default async function ProductPage({
   // ✅ плашку скидки показываем только если есть discountPrice
   const hasDiscount = Boolean(oldPrice);
 
+  // ✅ есть ли товар в наличии
+  const isSoldOut = !hasStock(product.variants);
+
   const products = await prisma.product.findMany({
     where: { id: { not: product.id } },
     orderBy: { createdAt: "desc" },
     take: 24,
+    include: {
+      variants: { select: { id: true, stock: true } },
+    },
   });
 
   return (
@@ -161,7 +175,7 @@ export default async function ProductPage({
           </div>
 
           {/* DISCOUNT (плашка) */}
-          {product.discountPercent > 0 && (
+          {product.discountPercent > 0 && hasDiscount && (
             <div className="text-[14px] md:text-[20px] font-bold text-[#B60404] mt-[-5px]">
               <span
                 style={{ fontFamily: "Yeast" }}
@@ -178,17 +192,26 @@ export default async function ProductPage({
             </div>
           )}
 
-          {/* SIZES + BUTTON */}
-          <div className="mt-[14px] md:mt-[18px]">
-            <AddToCart
-              productId={product.id}
-              title={product.title}
-              price={payPrice} // ✅ цена к оплате
-              image={product.images?.[0]}
-              variants={product.variants}
-              sizeChartImage={(product as any).sizeChartImage}
-            />
-          </div>
+          {/* SOLD OUT */}
+          {isSoldOut ? (
+            <div
+              className="mt-[14px] md:mt-[18px] h-[52px] md:h-[56px] w-full border border-black bg-black text-white flex items-center justify-center text-[14px] md:text-[16px] uppercase tracking-[0.12em]"
+              style={{ fontFamily: "Yeast" }}
+            >
+              Sold out
+            </div>
+          ) : (
+            <div className="mt-[14px] md:mt-[18px]">
+              <AddToCart
+                productId={product.id}
+                title={product.title}
+                price={payPrice}
+                image={product.images?.[0]}
+                variants={product.variants}
+                sizeChartImage={(product as any).sizeChartImage}
+              />
+            </div>
+          )}
 
           {/* DESCRIPTION */}
           {product.description && (
@@ -213,17 +236,28 @@ export default async function ProductPage({
             md:grid-cols-2 xl:grid-cols-3
           "
         >
-          {products.map((p) => (
-            <ProductCard
-              key={p.id}
-              slug={p.slug}
-              title={p.title}
-              price={p.price} // ⚠️ карточку тоже нужно будет править (использовать discountPrice). Если пришлёшь ProductCard — вставлю.
-              imageUrl={p.images?.[0] ?? null}
-              isSoon={p.isSoon}
-              discountPercent={p.discountPercent ?? 0} // ⚠️ можно оставить, но лучше тоже перейти на discountPrice
-            />
-          ))}
+          {products.map((p) => {
+            const discountPrice = (p as any).discountPrice as
+              | number
+              | null
+              | undefined;
+
+            const isSoldOutCard = !hasStock(p.variants);
+
+            return (
+              <ProductCard
+                key={p.id}
+                slug={p.slug}
+                title={p.title}
+                price={p.price}
+                discountPrice={discountPrice ?? null}
+                imageUrl={p.images?.[0] ?? null}
+                isSoon={p.isSoon}
+                discountPercent={p.discountPercent ?? 0}
+                isSoldOut={isSoldOutCard}
+              />
+            );
+          })}
         </div>
       </section>
     </div>

@@ -8,6 +8,13 @@ export const metadata = {
     "Интернет-магазин одежды SATL. Новые коллекции, лимитированные релизы.",
 };
 
+function hasStock(
+  variants: Array<{ stock: number | null }> | null | undefined
+): boolean {
+  if (!Array.isArray(variants) || variants.length === 0) return false;
+  return variants.some((v) => Number(v?.stock ?? 0) > 0);
+}
+
 export default async function HomePage() {
   const banner = await prisma.heroBanner.findFirst({
     orderBy: { createdAt: "asc" },
@@ -68,16 +75,19 @@ export default async function HomePage() {
                         | null
                         | undefined;
 
+                      const isSoldOut = !hasStock(p.variants);
+
                       return (
                         <ProductCard
                           key={p.id}
                           slug={p.slug}
                           title={p.title}
-                          price={p.price} // ✅ цена БЕЗ скидки (для зачёркнутой)
-                          discountPrice={discountPrice ?? null} // ✅ цена СО скидкой (для открытой)
+                          price={p.price}
+                          discountPrice={discountPrice ?? null}
                           imageUrl={p.images?.[0] ?? null}
                           isSoon={p.isSoon}
-                          discountPercent={p.discountPercent ?? 0} // ✅ только плашка, на цену НЕ влияет
+                          discountPercent={p.discountPercent ?? 0}
+                          isSoldOut={isSoldOut}
                         />
                       );
                     })}
