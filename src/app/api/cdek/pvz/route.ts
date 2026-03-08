@@ -30,7 +30,9 @@ export async function GET(req: Request) {
 
     const points = await cdekDeliveryPoints(cityCode);
 
-    const normalized = (Array.isArray(points) ? points : [])
+    const rawPoints = Array.isArray(points) ? points : [];
+
+    const normalized = rawPoints
       .map((p: any) => ({
         code: String(p?.code ?? "").trim(),
         name: String(p?.name ?? "ПВЗ").trim(),
@@ -38,6 +40,7 @@ export async function GET(req: Request) {
         lat: Number(p?.location?.latitude),
         lon: Number(p?.location?.longitude),
         workTime: String(p?.work_time ?? "").trim(),
+        type: String(p?.type ?? "").trim(),
         phones: Array.isArray(p?.phones)
           ? p.phones
               .map((x: any) => String(x?.number ?? "").trim())
@@ -46,13 +49,22 @@ export async function GET(req: Request) {
       }))
       .filter((x: any) => x.code && x.address);
 
+    // 🔎 диагностика конкретного ПВЗ
+    const testPvz = normalized.find(
+      (x) =>
+        x.code.toUpperCase() === "KSD68" ||
+        x.address.toLowerCase().includes("жигуленко")
+    );
+
     console.log(
-      "📦 /api/cdek/pvz:",
+      "📦 PVZ DEBUG:",
       JSON.stringify({
         city,
         cityCode,
-        rawPoints: Array.isArray(points) ? points.length : 0,
+        rawPoints: rawPoints.length,
         normalizedPoints: normalized.length,
+        foundKSD68: Boolean(testPvz),
+        pvzSample: testPvz || null,
       })
     );
 
