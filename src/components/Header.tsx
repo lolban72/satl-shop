@@ -99,7 +99,7 @@ export default async function Header({ className = "" }: { className?: string })
             <img
               src="/logo.svg"
               alt="SATL"
-              className="h-[40px] w-auto"
+              className="h-[30px] w-auto"
             />
           </Link>
 
