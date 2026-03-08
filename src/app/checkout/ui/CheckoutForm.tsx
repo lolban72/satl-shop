@@ -23,6 +23,7 @@ type PvzItem = {
   address: string;
   city?: string;
   workTime?: string;
+  type?: string;
 };
 
 type SelectedPvz = {
@@ -38,8 +39,6 @@ export default function CheckoutForm(props: {
     address: string;
     tgChatId?: string | null;
     city?: string;
-
-    // ✅ добавили данные ПВЗ из профиля
     pvzCode?: string | null;
     pvzAddress?: string | null;
     pvzName?: string | null;
@@ -63,13 +62,14 @@ export default function CheckoutForm(props: {
 
   const initialCity = String(props.initial.city ?? "").trim();
   const initialPvzCode = String(props.initial.pvzCode ?? "").trim();
-  const initialPvzAddress = String(props.initial.pvzAddress ?? props.initial.address ?? "").trim();
+  const initialPvzAddress = String(
+    props.initial.pvzAddress ?? props.initial.address ?? ""
+  ).trim();
   const initialPvzName = String(props.initial.pvzName ?? "").trim();
 
   const [address, setAddress] = useState(initialPvzAddress);
   const [city, setCity] = useState(initialCity);
 
-  // ✅ если ПВЗ уже сохранён в профиле — считаем его выбранным сразу
   const [pvz, setPvz] = useState<SelectedPvz | null>(
     initialPvzCode && initialPvzAddress
       ? {
@@ -82,6 +82,7 @@ export default function CheckoutForm(props: {
 
   const [pvzList, setPvzList] = useState<PvzItem[]>([]);
   const [pvzLoading, setPvzLoading] = useState(false);
+  const [pvzQuery, setPvzQuery] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -99,12 +100,15 @@ export default function CheckoutForm(props: {
 
   const deliveryAbortRef = useRef<AbortController | null>(null);
 
-  async function loadPvz() {
-    const cityTrim = String(city ?? "").trim();
+  async function loadPvz(nextCity?: string) {
+    const cityTrim = String(nextCity ?? city ?? "").trim();
 
     setErr(null);
     setPvzList([]);
+    setPvzQuery("");
     setDelivery(null);
+    setPvz(null);
+    setAddress("");
 
     if (!cityTrim) {
       setErr("Укажите город.");
@@ -122,6 +126,16 @@ export default function CheckoutForm(props: {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
+        const rawError = String(data?.error || "").toLowerCase();
+
+        if (
+          rawError.includes("city not found") ||
+          rawError.includes("город не найден") ||
+          rawError.includes("city or citycode required")
+        ) {
+          throw new Error("Город введен неверно");
+        }
+
         throw new Error(data?.error || "Не удалось загрузить пункты выдачи");
       }
 
@@ -140,8 +154,9 @@ export default function CheckoutForm(props: {
           address: String(x?.address ?? "").trim(),
           city: String(x?.city ?? data?.city ?? cityTrim).trim(),
           workTime: String(x?.workTime ?? "").trim(),
+          type: String(x?.type ?? "").trim(),
         }))
-        .filter((x: { code: any; address: any; }) => x.code && x.address);
+        .filter((x: { code: string; address: string }) => x.code && x.address);
 
       setPvzList(normalized);
 
@@ -149,7 +164,15 @@ export default function CheckoutForm(props: {
         setErr("Пункты выдачи не найдены.");
       }
     } catch (e: any) {
-      setErr(e?.message || "Ошибка загрузки ПВЗ");
+      const msg = String(e?.message || "Ошибка загрузки ПВЗ");
+      if (
+        msg.toLowerCase().includes("city not found") ||
+        msg.toLowerCase().includes("город не найден")
+      ) {
+        setErr("Город введен неверно");
+      } else {
+        setErr(msg);
+      }
     } finally {
       setPvzLoading(false);
     }
@@ -199,7 +222,6 @@ export default function CheckoutForm(props: {
       }
 
       const priceCents = Math.round(priceRub * 100);
-
       const dMin = best?.period_min != null ? Number(best.period_min) : null;
       const dMax = best?.period_max != null ? Number(best.period_max) : null;
 
@@ -237,7 +259,6 @@ export default function CheckoutForm(props: {
     });
   }
 
-  // ✅ если ПВЗ уже был сохранён в профиле — сразу считаем доставку
   useEffect(() => {
     if (!pvz?.code || !pvz?.address) return;
     if (!city.trim()) return;
@@ -245,7 +266,6 @@ export default function CheckoutForm(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ best effort: сохраняем ПВЗ из checkout в профиль
   async function persistPickupToAccount() {
     const cityTrim = String(city ?? "").trim();
     if (!cityTrim) return;
@@ -265,30 +285,37 @@ export default function CheckoutForm(props: {
         }),
       });
     } catch {
-      // молча игнорируем — оформление заказа не должно ломаться,
-      // даже если профиль не обновился
+      // ignore
     }
   }
 
   async function submit() {
     setErr(null);
 
-    if (isTelegramNotLinked) return setErr("Привяжите Telegram перед оформлением заказа.");
+    if (isTelegramNotLinked) {
+      return setErr("Привяжите Telegram перед оформлением заказа.");
+    }
+
     if (items.length === 0) return setErr("Корзина пуста.");
     if (!name.trim()) return setErr("Укажите имя.");
     if (!phone.trim()) return setErr("Укажите телефон.");
 
     const cityTrim = String(city ?? "").trim();
     if (!cityTrim) return setErr("Укажите город.");
-    if (!pvz?.code || !pvz?.address) return setErr("Выберите пункт выдачи СДЭК.");
+    if (!pvz?.code || !pvz?.address) {
+      return setErr("Выберите пункт выдачи СДЭК.");
+    }
 
     if (deliveryLoading) return setErr("Считаем доставку... подождите.");
-    if (!delivery) return setErr("Не удалось рассчитать доставку. Выберите ПВЗ ещё раз.");
+    if (!delivery) {
+      return setErr(
+        "Не удалось рассчитать доставку. Выберите ПВЗ ещё раз."
+      );
+    }
 
     setLoading(true);
 
     try {
-      // ✅ сохраняем ПВЗ в профиль перед созданием draft
       await persistPickupToAccount();
 
       const res = await fetch("/api/pay/draft", {
@@ -297,17 +324,13 @@ export default function CheckoutForm(props: {
         body: JSON.stringify({
           name: name.trim(),
           phone: phone.trim(),
-
           address: pvz.address,
-
           city: cityTrim,
           pvzCode: pvz.code,
           pvzAddress: pvz.address,
           pvzName: pvz.name ?? null,
-
           deliveryPrice: delivery.priceCents,
           deliveryDays: delivery.daysMax ?? delivery.daysMin ?? null,
-
           items: items.map((i: any) => ({
             productId: i.productId,
             variantId: i.variantId ?? null,
@@ -319,7 +342,9 @@ export default function CheckoutForm(props: {
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error || "Не удалось начать оплату");
+      if (!res.ok) {
+        throw new Error(data?.error || "Не удалось начать оплату");
+      }
 
       const draftId = String(data?.draftId || "");
       if (!draftId) throw new Error("Не удалось получить draftId");
@@ -331,6 +356,27 @@ export default function CheckoutForm(props: {
       setLoading(false);
     }
   }
+
+  const filteredPvz = useMemo(() => {
+    const q = String(pvzQuery || "").trim().toLowerCase();
+    if (!q) return pvzList;
+
+    return pvzList.filter((item) => {
+      const hay = [
+        item.code,
+        item.name,
+        item.address,
+        item.city,
+        item.workTime,
+        item.type,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return hay.includes(q);
+    });
+  }, [pvzList, pvzQuery]);
 
   const card = "border border-black/10 bg-white";
   const input =
@@ -432,66 +478,106 @@ export default function CheckoutForm(props: {
                       className={input}
                       value={city}
                       style={{ fontFamily: "Brygada" }}
-                      onChange={(e) => setCity(e.target.value)}
-                      placeholder="Например: Москва"
+                      onChange={(e) => {
+                        setCity(e.target.value);
+                        setPvzList([]);
+                        setPvzQuery("");
+                        setPvz(null);
+                        setAddress("");
+                        setDelivery(null);
+                        setErr(null);
+                      }}
+                      placeholder="Например: Краснодар"
                     />
                   </label>
 
                   <button
                     type="button"
-                    onClick={loadPvz}
+                    onClick={() => loadPvz(city)}
                     disabled={pvzLoading || !city.trim()}
                     className={btn}
                   >
-                    {pvzLoading ? "Загружаем пункты выдачи..." : "Показать пункты выдачи"}
+                    {pvzLoading
+                      ? "Загружаем пункты выдачи..."
+                      : "Показать пункты выдачи"}
                   </button>
 
                   {pvzList.length > 0 ? (
-                    <div className="border border-black/10">
-                      <div className="max-h-[320px] overflow-auto">
-                        {pvzList.map((item) => {
-                          const active = pvz?.code === item.code;
+                    <>
+                      <label className="grid gap-[4px]">
+                        <span className="text-[11px] text-black/55">
+                          Поиск ПВЗ по улице, дому, адресу или коду
+                        </span>
+                        <input
+                          className={input}
+                          value={pvzQuery}
+                          style={{ fontFamily: "Brygada" }}
+                          onChange={(e) => setPvzQuery(e.target.value)}
+                          placeholder="Например: Жигуленко 30"
+                        />
+                      </label>
 
-                          return (
-                            <button
-                              key={item.code}
-                              type="button"
-                              onClick={() => selectPvz(item)}
-                              className={clsx(
-                                "w-full border-b border-black/10 px-[14px] py-[12px] text-left transition last:border-b-0",
-                                active
-                                  ? "bg-black text-white"
-                                  : "bg-white hover:bg-black/[0.03]"
-                              )}
-                            >
-                              <div className="text-[12px] font-semibold uppercase tracking-[0.04em]">
-                                {item.name || `ПВЗ ${item.code}`}
-                              </div>
+                      <div className="border border-black/10">
+                        <div className="max-h-[320px] overflow-auto">
+                          {filteredPvz.length > 0 ? (
+                            filteredPvz.map((item) => {
+                              const active = pvz?.code === item.code;
 
-                              <div className="mt-[4px] text-[12px] leading-[1.45] opacity-80">
-                                {item.address}
-                              </div>
+                              return (
+                                <button
+                                  key={item.code}
+                                  type="button"
+                                  onClick={() => selectPvz(item)}
+                                  className={clsx(
+                                    "w-full border-b border-black/10 px-[14px] py-[12px] text-left transition last:border-b-0",
+                                    active
+                                      ? "bg-black text-white"
+                                      : "bg-white hover:bg-black/[0.03]"
+                                  )}
+                                >
+                                  <div className="text-[12px] font-semibold uppercase tracking-[0.04em]">
+                                    {item.name || `ПВЗ ${item.code}`}
+                                  </div>
 
-                              {item.workTime ? (
-                                <div className="mt-[6px] text-[10px] uppercase tracking-[0.08em] opacity-60">
-                                  {item.workTime}
-                                </div>
-                              ) : null}
-                            </button>
-                          );
-                        })}
+                                  <div className="mt-[4px] text-[12px] leading-[1.45] opacity-80">
+                                    {item.address}
+                                  </div>
+
+                                  {item.workTime ? (
+                                    <div className="mt-[6px] text-[10px] uppercase tracking-[0.08em] opacity-60">
+                                      {item.workTime}
+                                    </div>
+                                  ) : null}
+
+                                  {item.type ? (
+                                    <div className="mt-[4px] text-[10px] uppercase tracking-[0.08em] opacity-60">
+                                      {item.type}
+                                    </div>
+                                  ) : null}
+                                </button>
+                              );
+                            })
+                          ) : (
+                            <div className="px-[14px] py-[12px] text-[12px] text-black/55">
+                              Ничего не найдено. Попробуйте улицу, дом, часть
+                              адреса или код ПВЗ.
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    </>
                   ) : null}
 
                   <label className="grid gap-[4px]">
-                    <span className="text-[11px] text-black/55">Выбранный пункт</span>
+                    <span className="text-[11px] text-black/55">
+                      Выбранный пункт
+                    </span>
                     <textarea
                       value={address}
                       readOnly
                       rows={3}
                       style={{ fontFamily: "Brygada" }}
-                      className="w-full border border-black/15 px-[14px] py-[10px] text-[14px] outline-none bg-black/[0.03] resize-none leading-[1.45]"
+                      className="w-full resize-none border border-black/15 bg-black/[0.03] px-[14px] py-[10px] text-[14px] leading-[1.45] outline-none"
                       placeholder="Пункт выдачи не выбран"
                     />
                   </label>
@@ -511,7 +597,7 @@ export default function CheckoutForm(props: {
                   : "Перейти к оплате"}
               </button>
 
-              <div className="text-[11px] italic leading-[1.25] text-black/45 mt-[6px]">
+              <div className="mt-[6px] text-[11px] italic leading-[1.25] text-black/45">
                 Нажимая кнопку, вы соглашаетесь с{" "}
                 <Link
                   href="https://satl.shop/docs/public-offer"
@@ -550,7 +636,7 @@ export default function CheckoutForm(props: {
                   <img
                     src={i.image ?? "https://picsum.photos/seed/cart/140/140"}
                     alt={i.title}
-                    className="h-[70px] w-[70px] object-cover border border-black/10"
+                    className="h-[70px] w-[70px] border border-black/10 object-cover"
                     draggable={false}
                   />
 
@@ -570,13 +656,15 @@ export default function CheckoutForm(props: {
                       <span aria-hidden="true">•</span>
                       <span>Кол-во: {i.qty}</span>
                       <span aria-hidden="true">•</span>
-                      <span>Размер: {i.size ? String(i.size).toUpperCase() : "—"}</span>
+                      <span>
+                        Размер: {i.size ? String(i.size).toUpperCase() : "—"}
+                      </span>
                     </div>
                   </div>
 
                   <div
                     style={{ fontFamily: "Brygada" }}
-                    className="text-[12px] font-semibold whitespace-nowrap"
+                    className="whitespace-nowrap text-[12px] font-semibold"
                   >
                     {moneyRub(i.price * i.qty)}
                   </div>
@@ -585,7 +673,7 @@ export default function CheckoutForm(props: {
             )}
           </div>
 
-          <div className="h-[1px] bg-black/10 my-[16px]" />
+          <div className="my-[16px] h-[1px] bg-black/10" />
 
           <div className="space-y-[10px] text-[12px] text-black/65">
             <div className="flex items-center justify-between">
@@ -598,24 +686,32 @@ export default function CheckoutForm(props: {
             <div className="flex items-center justify-between">
               <span>Доставка</span>
               {deliveryLoading ? (
-                <span style={{ fontFamily: "Brygada" }} className="text-black/45">
+                <span
+                  style={{ fontFamily: "Brygada" }}
+                  className="text-black/45"
+                >
                   Считаем...
                 </span>
               ) : delivery ? (
                 <span style={{ fontFamily: "Brygada" }} className="text-black">
                   {moneyRub(delivery.priceCents)}
                   {delivery.daysMin || delivery.daysMax
-                    ? ` (${delivery.daysMin ?? "?"}-${delivery.daysMax ?? "?"} дн.)`
+                    ? ` (${delivery.daysMin ?? "?"}-${
+                        delivery.daysMax ?? "?"
+                      } дн.)`
                     : ""}
                 </span>
               ) : (
-                <span style={{ fontFamily: "Brygada" }} className="text-black/45">
+                <span
+                  style={{ fontFamily: "Brygada" }}
+                  className="text-black/45"
+                >
                   Выберите ПВЗ
                 </span>
               )}
             </div>
 
-            <div className="h-[1px] bg-black/10 my-[12px]" />
+            <div className="my-[12px] h-[1px] bg-black/10" />
 
             <div className="flex items-center justify-between">
               <span className="text-black/70">К оплате</span>
