@@ -31,14 +31,6 @@ type SelectedPvz = {
   name?: string;
 };
 
-type CitySuggest = {
-  code: number;
-  city: string;
-  region?: string;
-  country?: string;
-  full: string;
-};
-
 export default function CheckoutForm(props: {
   initial: {
     name: string;
@@ -46,6 +38,8 @@ export default function CheckoutForm(props: {
     address: string;
     tgChatId?: string | null;
     city?: string;
+
+    // ✅ добавили данные ПВЗ из профиля
     pvzCode?: string | null;
     pvzAddress?: string | null;
     pvzName?: string | null;
@@ -69,20 +63,13 @@ export default function CheckoutForm(props: {
 
   const initialCity = String(props.initial.city ?? "").trim();
   const initialPvzCode = String(props.initial.pvzCode ?? "").trim();
-  const initialPvzAddress = String(
-    props.initial.pvzAddress ?? props.initial.address ?? ""
-  ).trim();
+  const initialPvzAddress = String(props.initial.pvzAddress ?? props.initial.address ?? "").trim();
   const initialPvzName = String(props.initial.pvzName ?? "").trim();
 
   const [address, setAddress] = useState(initialPvzAddress);
   const [city, setCity] = useState(initialCity);
-  const [cityQuery, setCityQuery] = useState(initialCity);
-  const [selectedCityCode, setSelectedCityCode] = useState<number | null>(null);
 
-  const [citySuggestions, setCitySuggestions] = useState<CitySuggest[]>([]);
-  const [citySuggestLoading, setCitySuggestLoading] = useState(false);
-  const [cityDropdownOpen, setCityDropdownOpen] = useState(false);
-
+  // ✅ если ПВЗ уже сохранён в профиле — считаем его выбранным сразу
   const [pvz, setPvz] = useState<SelectedPvz | null>(
     initialPvzCode && initialPvzAddress
       ? {
@@ -95,7 +82,6 @@ export default function CheckoutForm(props: {
 
   const [pvzList, setPvzList] = useState<PvzItem[]>([]);
   const [pvzLoading, setPvzLoading] = useState(false);
-  const [pvzQuery, setPvzQuery] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -112,77 +98,13 @@ export default function CheckoutForm(props: {
   const payTotal = itemsTotal + (delivery?.priceCents ?? 0);
 
   const deliveryAbortRef = useRef<AbortController | null>(null);
-  const cityAbortRef = useRef<AbortController | null>(null);
-  const cityBoxRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
-    function onDocClick(e: MouseEvent) {
-      if (!cityBoxRef.current) return;
-      if (!cityBoxRef.current.contains(e.target as Node)) {
-        setCityDropdownOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, []);
-
-  useEffect(() => {
-    const q = String(cityQuery || "").trim();
-
-    if (q.length < 2) {
-      setCitySuggestions([]);
-      setCitySuggestLoading(false);
-      return;
-    }
-
-    const t = setTimeout(async () => {
-      cityAbortRef.current?.abort();
-      const ac = new AbortController();
-      cityAbortRef.current = ac;
-
-      setCitySuggestLoading(true);
-
-      try {
-        const res = await fetch(
-          `/api/cdek/cities?query=${encodeURIComponent(q)}`,
-          {
-            method: "GET",
-            cache: "no-store",
-            signal: ac.signal,
-          }
-        );
-
-        const data = await res.json().catch(() => ({}));
-
-        if (!res.ok) {
-          throw new Error(data?.error || "Не удалось загрузить города");
-        }
-
-        const list = Array.isArray(data?.items) ? data.items : [];
-        setCitySuggestions(list);
-        setCityDropdownOpen(true);
-      } catch (e: any) {
-        if (String(e?.name) === "AbortError") return;
-        setCitySuggestions([]);
-      } finally {
-        setCitySuggestLoading(false);
-      }
-    }, 250);
-
-    return () => clearTimeout(t);
-  }, [cityQuery]);
-
-  async function loadPvz(nextCity?: string, nextCityCode?: number | null) {
-    const cityTrim = String(nextCity ?? city ?? "").trim();
-    const cityCode = Number(nextCityCode ?? selectedCityCode ?? 0);
+  async function loadPvz() {
+    const cityTrim = String(city ?? "").trim();
 
     setErr(null);
     setPvzList([]);
-    setPvzQuery("");
     setDelivery(null);
-    setPvz(null);
-    setAddress("");
 
     if (!cityTrim) {
       setErr("Укажите город.");
@@ -192,16 +114,7 @@ export default function CheckoutForm(props: {
     setPvzLoading(true);
 
     try {
-      const qs = new URLSearchParams();
-
-      if (cityCode > 0) {
-        qs.set("cityCode", String(cityCode));
-        qs.set("city", cityTrim);
-      } else {
-        qs.set("city", cityTrim);
-      }
-
-      const res = await fetch(`/api/cdek/pvz?${qs.toString()}`, {
+      const res = await fetch(`/api/cdek/pvz?city=${encodeURIComponent(cityTrim)}`, {
         method: "GET",
         cache: "no-store",
       });
@@ -225,10 +138,10 @@ export default function CheckoutForm(props: {
           code: String(x?.code ?? "").trim(),
           name: String(x?.name ?? "ПВЗ").trim(),
           address: String(x?.address ?? "").trim(),
-          city: String(data?.city ?? cityTrim).trim(),
+          city: String(x?.city ?? data?.city ?? cityTrim).trim(),
           workTime: String(x?.workTime ?? "").trim(),
         }))
-        .filter((x: { code: string; address: string }) => x.code && x.address);
+        .filter((x: { code: any; address: any; }) => x.code && x.address);
 
       setPvzList(normalized);
 
@@ -286,6 +199,7 @@ export default function CheckoutForm(props: {
       }
 
       const priceCents = Math.round(priceRub * 100);
+
       const dMin = best?.period_min != null ? Number(best.period_min) : null;
       const dMax = best?.period_max != null ? Number(best.period_max) : null;
 
@@ -316,7 +230,6 @@ export default function CheckoutForm(props: {
     setPvz(next);
     setAddress(item.address);
     setCity(nextCity);
-    setCityQuery(nextCity);
 
     recalcDelivery(nextCity, {
       code: item.code,
@@ -324,6 +237,7 @@ export default function CheckoutForm(props: {
     });
   }
 
+  // ✅ если ПВЗ уже был сохранён в профиле — сразу считаем доставку
   useEffect(() => {
     if (!pvz?.code || !pvz?.address) return;
     if (!city.trim()) return;
@@ -331,6 +245,7 @@ export default function CheckoutForm(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ✅ best effort: сохраняем ПВЗ из checkout в профиль
   async function persistPickupToAccount() {
     const cityTrim = String(city ?? "").trim();
     if (!cityTrim) return;
@@ -350,37 +265,30 @@ export default function CheckoutForm(props: {
         }),
       });
     } catch {
-      // ignore
+      // молча игнорируем — оформление заказа не должно ломаться,
+      // даже если профиль не обновился
     }
   }
 
   async function submit() {
     setErr(null);
 
-    if (isTelegramNotLinked) {
-      return setErr("Привяжите Telegram перед оформлением заказа.");
-    }
-
+    if (isTelegramNotLinked) return setErr("Привяжите Telegram перед оформлением заказа.");
     if (items.length === 0) return setErr("Корзина пуста.");
     if (!name.trim()) return setErr("Укажите имя.");
     if (!phone.trim()) return setErr("Укажите телефон.");
 
     const cityTrim = String(city ?? "").trim();
     if (!cityTrim) return setErr("Укажите город.");
-    if (!pvz?.code || !pvz?.address) {
-      return setErr("Выберите пункт выдачи СДЭК.");
-    }
+    if (!pvz?.code || !pvz?.address) return setErr("Выберите пункт выдачи СДЭК.");
 
     if (deliveryLoading) return setErr("Считаем доставку... подождите.");
-    if (!delivery) {
-      return setErr(
-        "Не удалось рассчитать доставку. Выберите ПВЗ ещё раз."
-      );
-    }
+    if (!delivery) return setErr("Не удалось рассчитать доставку. Выберите ПВЗ ещё раз.");
 
     setLoading(true);
 
     try {
+      // ✅ сохраняем ПВЗ в профиль перед созданием draft
       await persistPickupToAccount();
 
       const res = await fetch("/api/pay/draft", {
@@ -389,13 +297,17 @@ export default function CheckoutForm(props: {
         body: JSON.stringify({
           name: name.trim(),
           phone: phone.trim(),
+
           address: pvz.address,
+
           city: cityTrim,
           pvzCode: pvz.code,
           pvzAddress: pvz.address,
           pvzName: pvz.name ?? null,
+
           deliveryPrice: delivery.priceCents,
           deliveryDays: delivery.daysMax ?? delivery.daysMin ?? null,
+
           items: items.map((i: any) => ({
             productId: i.productId,
             variantId: i.variantId ?? null,
@@ -407,9 +319,7 @@ export default function CheckoutForm(props: {
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data?.error || "Не удалось начать оплату");
-      }
+      if (!res.ok) throw new Error(data?.error || "Не удалось начать оплату");
 
       const draftId = String(data?.draftId || "");
       if (!draftId) throw new Error("Не удалось получить draftId");
@@ -421,26 +331,6 @@ export default function CheckoutForm(props: {
       setLoading(false);
     }
   }
-
-  const filteredPvz = useMemo(() => {
-    const q = String(pvzQuery || "").trim().toLowerCase();
-    if (!q) return pvzList;
-
-    return pvzList.filter((item) => {
-      const hay = [
-        item.code,
-        item.name,
-        item.address,
-        item.city,
-        item.workTime,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return hay.includes(q);
-    });
-  }, [pvzList, pvzQuery]);
 
   const card = "border border-black/10 bg-white";
   const input =
@@ -536,145 +426,72 @@ export default function CheckoutForm(props: {
                 <div className="grid gap-[10px]">
                   <span className={label}>Пункт выдачи СДЭК</span>
 
-                  <div className="grid gap-[4px]" ref={cityBoxRef}>
+                  <label className="grid gap-[4px]">
                     <span className="text-[11px] text-black/55">Город</span>
-
-                    <div className="relative">
-                      <input
-                        className={input}
-                        value={cityQuery}
-                        style={{ fontFamily: "Brygada" }}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setCityQuery(v);
-                          setCity(v);
-                          setSelectedCityCode(null);
-                          setCityDropdownOpen(true);
-                        }}
-                        onFocus={() => {
-                          if (citySuggestions.length > 0) {
-                            setCityDropdownOpen(true);
-                          }
-                        }}
-                        placeholder="Начните вводить город"
-                      />
-
-                      {cityDropdownOpen &&
-                      (citySuggestions.length > 0 || citySuggestLoading) ? (
-                        <div className="absolute z-20 mt-[6px] w-full max-h-[260px] overflow-auto border border-black/10 bg-white shadow-sm">
-                          {citySuggestLoading ? (
-                            <div className="px-[14px] py-[12px] text-[12px] text-black/55">
-                              Ищем города...
-                            </div>
-                          ) : (
-                            citySuggestions.map((item) => (
-                              <button
-                                key={`${item.code}-${item.city}`}
-                                type="button"
-                                onClick={() => {
-                                  setCity(item.city);
-                                  setCityQuery(item.city);
-                                  setSelectedCityCode(item.code);
-                                  setCityDropdownOpen(false);
-                                  loadPvz(item.city, item.code);
-                                }}
-                                className="block w-full border-b border-black/10 px-[14px] py-[12px] text-left last:border-b-0 hover:bg-black/[0.03]"
-                              >
-                                <div className="text-[12px] font-semibold">
-                                  {item.city}
-                                </div>
-                                <div className="mt-[2px] text-[11px] text-black/55">
-                                  {item.full}
-                                </div>
-                              </button>
-                            ))
-                          )}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
+                    <input
+                      className={input}
+                      value={city}
+                      style={{ fontFamily: "Brygada" }}
+                      onChange={(e) => setCity(e.target.value)}
+                      placeholder="Например: Москва"
+                    />
+                  </label>
 
                   <button
                     type="button"
-                    onClick={() => loadPvz(city, selectedCityCode)}
+                    onClick={loadPvz}
                     disabled={pvzLoading || !city.trim()}
                     className={btn}
                   >
-                    {pvzLoading
-                      ? "Загружаем пункты выдачи..."
-                      : "Показать пункты выдачи"}
+                    {pvzLoading ? "Загружаем пункты выдачи..." : "Показать пункты выдачи"}
                   </button>
 
                   {pvzList.length > 0 ? (
-                    <>
-                      <label className="grid gap-[4px]">
-                        <span className="text-[11px] text-black/55">
-                          Поиск ПВЗ по улице, дому, адресу или коду
-                        </span>
-                        <input
-                          className={input}
-                          value={pvzQuery}
-                          style={{ fontFamily: "Brygada" }}
-                          onChange={(e) => setPvzQuery(e.target.value)}
-                          placeholder="Например: Карнацевича 6"
-                        />
-                      </label>
+                    <div className="border border-black/10">
+                      <div className="max-h-[320px] overflow-auto">
+                        {pvzList.map((item) => {
+                          const active = pvz?.code === item.code;
 
-                      <div className="border border-black/10">
-                        <div className="max-h-[320px] overflow-auto">
-                          {filteredPvz.length > 0 ? (
-                            filteredPvz.map((item) => {
-                              const active = pvz?.code === item.code;
+                          return (
+                            <button
+                              key={item.code}
+                              type="button"
+                              onClick={() => selectPvz(item)}
+                              className={clsx(
+                                "w-full border-b border-black/10 px-[14px] py-[12px] text-left transition last:border-b-0",
+                                active
+                                  ? "bg-black text-white"
+                                  : "bg-white hover:bg-black/[0.03]"
+                              )}
+                            >
+                              <div className="text-[12px] font-semibold uppercase tracking-[0.04em]">
+                                {item.name || `ПВЗ ${item.code}`}
+                              </div>
 
-                              return (
-                                <button
-                                  key={item.code}
-                                  type="button"
-                                  onClick={() => selectPvz(item)}
-                                  className={clsx(
-                                    "w-full border-b border-black/10 px-[14px] py-[12px] text-left transition last:border-b-0",
-                                    active
-                                      ? "bg-black text-white"
-                                      : "bg-white hover:bg-black/[0.03]"
-                                  )}
-                                >
-                                  <div className="text-[12px] font-semibold uppercase tracking-[0.04em]">
-                                    {item.name || `ПВЗ ${item.code}`}
-                                  </div>
+                              <div className="mt-[4px] text-[12px] leading-[1.45] opacity-80">
+                                {item.address}
+                              </div>
 
-                                  <div className="mt-[4px] text-[12px] leading-[1.45] opacity-80">
-                                    {item.address}
-                                  </div>
-
-                                  {item.workTime ? (
-                                    <div className="mt-[6px] text-[10px] uppercase tracking-[0.08em] opacity-60">
-                                      {item.workTime}
-                                    </div>
-                                  ) : null}
-                                </button>
-                              );
-                            })
-                          ) : (
-                            <div className="px-[14px] py-[12px] text-[12px] text-black/55">
-                              Ничего не найдено. Попробуйте улицу, дом, часть
-                              адреса или код ПВЗ.
-                            </div>
-                          )}
-                        </div>
+                              {item.workTime ? (
+                                <div className="mt-[6px] text-[10px] uppercase tracking-[0.08em] opacity-60">
+                                  {item.workTime}
+                                </div>
+                              ) : null}
+                            </button>
+                          );
+                        })}
                       </div>
-                    </>
+                    </div>
                   ) : null}
 
                   <label className="grid gap-[4px]">
-                    <span className="text-[11px] text-black/55">
-                      Выбранный пункт
-                    </span>
+                    <span className="text-[11px] text-black/55">Выбранный пункт</span>
                     <textarea
                       value={address}
                       readOnly
                       rows={3}
                       style={{ fontFamily: "Brygada" }}
-                      className="w-full resize-none border border-black/15 bg-black/[0.03] px-[14px] py-[10px] text-[14px] leading-[1.45] outline-none"
+                      className="w-full border border-black/15 px-[14px] py-[10px] text-[14px] outline-none bg-black/[0.03] resize-none leading-[1.45]"
                       placeholder="Пункт выдачи не выбран"
                     />
                   </label>
@@ -694,7 +511,7 @@ export default function CheckoutForm(props: {
                   : "Перейти к оплате"}
               </button>
 
-              <div className="mt-[6px] text-[11px] italic leading-[1.25] text-black/45">
+              <div className="text-[11px] italic leading-[1.25] text-black/45 mt-[6px]">
                 Нажимая кнопку, вы соглашаетесь с{" "}
                 <Link
                   href="https://satl.shop/docs/public-offer"
@@ -733,7 +550,7 @@ export default function CheckoutForm(props: {
                   <img
                     src={i.image ?? "https://picsum.photos/seed/cart/140/140"}
                     alt={i.title}
-                    className="h-[70px] w-[70px] border border-black/10 object-cover"
+                    className="h-[70px] w-[70px] object-cover border border-black/10"
                     draggable={false}
                   />
 
@@ -753,15 +570,13 @@ export default function CheckoutForm(props: {
                       <span aria-hidden="true">•</span>
                       <span>Кол-во: {i.qty}</span>
                       <span aria-hidden="true">•</span>
-                      <span>
-                        Размер: {i.size ? String(i.size).toUpperCase() : "—"}
-                      </span>
+                      <span>Размер: {i.size ? String(i.size).toUpperCase() : "—"}</span>
                     </div>
                   </div>
 
                   <div
                     style={{ fontFamily: "Brygada" }}
-                    className="whitespace-nowrap text-[12px] font-semibold"
+                    className="text-[12px] font-semibold whitespace-nowrap"
                   >
                     {moneyRub(i.price * i.qty)}
                   </div>
@@ -770,7 +585,7 @@ export default function CheckoutForm(props: {
             )}
           </div>
 
-          <div className="my-[16px] h-[1px] bg-black/10" />
+          <div className="h-[1px] bg-black/10 my-[16px]" />
 
           <div className="space-y-[10px] text-[12px] text-black/65">
             <div className="flex items-center justify-between">
@@ -783,32 +598,24 @@ export default function CheckoutForm(props: {
             <div className="flex items-center justify-between">
               <span>Доставка</span>
               {deliveryLoading ? (
-                <span
-                  style={{ fontFamily: "Brygada" }}
-                  className="text-black/45"
-                >
+                <span style={{ fontFamily: "Brygada" }} className="text-black/45">
                   Считаем...
                 </span>
               ) : delivery ? (
                 <span style={{ fontFamily: "Brygada" }} className="text-black">
                   {moneyRub(delivery.priceCents)}
                   {delivery.daysMin || delivery.daysMax
-                    ? ` (${delivery.daysMin ?? "?"}-${
-                        delivery.daysMax ?? "?"
-                      } дн.)`
+                    ? ` (${delivery.daysMin ?? "?"}-${delivery.daysMax ?? "?"} дн.)`
                     : ""}
                 </span>
               ) : (
-                <span
-                  style={{ fontFamily: "Brygada" }}
-                  className="text-black/45"
-                >
+                <span style={{ fontFamily: "Brygada" }} className="text-black/45">
                   Выберите ПВЗ
                 </span>
               )}
             </div>
 
-            <div className="my-[12px] h-[1px] bg-black/10" />
+            <div className="h-[1px] bg-black/10 my-[12px]" />
 
             <div className="flex items-center justify-between">
               <span className="text-black/70">К оплате</span>
