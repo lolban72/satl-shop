@@ -12,30 +12,27 @@ export default function ProductCard({
 }: {
   slug: string;
   title: string;
-  price: number; // ✅ цена БЕЗ скидки (в копейках)
-  discountPrice?: number | null; // ✅ цена СО скидкой (в копейках)
+  price: number;
+  discountPrice?: number | null;
   imageUrl?: string | null;
   isSoon?: boolean;
-  discountPercent?: number; // ✅ только для плашки, на цену НЕ влияет
-  isSoldOut?: boolean; // ✅ нет товара в наличии
+  discountPercent?: number;
+  isSoldOut?: boolean;
 }) {
   const Wrapper: any = isSoon ? "div" : Link;
   const wrapperProps = isSoon ? {} : { href: `/product/${slug}` };
 
-  // ✅ скидка активна ТОЛЬКО если задан discountPrice и она меньше base price
   const basePrice = Number(price ?? 0);
   const discPrice =
     discountPrice == null ? null : Number(discountPrice ?? 0);
 
   const hasDiscount =
-    !isSoon && discPrice != null && discPrice > 0 && discPrice < basePrice;
+    !isSoon && !isSoldOut && discPrice != null && discPrice > 0 && discPrice < basePrice;
 
-  // ✅ плашка — по discountPercent (если хочешь показывать), но она НЕ влияет на цену
   const showDiscountBadge = hasDiscount && (discountPercent ?? 0) > 0;
 
-  // ✅ финальные цены БЕЗ расчетов
-  const oldPrice = basePrice; // зачёркнутая (без скидки)
-  const finalPrice = hasDiscount ? (discPrice as number) : basePrice; // открытая (со скидкой) или обычная
+  const oldPrice = basePrice;
+  const finalPrice = hasDiscount ? (discPrice as number) : basePrice;
 
   return (
     <Wrapper
@@ -45,8 +42,8 @@ export default function ProductCard({
         w-full md:w-[400px]
       "
     >
-      {/* ✅ ПЛАШКА СКИДКИ (не влияет на цену) */}
-      {showDiscountBadge ? (
+      {/* ПЛАШКА СКИДКИ */}
+      {showDiscountBadge && (
         <div className="absolute right-[8px] md:right-[18px] top-[5px] md:top-[-28px] z-30 pointer-events-none">
           <span
             className="text-[15px] md:text-[20px] leading-none"
@@ -66,7 +63,7 @@ export default function ProductCard({
             %
           </span>
         </div>
-      ) : null}
+      )}
 
       {/* ОБЛАСТЬ ИЗОБРАЖЕНИЯ */}
       <div
@@ -77,7 +74,6 @@ export default function ProductCard({
           md:h-[300px]
         "
       >
-        {/* ✅ свечение/тень */}
         {!isSoon && (
           <div
             className="
@@ -91,7 +87,7 @@ export default function ProductCard({
           />
         )}
 
-        {/* ===== MOBILE IMAGE (НЕ РЕЖЕМ) ===== */}
+        {/* MOBILE IMAGE */}
         <div className="md:hidden absolute inset-0 z-10">
           <div className="absolute inset-0 rounded-[28px] sm:rounded-[40px]" />
           <div className="absolute inset-0 z-20 p-[18px] overflow-visible">
@@ -104,7 +100,7 @@ export default function ProductCard({
           </div>
         </div>
 
-        {/* ===== DESKTOP IMAGE (АККУРАТНО ВНУТРИ) ===== */}
+        {/* DESKTOP IMAGE */}
         <div className="hidden md:block absolute inset-0 z-10 overflow-hidden rounded-[60px]">
           <img
             src={imageUrl ?? "https://picsum.photos/seed/product/800/600"}
@@ -114,34 +110,7 @@ export default function ProductCard({
           />
         </div>
 
-        {/* ===== SOLD OUT OVERLAY ===== */}
-        {isSoldOut && !isSoon && (
-          <div className="absolute inset-0 z-20">
-            <div
-              className="
-                absolute inset-0
-                rounded-[24px] sm:rounded-[34px] md:rounded-[50px]
-                bg-black/18 backdrop-blur-[20px] md:backdrop-blur-[24px]
-              "
-            />
-            <div className="absolute inset-0 grid place-items-center">
-              <div
-                className="text-[24px] sm:text-[30px] md:text-[46px] tracking-[0.08em] text-white uppercase"
-                style={{
-                  fontFamily: "Montserrat",
-                  fontWeight: 800,
-                  fontSynthesis: "none",
-                  textShadow: "0 6px 12px rgba(0,0,0,0.55)",
-                  WebkitTextStroke: "1.5px rgba(255,255,255,0.95)",
-                }}
-              >
-                Sold out
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ===== СКОРО OVERLAY ===== */}
+        {/* СКОРО */}
         {isSoon && (
           <div className="absolute inset-0 z-20">
             <div
@@ -157,7 +126,6 @@ export default function ProductCard({
                 style={{
                   fontFamily: "Montserrat",
                   fontWeight: 800,
-                  fontSynthesis: "none",
                   textShadow: "0 6px 12px rgba(0,0,0,0.6)",
                   WebkitTextStroke: "3px rgb(255, 255, 255)",
                 }}
@@ -169,7 +137,7 @@ export default function ProductCard({
         )}
       </div>
 
-      {/* НАЗВАНИЕ + ЦЕНА (только если НЕ "скоро") */}
+      {/* НАЗВАНИЕ + ЦЕНА */}
       {!isSoon && (
         <div className="mt-[-5px] md:mt-5">
           <div
@@ -179,20 +147,25 @@ export default function ProductCard({
             {title}
           </div>
 
-          {/* ЦЕНЫ */}
-          {hasDiscount ? (
+          {/* SOLD OUT */}
+          {isSoldOut ? (
+            <div
+              className="mt-2 text-[18px] md:text-[25px] leading-none uppercase text-black/70"
+              style={{ fontFamily: "Yeast" }}
+            >
+              Sold out
+            </div>
+          ) : hasDiscount ? (
             <div className="mt-2 flex items-baseline justify-center gap-2 md:gap-3">
-              {/* старая зачеркнутая (price из админки) */}
               <div
-                className="text-[14px] sm:text-[14px] md:text-[18px] leading-none opacity-70 line-through"
+                className="text-[14px] md:text-[18px] leading-none opacity-70 line-through"
                 style={{ fontFamily: "Yeast" }}
               >
                 {(oldPrice / 100).toFixed(0)}р
               </div>
 
-              {/* новая (discountPrice из админки) */}
               <div
-                className="text-[18px] sm:text-[16px] md:text-[25px] leading-none"
+                className="text-[18px] md:text-[25px] leading-none"
                 style={{ fontFamily: "Yeast" }}
               >
                 {(finalPrice / 100).toFixed(0)}р
@@ -200,7 +173,7 @@ export default function ProductCard({
             </div>
           ) : (
             <div
-              className="mt-2 text-[18px] sm:text-[16px] md:text-[25px] leading-none"
+              className="mt-2 text-[18px] md:text-[25px] leading-none"
               style={{ fontFamily: "Yeast" }}
             >
               {(basePrice / 100).toFixed(0)}р
