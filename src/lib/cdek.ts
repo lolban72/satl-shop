@@ -18,7 +18,9 @@ async function getToken(): Promise<string> {
   }
 
   const now = Date.now();
-  if (tokenCache && tokenCache.exp - 30_000 > now) return tokenCache.token;
+  if (tokenCache && tokenCache.exp - 30_000 > now) {
+    return tokenCache.token;
+  }
 
   const url =
     `${BASE}/v2/oauth/token` +
@@ -38,9 +40,12 @@ async function getToken(): Promise<string> {
   }
 
   const expMs = Number(data.expires_in ?? 900) * 1000;
-  tokenCache = { token: data.access_token, exp: now + expMs };
+  tokenCache = {
+    token: String(data.access_token),
+    exp: now + expMs,
+  };
 
-  return data.access_token;
+  return tokenCache.token;
 }
 
 async function cdekFetchJson(path: string, init?: RequestInit) {
@@ -66,8 +71,9 @@ async function cdekFetchJson(path: string, init?: RequestInit) {
   return data;
 }
 
+// Город -> city_code
 export async function cdekResolveCityCode(city: string): Promise<number> {
-  const q = encodeURIComponent(city);
+  const q = encodeURIComponent(String(city || "").trim());
 
   const data = await cdekFetchJson(
     `/v2/location/cities?city=${q}&size=20&country_codes=RU`,
@@ -81,7 +87,7 @@ export async function cdekResolveCityCode(city: string): Promise<number> {
       (x: any) =>
         String(x?.city || "")
           .trim()
-          .toLowerCase() === city.trim().toLowerCase()
+          .toLowerCase() === String(city).trim().toLowerCase()
     ) ?? arr[0];
 
   const code = exact?.code;
@@ -93,17 +99,47 @@ export async function cdekResolveCityCode(city: string): Promise<number> {
   return Number(code);
 }
 
+// Все точки по коду города: ПВЗ + постаматы
 export async function cdekDeliveryPoints(cityCode: number) {
+  const all: any[] = [];
   const size = 1000;
 
-  const data = await cdekFetchJson(
-    `/v2/deliverypoints?city_code=${cityCode}&size=${size}`,
-    { method: "GET" }
-  );
+  for (let page = 0; page < 10; page++) {
+    const data = await cdekFetchJson(
+      `/v2/deliverypoints?city_code=${cityCode}&type=ALL&size=${size}&page=${page}`,
+      { method: "GET" }
+    );
 
-  return Array.isArray(data) ? data : [];
+    const chunk = Array.isArray(data) ? data : [];
+
+    if (chunk.length === 0) {
+      break;
+    }
+
+    all.push(...chunk);
+
+    if (chunk.length < size) {
+      break;
+    }
+  }
+
+  const seen = new Set<string>();
+
+  return all.filter((item: any) => {
+    const code = String(item?.code ?? "").trim();
+
+    if (!code) return false;
+    if (seen.has(code)) return false;
+
+    seen.add(code);
+    return true;
+  });
 }
 
+/**
+ * Калькулятор: список доступных тарифов (цена/сроки).
+ * POST /v2/calculator/tarifflist
+ */
 export async function cdekTariffList(payload: any) {
   return await cdekFetchJson(`/v2/calculator/tarifflist`, {
     method: "POST",

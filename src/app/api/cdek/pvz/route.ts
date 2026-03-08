@@ -13,6 +13,7 @@ export async function GET(req: Request) {
 
     if (cityCodeRaw) {
       cityCode = Number(cityCodeRaw);
+
       if (!Number.isFinite(cityCode) || cityCode <= 0) {
         return Response.json({ error: "invalid cityCode" }, { status: 400 });
       }
@@ -23,6 +24,7 @@ export async function GET(req: Request) {
           { status: 400 }
         );
       }
+
       cityCode = await cdekResolveCityCode(city);
     }
 
@@ -37,10 +39,22 @@ export async function GET(req: Request) {
         lon: Number(p?.location?.longitude),
         workTime: String(p?.work_time ?? "").trim(),
         phones: Array.isArray(p?.phones)
-          ? p.phones.map((x: any) => String(x?.number ?? "").trim()).filter(Boolean)
+          ? p.phones
+              .map((x: any) => String(x?.number ?? "").trim())
+              .filter(Boolean)
           : [],
       }))
       .filter((x: any) => x.code && x.address);
+
+    console.log(
+      "📦 /api/cdek/pvz:",
+      JSON.stringify({
+        city,
+        cityCode,
+        rawPoints: Array.isArray(points) ? points.length : 0,
+        normalizedPoints: normalized.length,
+      })
+    );
 
     return Response.json({
       city,
@@ -50,6 +64,7 @@ export async function GET(req: Request) {
   } catch (e: any) {
     const msg = String(e?.message || e || "CDEK error");
     console.log("❌ /api/cdek/pvz error:", msg);
+
     return Response.json({ error: msg }, { status: 500 });
   }
 }
