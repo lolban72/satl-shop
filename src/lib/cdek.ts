@@ -18,6 +18,7 @@ async function getToken(): Promise<string> {
   }
 
   const now = Date.now();
+
   if (tokenCache && tokenCache.exp - 30_000 > now) {
     return tokenCache.token;
   }
@@ -40,6 +41,7 @@ async function getToken(): Promise<string> {
   }
 
   const expMs = Number(data.expires_in ?? 900) * 1000;
+
   tokenCache = {
     token: String(data.access_token),
     exp: now + expMs,
@@ -71,35 +73,104 @@ async function cdekFetchJson(path: string, init?: RequestInit) {
   return data;
 }
 
+function norm(v: any) {
+  return String(v ?? "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+async function countDeliveryPoints(cityCode: number): Promise<number> {
+  try {
+    const size = 1000;
+    const data = await cdekFetchJson(
+      `/v2/deliverypoints?city_code=${cityCode}&type=ALL&size=${size}&page=0`,
+      { method: "GET" }
+    );
+
+    return Array.isArray(data) ? data.length : 0;
+  } catch {
+    return 0;
+  }
+}
+
 // Город -> city_code
 export async function cdekResolveCityCode(city: string): Promise<number> {
-  const q = encodeURIComponent(String(city || "").trim());
+  const cityTrim = String(city || "").trim();
+  const q = encodeURIComponent(cityTrim);
 
   const data = await cdekFetchJson(
-    `/v2/location/cities?city=${q}&size=20&country_codes=RU`,
+    `/v2/location/cities?city=${q}&size=50&country_codes=RU`,
     { method: "GET" }
   );
 
   const arr = Array.isArray(data) ? data : [];
-
-  const exact =
-    arr.find(
-      (x: any) =>
-        String(x?.city || "")
-          .trim()
-          .toLowerCase() === String(city).trim().toLowerCase()
-    ) ?? arr[0];
-
-  const code = exact?.code;
-
-  if (!code) {
+  if (!arr.length) {
     throw new Error(`CDEK city not found: ${city}`);
   }
 
-  return Number(code);
+  const exact = arr.filter(
+    (x: any) => norm(x?.city) === norm(cityTrim)
+  );
+
+  const candidates = exact.length ? exact : arr;
+
+  let bestCode: number | null = null;
+  let bestCount = -1;
+  let bestCity: any = null;
+
+  for (const item of candidates) {
+    const code = Number(item?.code || 0);
+    if (!Number.isFinite(code) || code <= 0) continue;
+
+    const count = await countDeliveryPoints(code);
+
+    if (count > bestCount) {
+      bestCount = count;
+      bestCode = code;
+      bestCity = item;
+    }
+  }
+
+  if (!bestCode) {
+    const fallback = Number(candidates[0]?.code || 0);
+    if (!fallback) {
+      throw new Error(`CDEK city not found: ${city}`);
+    }
+
+    console.log(
+      "🏙️ CDEK city resolve fallback:",
+      JSON.stringify({
+        query: cityTrim,
+        fallbackCode: fallback,
+        fallbackCity: candidates[0]?.city ?? null,
+        fallbackRegion: candidates[0]?.region ?? null,
+      })
+    );
+
+    return fallback;
+  }
+
+  console.log(
+    "🏙️ CDEK city resolved:",
+    JSON.stringify({
+      query: cityTrim,
+      selectedCode: bestCode,
+      selectedCity: bestCity?.city ?? null,
+      selectedRegion: bestCity?.region ?? null,
+      selectedPoints: bestCount,
+      candidates: candidates.map((x: any) => ({
+        code: Number(x?.code || 0),
+        city: String(x?.city ?? ""),
+        region: String(x?.region ?? ""),
+      })),
+    })
+  );
+
+  return bestCode;
 }
 
-// Все точки по коду города: ПВЗ + постаматы
+// Все точки по коду города
 export async function cdekDeliveryPoints(cityCode: number) {
   const all: any[] = [];
   const size = 1000;
@@ -112,15 +183,11 @@ export async function cdekDeliveryPoints(cityCode: number) {
 
     const chunk = Array.isArray(data) ? data : [];
 
-    if (chunk.length === 0) {
-      break;
-    }
+    if (chunk.length === 0) break;
 
     all.push(...chunk);
 
-    if (chunk.length < size) {
-      break;
-    }
+    if (chunk.length < size) break;
   }
 
   const seen = new Set<string>();
@@ -136,10 +203,6 @@ export async function cdekDeliveryPoints(cityCode: number) {
   });
 }
 
-/**
- * Калькулятор: список доступных тарифов (цена/сроки).
- * POST /v2/calculator/tarifflist
- */
 export async function cdekTariffList(payload: any) {
   return await cdekFetchJson(`/v2/calculator/tarifflist`, {
     method: "POST",
