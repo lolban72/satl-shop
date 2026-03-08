@@ -5,24 +5,48 @@ export const runtime = "nodejs";
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
+
     const city = String(searchParams.get("city") || "").trim();
+    const cityCodeRaw = String(searchParams.get("cityCode") || "").trim();
 
-    if (!city) return Response.json({ error: "city required" }, { status: 400 });
+    let cityCode: number;
 
-    const cityCode = await cdekResolveCityCode(city);
+    if (cityCodeRaw) {
+      cityCode = Number(cityCodeRaw);
+      if (!Number.isFinite(cityCode) || cityCode <= 0) {
+        return Response.json({ error: "invalid cityCode" }, { status: 400 });
+      }
+    } else {
+      if (!city) {
+        return Response.json(
+          { error: "city or cityCode required" },
+          { status: 400 }
+        );
+      }
+      cityCode = await cdekResolveCityCode(city);
+    }
+
     const points = await cdekDeliveryPoints(cityCode);
 
-    const normalized = (Array.isArray(points) ? points : []).map((p: any) => ({
-      code: String(p.code),
-      name: String(p.name ?? "ПВЗ"),
-      address: String(p.location?.address_full ?? p.address ?? ""),
-      lat: Number(p.location?.latitude),
-      lon: Number(p.location?.longitude),
-      workTime: String(p.work_time ?? ""),
-      phones: (p.phones ?? []).map((x: any) => String(x.number)).filter(Boolean),
-    }));
+    const normalized = (Array.isArray(points) ? points : [])
+      .map((p: any) => ({
+        code: String(p?.code ?? "").trim(),
+        name: String(p?.name ?? "ПВЗ").trim(),
+        address: String(p?.location?.address_full ?? p?.address ?? "").trim(),
+        lat: Number(p?.location?.latitude),
+        lon: Number(p?.location?.longitude),
+        workTime: String(p?.work_time ?? "").trim(),
+        phones: Array.isArray(p?.phones)
+          ? p.phones.map((x: any) => String(x?.number ?? "").trim()).filter(Boolean)
+          : [],
+      }))
+      .filter((x: any) => x.code && x.address);
 
-    return Response.json({ city, cityCode, points: normalized });
+    return Response.json({
+      city,
+      cityCode,
+      points: normalized,
+    });
   } catch (e: any) {
     const msg = String(e?.message || e || "CDEK error");
     console.log("❌ /api/cdek/pvz error:", msg);

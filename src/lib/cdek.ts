@@ -26,7 +26,11 @@ async function getToken(): Promise<string> {
     `&client_id=${encodeURIComponent(CLIENT_ID)}` +
     `&client_secret=${encodeURIComponent(CLIENT_SECRET)}`;
 
-  const r = await fetch(url, { method: "POST", cache: "no-store" });
+  const r = await fetch(url, {
+    method: "POST",
+    cache: "no-store",
+  });
+
   const data = await r.json().catch(() => ({}));
 
   if (!r.ok || !data?.access_token) {
@@ -35,6 +39,7 @@ async function getToken(): Promise<string> {
 
   const expMs = Number(data.expires_in ?? 900) * 1000;
   tokenCache = { token: data.access_token, exp: now + expMs };
+
   return data.access_token;
 }
 
@@ -46,78 +51,57 @@ async function cdekFetchJson(path: string, init?: RequestInit) {
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
+      Accept: "application/json",
       ...(init?.headers || {}),
     },
     cache: "no-store",
   });
 
   const data = await r.json().catch(() => ({}));
+
   if (!r.ok) {
     throw new Error(`CDEK ${path} failed: ${r.status} ${JSON.stringify(data)}`);
   }
+
   return data;
 }
 
 export async function cdekResolveCityCode(city: string): Promise<number> {
   const q = encodeURIComponent(city);
-  const data = await cdekFetchJson(
-    `/v2/location/cities?city=${q}&size=1&country_codes=RU`,
-    { method: "GET" }
-  );
-
-  const first = Array.isArray(data) ? data[0] : data?.[0];
-  const code = first?.code;
-
-  if (!code) throw new Error(`CDEK city not found: ${city}`);
-  return Number(code);
-}
-
-export async function cdekSuggestCities(query: string) {
-  const q = String(query || "").trim();
-  if (!q) return [];
 
   const data = await cdekFetchJson(
-    `/v2/location/cities?city=${encodeURIComponent(q)}&size=20&country_codes=RU`,
+    `/v2/location/cities?city=${q}&size=20&country_codes=RU`,
     { method: "GET" }
   );
 
   const arr = Array.isArray(data) ? data : [];
 
-  return arr.map((x: any) => ({
-    code: Number(x?.code),
-    city: String(x?.city ?? "").trim(),
-    region: String(x?.region ?? "").trim(),
-    country: String(x?.country ?? "").trim(),
-    full: [
-      String(x?.city ?? "").trim(),
-      String(x?.region ?? "").trim(),
-      String(x?.country ?? "").trim(),
-    ]
-      .filter(Boolean)
-      .join(", "),
-  }));
+  const exact =
+    arr.find(
+      (x: any) =>
+        String(x?.city || "")
+          .trim()
+          .toLowerCase() === city.trim().toLowerCase()
+    ) ?? arr[0];
+
+  const code = exact?.code;
+
+  if (!code) {
+    throw new Error(`CDEK city not found: ${city}`);
+  }
+
+  return Number(code);
 }
 
 export async function cdekDeliveryPoints(cityCode: number) {
-  const all: any[] = [];
-  const size = 500;
+  const size = 1000;
 
-  for (let page = 0; page < 20; page++) {
-    const data = await cdekFetchJson(
-      `/v2/deliverypoints?city_code=${cityCode}&type=PVZ&page=${page}&size=${size}`,
-      { method: "GET" }
-    );
+  const data = await cdekFetchJson(
+    `/v2/deliverypoints?city_code=${cityCode}&size=${size}`,
+    { method: "GET" }
+  );
 
-    const chunk = Array.isArray(data) ? data : [];
-
-    if (!chunk.length) break;
-
-    all.push(...chunk);
-
-    if (chunk.length < size) break;
-  }
-
-  return all;
+  return Array.isArray(data) ? data : [];
 }
 
 export async function cdekTariffList(payload: any) {

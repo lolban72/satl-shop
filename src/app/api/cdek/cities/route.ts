@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-const ENV = String(process.env.CDEK_ENV || "TEST").toUpperCase(); // TEST | PROD
+const ENV = String(process.env.CDEK_ENV || "TEST").toUpperCase();
 
 const CDEK_API_BASE =
   ENV === "PROD"
@@ -12,7 +12,6 @@ const CDEK_API_BASE =
 const CLIENT_ID = process.env.CDEK_CLIENT_ID || "";
 const CLIENT_SECRET = process.env.CDEK_CLIENT_SECRET || "";
 
-// in-memory cache токена
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
 async function getCdekToken() {
@@ -68,18 +67,23 @@ async function getCdekToken() {
   return token;
 }
 
+function normalizeText(v: any) {
+  return String(v || "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
 
-    // поддерживаем и q, и query
-    const q = String(
+    const q = normalizeText(
       url.searchParams.get("q") || url.searchParams.get("query") || ""
-    ).trim();
+    );
 
     const limit = Math.min(
-      Math.max(Number(url.searchParams.get("limit") || 10), 1),
-      20
+      Math.max(Number(url.searchParams.get("limit") || 50), 1),
+      100
     );
 
     if (q.length < 2) {
@@ -106,7 +110,7 @@ export async function GET(req: Request) {
       }
     );
 
-    const data = await res.json().catch(() => ({} as any));
+    const data = await res.json().catch(() => ([] as any[]));
 
     if (!res.ok) {
       const msg =
@@ -120,34 +124,48 @@ export async function GET(req: Request) {
 
     const list = Array.isArray(data) ? data : [];
 
-    const seen = new Set<string>();
-
-    const items = list
+    // собираем нормальные города
+    const prepared = list
       .map((x: any) => {
-        const code =
-          x?.code != null && x?.code !== "" ? Number(x.code) : undefined;
-
-        const city = String(x?.city || x?.city_name || "").trim();
-        const region = String(x?.region || x?.region_name || "").trim();
-        const country = String(x?.country || x?.country_code || "").trim();
-
-        const full = [city, region, country].filter(Boolean).join(", ");
+        const city = normalizeText(x?.city || x?.city_name);
+        const region = normalizeText(x?.region || x?.region_name);
+        const country = normalizeText(x?.country || x?.country_code);
+        const code = Number(x?.code || 0);
 
         return {
           code,
           city,
           region: region || undefined,
           country: country || undefined,
-          full,
+          full: [city, region].filter(Boolean).join(", "),
         };
       })
-      .filter((x) => x.city)
-      .filter((x) => {
-        const key = `${x.code ?? ""}|${x.city}|${x.region ?? ""}|${x.country ?? ""}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
+      .filter((x) => x.city && Number.isFinite(x.code) && x.code > 0);
+
+    // убираем дубли по названию города
+    // оставляем первый нормальный вариант
+    const byCity = new Map<string, (typeof prepared)[number]>();
+
+    for (const item of prepared) {
+      const key = item.city.toLowerCase();
+      if (!byCity.has(key)) {
+        byCity.set(key, item);
+      }
+    }
+
+    const items = Array.from(byCity.values())
+      .sort((a, b) => {
+        const aq = a.city.toLowerCase();
+        const bq = b.city.toLowerCase();
+        const qq = q.toLowerCase();
+
+        const aStarts = aq.startsWith(qq) ? 1 : 0;
+        const bStarts = bq.startsWith(qq) ? 1 : 0;
+
+        if (aStarts !== bStarts) return bStarts - aStarts;
+        return aq.localeCompare(bq, "ru");
+      })
+      .slice(0, 12);
 
     return NextResponse.json({ items }, { status: 200 });
   } catch (e: any) {
