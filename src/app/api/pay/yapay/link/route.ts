@@ -18,9 +18,9 @@ export async function POST(req: Request) {
       where: { id: draftId },
       select: {
         id: true,
-        total: true, // товары (копейки)
+        total: true,
         itemsJson: true,
-        deliveryPrice: true, // доставка (копейки)
+        deliveryPrice: true,
         pvzCity: true,
         pvzAddress: true,
       },
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     }
 
     const isProd = process.env.NEXT_PUBLIC_YAPAY_ENV === "PRODUCTION";
-    const apiKey = isProd ? (process.env.YAPAY_API_KEY || "") : merchantId;
+    const apiKey = isProd ? process.env.YAPAY_API_KEY || "" : merchantId;
 
     if (isProd && !apiKey) {
       return Response.json(
@@ -70,10 +70,13 @@ export async function POST(req: Request) {
       };
     });
 
-    const deliveryCents = Number(draft.deliveryPrice ?? 0);
+    const baseDeliveryCents = Number(draft.deliveryPrice ?? 0);
+    const deliveryCents =
+      Number.isFinite(baseDeliveryCents) && baseDeliveryCents > 0
+        ? Math.round(baseDeliveryCents * 1.1)
+        : 0;
 
-    // ✅ доставка отдельной строкой
-    if (Number.isFinite(deliveryCents) && deliveryCents > 0) {
+    if (deliveryCents > 0) {
       const city = String(draft.pvzCity ?? "").trim();
       const addr = String(draft.pvzAddress ?? "").trim();
       const label =
@@ -89,8 +92,7 @@ export async function POST(req: Request) {
       });
     }
 
-    // ✅ итог к оплате = товары + доставка
-    const payTotalCents = Number(draft.total) + (Number.isFinite(deliveryCents) ? deliveryCents : 0);
+    const payTotalCents = Number(draft.total);
 
     const payload = {
       orderId: draft.id,
@@ -104,7 +106,7 @@ export async function POST(req: Request) {
       },
       cart: {
         items,
-        total: { amount: rub2(payTotalCents) }, // ✅ ВАЖНО: уже с доставкой
+        total: { amount: rub2(payTotalCents) },
       },
     };
 
