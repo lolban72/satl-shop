@@ -5,6 +5,7 @@ const FLOW: OrderStatus[] = [
   "PROCESSING",
   "SHIPPED",
   "DELIVERED",
+  "COMPLETED",
 ];
 
 const LABELS: Record<OrderStatus, string> = {
@@ -12,6 +13,7 @@ const LABELS: Record<OrderStatus, string> = {
   PROCESSING: "В обработке",
   SHIPPED: "В доставке",
   DELIVERED: "Доставлен",
+  COMPLETED: "Получен",
   CANCELED: "Отменён",
   RETURNED: "Возврат",
 };
@@ -47,7 +49,7 @@ export default function OrderProgress({ status }: { status: OrderStatus }) {
                 done ? "bg-black" : "bg-black/20",
               ].join(" ")}
             />
-            <div className="mt-2 text-[11px] text-black/70 text-center">
+            <div className="mt-2 text-[11px] text-center text-black/70">
               {LABELS[step]}
             </div>
           </div>
