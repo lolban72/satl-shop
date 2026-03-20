@@ -23,7 +23,6 @@ function makeSku(slug: string, size: string, color: string) {
     .slice(2, 8)}`.toUpperCase();
 }
 
-// "1990" -> 199000 (копейки). ""/undefined/null -> null
 function rubToCentsOrNull(v: any): number | null {
   if (v === null || v === undefined) return null;
   const s = String(v).trim();
@@ -38,39 +37,62 @@ function rubToCentsOrNull(v: any): number | null {
   return cents;
 }
 
+function toIntOrUndefined(v: any): number | undefined {
+  if (v === undefined || v === null || v === "") return undefined;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return undefined;
+  return Math.trunc(n);
+}
+
+async function readBody(req: Request) {
+  const contentType = req.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    return await req.json();
+  }
+
+  if (
+    contentType.includes("application/x-www-form-urlencoded") ||
+    contentType.includes("multipart/form-data")
+  ) {
+    const formData = await req.formData();
+    const obj: Record<string, any> = {};
+    for (const [key, value] of formData.entries()) {
+      obj[key] = value;
+    }
+    return obj;
+  }
+
+  return {};
+}
+
 export async function PATCH(
   req: Request,
   ctx: { params: Promise<{ id: string }> }
 ) {
-  // ✅ защита админского API
   const session = await auth();
   if (!session?.user || !isAdminEmail(session.user.email)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const { id } = await ctx.params;
-  const body = await req.json();
+  const body = await readBody(req);
 
   const imagesFinal =
     body.homeImage || body.images
       ? ([body.homeImage, ...(body.images ?? [])].filter(Boolean) as string[])
       : undefined;
 
-  // ✅ price (копейки)
-  // - если priceRub не прислали -> undefined (не трогаем)
-  // - если прислали мусор -> null (но ниже это приведёт к ошибке)
   const priceCents =
     body.priceRub === undefined ? undefined : rubToCentsOrNull(body.priceRub);
 
-  // ✅ discountPrice (копейки)
-  // - если discountPriceRub не прислали -> undefined (не трогаем)
-  // - если прислали ""/null -> null (очистить)
   const discountPriceCents =
     body.discountPriceRub === undefined
       ? undefined
       : rubToCentsOrNull(body.discountPriceRub);
 
-  // ✅ (необязательно, но полезно) проверка логики цен, если прислали обе
+  const sortOrder = toIntOrUndefined(body.sortOrder);
+
   if (body.isSoon !== true) {
     if (body.priceRub !== undefined && priceCents == null) {
       return NextResponse.json(
@@ -110,10 +132,8 @@ export async function PATCH(
         categoryId: body.categoryId === undefined ? undefined : body.categoryId,
 
         images: imagesFinal,
-
         isSoon: body.isSoon ?? undefined,
 
-        // ✅ price: если isSoon=true -> 0, иначе обновляем если прислали
         price:
           body.isSoon === true
             ? 0
@@ -121,14 +141,9 @@ export async function PATCH(
             ? undefined
             : (priceCents ?? undefined),
 
-        // ✅ discountPercent: если isSoon=true -> 0
         discountPercent:
           body.isSoon === true ? 0 : body.discountPercent ?? undefined,
 
-        // ✅ discountPrice (Int?):
-        // - isSoon=true -> null
-        // - не прислали -> undefined (не трогаем)
-        // - прислали ""/null -> null (очистить)
         discountPrice:
           body.isSoon === true
             ? null
@@ -136,9 +151,10 @@ export async function PATCH(
             ? undefined
             : discountPriceCents,
 
-        // ✅ размерная таблица
         sizeChartImage:
           body.sizeChartImage === undefined ? undefined : body.sizeChartImage,
+
+        sortOrder,
       },
     });
 
@@ -168,11 +184,33 @@ export async function PATCH(
   return NextResponse.json({ ok: true });
 }
 
+export async function POST(
+  req: Request,
+  ctx: { params: Promise<{ id: string }> }
+) {
+  const formData = await req.formData();
+  const method = String(formData.get("_method") || "").toUpperCase();
+
+  if (method === "PATCH") {
+    return PATCH(
+      new Request(req.url, {
+        method: "PATCH",
+        headers: req.headers,
+        body: new URLSearchParams(
+          Array.from(formData.entries()).map(([k, v]) => [k, String(v)])
+        ),
+      }),
+      ctx
+    );
+  }
+
+  return NextResponse.json({ error: "Method Not Allowed" }, { status: 405 });
+}
+
 export async function DELETE(
   _req: Request,
   ctx: { params: Promise<{ id: string }> }
 ) {
-  // ✅ защита админского API
   const session = await auth();
   if (!session?.user || !isAdminEmail(session.user.email)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

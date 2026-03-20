@@ -8,7 +8,7 @@ export const metadata = {
 
 export default async function ProductsListPage() {
   const products = await prisma.product.findMany({
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
     include: { variants: true, category: true },
   });
 
@@ -17,7 +17,9 @@ export default async function ProductsListPage() {
       <div className="flex items-end justify-between gap-3">
         <div>
           <div className="text-lg font-semibold">Товары</div>
-          <div className="text-sm text-gray-600">Список всех товаров.</div>
+          <div className="text-sm text-gray-600">
+            Список всех товаров. Чем меньше порядок, тем выше товар на главной.
+          </div>
         </div>
         <Link href="/admin/products/new" className="rounded-xl bg-black px-4 py-2 text-sm text-white">
           + Добавить
@@ -30,6 +32,7 @@ export default async function ProductsListPage() {
         <div className="mt-4 space-y-3">
           {products.map((p) => {
             const stock = p.variants.reduce((s, v) => s + v.stock, 0);
+
             return (
               <div key={p.id} className="rounded-xl border p-3">
                 <div className="flex items-start justify-between gap-3">
@@ -39,11 +42,19 @@ export default async function ProductsListPage() {
                     <div className="mt-1 text-xs text-gray-600">
                       Категория: {p.category?.title ?? "—"}
                     </div>
-                    {/* Display the size chart image if it exists */}
+
+                    <div className="mt-2 text-sm text-gray-600">
+                      Порядок на главной: <span className="font-semibold text-black">{p.sortOrder ?? 0}</span>
+                    </div>
+
                     {p.sizeChartImage && (
                       <div className="mt-2">
                         <span className="text-sm text-gray-600">Таблица размеров:</span>
-                        <a href={p.sizeChartImage} target="_blank" className="text-sm text-blue-500 underline ml-2">
+                        <a
+                          href={p.sizeChartImage}
+                          target="_blank"
+                          className="ml-2 text-sm text-blue-500 underline"
+                        >
                           Скачать
                         </a>
                       </div>
@@ -53,6 +64,27 @@ export default async function ProductsListPage() {
                   <div className="text-right">
                     <div className="font-semibold">{(p.price / 100).toFixed(2)}р</div>
                     <div className="text-sm text-gray-600">stock: {stock}</div>
+
+                    <form
+                      action={`/api/admin/products/${p.id}`}
+                      method="POST"
+                      className="mt-3 flex items-center justify-end gap-2"
+                    >
+                      <input type="hidden" name="_method" value="PATCH" />
+                      <input
+                        type="number"
+                        name="sortOrder"
+                        defaultValue={p.sortOrder ?? 0}
+                        className="h-9 w-24 rounded-xl border px-3 text-sm"
+                        placeholder="Порядок"
+                      />
+                      <button
+                        type="submit"
+                        className="h-9 rounded-xl border px-3 text-sm hover:bg-gray-50"
+                      >
+                        Сохранить
+                      </button>
+                    </form>
 
                     <Link
                       href={`/admin/products/${p.id}`}

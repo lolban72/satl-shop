@@ -103,7 +103,6 @@ export default function AdminCategoriesPage() {
 
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <input className="rounded-xl border p-2" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Название" />
-          <input className="rounded-xl border p-2" value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="Slug (необязательно)" />
           <button className="rounded-xl bg-black px-4 py-2 text-white" onClick={create}>
             + Добавить
           </button>
@@ -124,7 +123,6 @@ export default function AdminCategoriesPage() {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="font-medium">{c.title}</div>
-                  <div className="text-sm text-gray-600">{c.slug}</div>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
@@ -162,7 +160,7 @@ export default function AdminCategoriesPage() {
 
               <div className="mt-3 grid gap-3 md:grid-cols-2">
                 <label className="grid gap-1 text-sm">
-                  <span className="text-gray-600">navOrder (шапка)</span>
+                  <span className="text-gray-600">Шапка</span>
                   <input
                     className="rounded-xl border p-2"
                     value={c.navOrder}
@@ -178,7 +176,7 @@ export default function AdminCategoriesPage() {
                 </label>
 
                 <label className="grid gap-1 text-sm">
-                  <span className="text-gray-600">homeOrder (главная)</span>
+                  <span className="text-gray-600">Главная страница</span>
                   <input
                     className="rounded-xl border p-2"
                     value={c.homeOrder}

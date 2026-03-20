@@ -166,6 +166,7 @@ model Product {
   lengthCm        Int?
   widthCm         Int?
   heightCm        Int?
+  sortOrder Int @default(0)
 }
 
 model Variant {

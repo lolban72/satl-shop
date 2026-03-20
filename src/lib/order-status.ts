@@ -3,6 +3,7 @@ export type OrderStatus =
   | "PROCESSING"
   | "SHIPPED"
   | "DELIVERED"
+  | "COMPLETED" // ✅ добавили
   | "CANCELED"
   | "RETURNED";
 
@@ -44,6 +45,14 @@ export const STATUS_META: Record<OrderStatus, Meta> = {
     ].join(" "),
   },
 
+  COMPLETED: {
+    label: "Завершен",
+    badgeClass: [
+      BASE,
+      "border-green-300/70 bg-green-50 text-green-700",
+    ].join(" "),
+  },
+
   CANCELED: {
     label: "Отменён",
     badgeClass: [
@@ -66,21 +75,12 @@ export const STATUS_ORDER: OrderStatus[] = [
   "PROCESSING",
   "SHIPPED",
   "DELIVERED",
+  "COMPLETED", // ✅ добавили
   "CANCELED",
   "RETURNED",
 ];
 
-// Разрешённые переходы
-export const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  NEW: ["PROCESSING", "CANCELED"],
-  PROCESSING: ["SHIPPED", "CANCELED"],
-  SHIPPED: ["DELIVERED"],
-  DELIVERED: ["RETURNED"],
-  CANCELED: [],
-  RETURNED: [],
-};
-
+// Любой переход разрешён
 export function isAllowedTransition(from: OrderStatus, to: OrderStatus) {
-  if (from === to) return true;
-  return ALLOWED_TRANSITIONS[from]?.includes(to) ?? false;
+  return true;
 }

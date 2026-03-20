@@ -61,18 +61,15 @@ export default async function AdminOrdersPage(props: {
   searchParams?: Promise<{
     q?: string;
     status?: string;
-    day?: string;   // today/yesterday
-    date?: string;  // YYYY-MM-DD
+    day?: string;
+    date?: string;
   }>;
 }) {
   const sp = (await props.searchParams) ?? {};
 
   const q = (sp.q ?? "").trim();
-
-  // ✅ FIX: никогда не падаем
   const statusRaw = (sp.status ?? "").trim().toUpperCase();
 
-  // ✅ date имеет приоритет над day
   const dayInput = (sp.date ?? "").trim() || (sp.day ?? "today");
   const { start, end, day } = getDayRangeUTC(dayInput);
 
@@ -101,6 +98,8 @@ export default async function AdminOrdersPage(props: {
     take: 500,
   });
 
+  const ordersCount = orders.length;
+
   async function printLabelsAction(formData: FormData) {
     "use server";
 
@@ -110,17 +109,38 @@ export default async function AdminOrdersPage(props: {
 
     const { start, end, day: normalized } = getDayRangeUTC(dayInput);
 
-    await prisma.order.updateMany({
+    const newOrders = await prisma.order.findMany({
       where: {
         createdAt: { gte: start, lt: end },
         status: "NEW",
+      },
+      select: { id: true },
+      orderBy: { createdAt: "asc" },
+      take: 500,
+    });
+
+    const ids = newOrders.map((o) => o.id);
+
+    if (ids.length === 0) {
+      redirect(
+        `/admin/orders?${
+          isIsoDate(normalized)
+            ? `date=${encodeURIComponent(normalized)}`
+            : `day=${encodeURIComponent(normalized)}`
+        }`
+      );
+    }
+
+    await prisma.order.updateMany({
+      where: {
+        id: { in: ids },
       },
       data: {
         status: "PROCESSING",
       },
     });
 
-    redirect(`/admin/orders/labels?day=${encodeURIComponent(normalized)}`);
+    redirect(`/admin/orders/labels?ids=${encodeURIComponent(ids.join(","))}`);
   }
 
   const isoToday = todayIsoUTC();
@@ -143,9 +163,7 @@ export default async function AdminOrdersPage(props: {
         </form>
       </div>
 
-      {/* Поиск + фильтры */}
-      <form className="mb-6 flex flex-wrap gap-3" method="GET">
-        {/* День */}
+      <form className="mb-6 flex flex-wrap items-center gap-3" method="GET">
         <select
           name="day"
           defaultValue={isCustomDay ? "today" : day}
@@ -155,7 +173,6 @@ export default async function AdminOrdersPage(props: {
           <option value="yesterday">Вчера</option>
         </select>
 
-        {/* Конкретная дата */}
         <input
           name="date"
           defaultValue={isCustomDay ? day : ""}
@@ -187,6 +204,8 @@ export default async function AdminOrdersPage(props: {
         <button className="h-9 rounded-xl bg-black px-4 text-sm font-semibold text-white">
           Найти
         </button>
+
+        <div className="text-sm text-black/60">Заказов: {ordersCount}</div>
       </form>
 
       <div className="overflow-x-auto rounded-2xl border">

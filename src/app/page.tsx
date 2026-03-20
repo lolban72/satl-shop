@@ -31,7 +31,7 @@ export default async function HomePage() {
       slug: true,
       title: true,
       products: {
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
         include: {
           variants: { select: { id: true, stock: true } },
         },

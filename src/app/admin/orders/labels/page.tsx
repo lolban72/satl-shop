@@ -27,23 +27,50 @@ function getDayRangeUTC(dayRaw?: string) {
 }
 
 export default async function LabelsPage(props: {
-  searchParams?: Promise<{ day?: string }>;
+  searchParams?: Promise<{ day?: string; ids?: string }>;
 }) {
   const sp = (await props.searchParams) ?? {};
-  const { start, end } = getDayRangeUTC(sp.day);
 
-  const orders = await prisma.order.findMany({
-    where: { createdAt: { gte: start, lt: end } },
-    orderBy: { createdAt: "asc" },
-    include: {
-      items: {
-        include: {
-          variant: true, // ✅ размер
+  const ids = String(sp.ids ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  let orders: any[] = [];
+
+  if (ids.length > 0) {
+    orders = await prisma.order.findMany({
+      where: {
+        id: { in: ids },
+      },
+      orderBy: { createdAt: "asc" },
+      include: {
+        items: {
+          include: {
+            variant: true,
+          },
         },
       },
-    },
-    take: 2000,
-  });
+      take: 2000,
+    });
+  } else {
+    const { start, end } = getDayRangeUTC(sp.day);
+
+    orders = await prisma.order.findMany({
+      where: {
+        createdAt: { gte: start, lt: end },
+      },
+      orderBy: { createdAt: "asc" },
+      include: {
+        items: {
+          include: {
+            variant: true,
+          },
+        },
+      },
+      take: 2000,
+    });
+  }
 
   return <LabelsClient orders={orders} />;
 }

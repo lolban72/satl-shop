@@ -1,10 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   STATUS_META,
   STATUS_ORDER,
-  ALLOWED_TRANSITIONS,
   type OrderStatus,
 } from "@/lib/order-status";
 
@@ -18,12 +17,6 @@ export default function OrderStatusForm(props: {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
-
-  const allowed = useMemo(() => {
-    // текущий статус всегда можно оставить как есть
-    const next = new Set<OrderStatus>([status, ...(ALLOWED_TRANSITIONS[status] ?? [])]);
-    return STATUS_ORDER.filter((s) => next.has(s));
-  }, [status]);
 
   async function save() {
     setErr(null);
@@ -67,7 +60,7 @@ export default function OrderStatusForm(props: {
           onChange={(e) => setStatus(e.target.value as OrderStatus)}
           className="h-9 rounded-xl border px-3 text-sm"
         >
-          {allowed.map((s) => (
+          {STATUS_ORDER.map((s) => (
             <option key={s} value={s}>
               {STATUS_META[s].label}
             </option>

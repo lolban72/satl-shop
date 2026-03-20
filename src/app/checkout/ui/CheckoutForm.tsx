@@ -506,7 +506,7 @@ export default function CheckoutForm(props: {
                     <>
                       <label className="grid gap-[4px]">
                         <span className="text-[11px] text-black/55">
-                          Поиск ПВЗ по улице, дому, адресу или коду
+                          Поиск пункта выдачи заказов
                         </span>
                         <input
                           className={input}

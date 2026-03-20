@@ -8,6 +8,7 @@ const BodySchema = z.object({
     phone: z.string().min(5, "Телефон слишком короткий"),
     address: z.string().min(5, "Адрес слишком короткий"),
   }),
+  deliveryPrice: z.coerce.number().int().min(0, "Некорректная стоимость доставки"),
   items: z
     .array(
       z.object({
@@ -56,9 +57,8 @@ export async function POST(req: Request) {
 
     const body = BodySchema.parse(await req.json());
 
-    // ✅ считаем total и собираем itemsJson (с title/price)
+    // считаем total и собираем itemsJson
     let total = 0;
-
     const itemsJson: any[] = [];
 
     for (const i of body.items) {
@@ -100,7 +100,13 @@ export async function POST(req: Request) {
       });
     }
 
-    // ✅ сохраняем данные пользователя (можно оставить тут)
+    // добавляем доставку + 10% от доставки
+    const deliveryPrice = body.deliveryPrice;
+    const deliveryTax = Math.round(deliveryPrice * 0.1);
+
+    total += deliveryPrice + deliveryTax;
+
+    // сохраняем данные пользователя
     await prisma.user.update({
       where: { id: userId },
       data: {
@@ -110,7 +116,7 @@ export async function POST(req: Request) {
       },
     });
 
-    // ✅ создаём только draft (Order создаст webhook после оплаты)
+    // создаём только draft (Order создаст webhook после оплаты)
     const draft = await prisma.paymentDraft.create({
       data: {
         userId,
