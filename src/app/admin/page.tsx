@@ -97,14 +97,6 @@ export default async function AdminDashboard() {
       links: [{ href: "/admin/categories", label: "Управление категориями" }],
     },
     {
-      title: "Навигация",
-      desc: "Порядок категорий отдельно для шапки и главной.",
-      links: [
-        { href: "/admin/navigation/header", label: "Порядок в шапке" },
-        { href: "/admin/navigation/home", label: "Порядок на главной" },
-      ],
-    },
-    {
       title: "Маркетинг",
       desc: "Баннер на главной (текст, кнопка, фон, включение).",
       links: [{ href: "/admin/marketing/hero", label: "Баннер" }],

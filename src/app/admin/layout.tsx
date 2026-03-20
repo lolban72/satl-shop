@@ -23,8 +23,6 @@ const nav = [
   { href: "/admin/products", label: "Товары" },
   { href: "/admin/products/new", label: "Добавить товар" },
   { href: "/admin/categories", label: "Категории" },
-  { href: "/admin/navigation/header", label: "Порядок в шапке" },
-  { href: "/admin/navigation/home", label: "Порядок на главной" },
   { href: "/admin/marketing/hero", label: "Баннер" },
   { href: "/admin/marquee", label: "Бегущая строка" },
 

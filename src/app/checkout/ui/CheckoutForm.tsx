@@ -96,7 +96,16 @@ export default function CheckoutForm(props: {
   const [deliveryLoading, setDeliveryLoading] = useState(false);
 
   const isTelegramNotLinked = !String(props.initial.tgChatId ?? "").trim();
-  const payTotal = itemsTotal + (delivery?.priceCents ?? 0);
+
+  const deliveryMarkupCents = delivery
+    ? Math.round(delivery.priceCents * 0.1)
+    : 0;
+
+  const deliveryTotalCents = delivery
+    ? delivery.priceCents + deliveryMarkupCents
+    : 0;
+
+  const payTotal = itemsTotal + deliveryTotalCents;
 
   const deliveryAbortRef = useRef<AbortController | null>(null);
 
@@ -118,10 +127,13 @@ export default function CheckoutForm(props: {
     setPvzLoading(true);
 
     try {
-      const res = await fetch(`/api/cdek/pvz?city=${encodeURIComponent(cityTrim)}`, {
-        method: "GET",
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `/api/cdek/pvz?city=${encodeURIComponent(cityTrim)}`,
+        {
+          method: "GET",
+          cache: "no-store",
+        }
+      );
 
       const data = await res.json().catch(() => ({}));
 
@@ -694,7 +706,7 @@ export default function CheckoutForm(props: {
                 </span>
               ) : delivery ? (
                 <span style={{ fontFamily: "Brygada" }} className="text-black">
-                  {moneyRub(delivery.priceCents)}
+                  {moneyRub(deliveryTotalCents)}
                   {delivery.daysMin || delivery.daysMax
                     ? ` (${delivery.daysMin ?? "?"}-${
                         delivery.daysMax ?? "?"
