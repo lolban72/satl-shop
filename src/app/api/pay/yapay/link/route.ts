@@ -1,4 +1,3 @@
-// ✅ src/app/api/pay/link/route.ts
 import { prisma } from "@/lib/prisma";
 
 function rub2(totalCents: number) {
@@ -39,7 +38,7 @@ export async function POST(req: Request) {
     }
 
     const isProd = process.env.NEXT_PUBLIC_YAPAY_ENV === "PRODUCTION";
-    const apiKey = isProd ? process.env.YAPAY_API_KEY || "" : merchantId;
+    const apiKey = isProd ? (process.env.YAPAY_API_KEY || "") : merchantId;
 
     if (isProd && !apiKey) {
       return Response.json(
@@ -54,26 +53,37 @@ export async function POST(req: Request) {
 
     const rawItems: any[] = Array.isArray(draft.itemsJson) ? draft.itemsJson : [];
 
-    const items = rawItems.map((it, idx) => {
+    const items: Array<{
+      productId: string;
+      title: string;
+      quantity: { count: string };
+      total: string;
+    }> = [];
+
+    let cartTotalCents = 0;
+
+    for (let idx = 0; idx < rawItems.length; idx++) {
+      const it = rawItems[idx];
       const productId = String(it?.productId ?? `item-${idx}`);
       const title = String(it?.title ?? "Товар");
       const qty = Number(it?.qty ?? 1);
-
       const priceCents = Number(it?.price ?? it?.priceCents ?? 0);
       const lineTotalCents = priceCents * qty;
 
-      return {
+      cartTotalCents += lineTotalCents;
+
+      items.push({
         productId,
         title,
         quantity: { count: String(qty) },
         total: rub2(lineTotalCents),
-      };
-    });
+      });
+    }
 
     const baseDeliveryCents = Number(draft.deliveryPrice ?? 0);
     const deliveryCents =
       Number.isFinite(baseDeliveryCents) && baseDeliveryCents > 0
-        ? Math.round(baseDeliveryCents * 1.1)
+        ? baseDeliveryCents + Math.round(baseDeliveryCents * 0.1)
         : 0;
 
     if (deliveryCents > 0) {
@@ -84,6 +94,8 @@ export async function POST(req: Request) {
           ? `Доставка СДЭК до ПВЗ (${[city, addr].filter(Boolean).join(", ")})`
           : "Доставка СДЭК до ПВЗ";
 
+      cartTotalCents += deliveryCents;
+
       items.push({
         productId: "delivery",
         title: label,
@@ -91,8 +103,6 @@ export async function POST(req: Request) {
         total: rub2(deliveryCents),
       });
     }
-
-    const payTotalCents = Number(draft.total);
 
     const payload = {
       orderId: draft.id,
@@ -106,7 +116,7 @@ export async function POST(req: Request) {
       },
       cart: {
         items,
-        total: { amount: rub2(payTotalCents) },
+        total: { amount: rub2(cartTotalCents) },
       },
     };
 
@@ -123,7 +133,7 @@ export async function POST(req: Request) {
 
     if (!r.ok) {
       return Response.json(
-        { error: "Yandex Pay order create failed", details: data },
+        { error: "Yandex Pay order create failed", details: data, payload },
         { status: 500 }
       );
     }
@@ -131,7 +141,7 @@ export async function POST(req: Request) {
     const paymentUrl = data?.data?.paymentUrl;
     if (!paymentUrl) {
       return Response.json(
-        { error: "paymentUrl missing in response", details: data },
+        { error: "paymentUrl missing in response", details: data, payload },
         { status: 500 }
       );
     }
