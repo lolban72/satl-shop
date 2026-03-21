@@ -29,7 +29,6 @@ function OneLabelHTML({
 
   const productTitle = val(firstItem?.title);
   const size = val(firstItem?.variant?.size);
-  const color = val(firstItem?.variant?.color);
 
   const pvz = val(
     order?.pvzName ||
@@ -55,7 +54,7 @@ function OneLabelHTML({
     JsBarcode(barcodeRef.current, trackNumber, {
       format: "CODE128",
       width: 1.08,
-      height: 44,
+      height: 42,
       displayValue: false,
       margin: 0,
     });
@@ -156,12 +155,17 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
         .label-58x40 {
           width: 58mm;
           height: 40mm;
+
           box-sizing: border-box;
           padding: 2.7mm 3.2mm 2.1mm 3.2mm;
 
           display: flex;
           flex-direction: column;
-          gap: 1.2mm;
+
+          justify-content: center;
+          align-items: center;
+
+          gap: 1.4mm;
 
           background: #fff;
           color: #000;
@@ -175,12 +179,12 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
 
         .barcode-wrap {
           width: 100%;
-          min-height: 10.5mm;
+
           display: flex;
           justify-content: center;
-          align-items: flex-start;
-          padding-top: 0.6mm;
-          margin-bottom: 0.9mm;
+          align-items: center;
+
+          margin-bottom: 1mm;
         }
 
         .barcode {
@@ -191,7 +195,7 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
 
         .barcode-empty {
           width: 41.5mm;
-          height: 10mm;
+          height: 12mm;
 
           display: flex;
           align-items: center;
@@ -202,60 +206,69 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
           font-family: Arial, Helvetica, sans-serif;
           font-size: 7.6px;
           font-weight: 700;
-          letter-spacing: 0.04em;
         }
 
         .meta {
           display: flex;
           flex-direction: column;
-          gap: 0.7mm;
-          text-align: left;
-          min-height: 0;
+
+          gap: 0.9mm;
+
+          width: 100%;
+
+          text-align: center;
         }
 
         .row {
           display: flex;
+
+          justify-content: center;
+          align-items: center;
+
           gap: 1.2mm;
-          align-items: baseline;
-          justify-content: flex-start;
+
           min-width: 0;
         }
 
         .row-top {
-          align-items: flex-start;
+          align-items: center;
         }
 
         .k {
           font-weight: 700;
           white-space: nowrap;
-          flex: 0 0 auto;
         }
 
         .v {
-          flex: 1 1 auto;
           min-width: 0;
-          text-align: left;
+
+          text-align: center;
+
           overflow: hidden;
           text-overflow: ellipsis;
+
           white-space: nowrap;
+
           font-weight: 500;
         }
 
         .v-wrap {
           white-space: normal;
-          overflow: hidden;
-          text-overflow: clip;
+
           display: -webkit-box;
           -webkit-box-orient: vertical;
           -webkit-line-clamp: 2;
+
           line-clamp: 2;
+
           word-break: break-word;
+
+          text-align: center;
         }
 
         .mono {
           font-family: Arial, Helvetica, sans-serif;
           font-weight: 600;
-          letter-spacing: 0;
         }
 
         @media print {
