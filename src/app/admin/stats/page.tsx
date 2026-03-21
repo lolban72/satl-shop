@@ -12,7 +12,7 @@ export default async function AdminStatsPage() {
   const d30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
   const [
-    deliveredOrders,
+    completedOrders,
     canceledOrders,
     usersTotal,
     verifiedUsers,
@@ -24,7 +24,7 @@ export default async function AdminStatsPage() {
     ordersNew,
     ordersProcessing,
     ordersShipped,
-    ordersDelivered,
+    ordersCompleted,
     ordersCanceled,
     ordersReturned,
     productsTotal,
@@ -33,7 +33,7 @@ export default async function AdminStatsPage() {
     categoriesTotal,
   ] = await Promise.all([
     prisma.order.findMany({
-      where: { status: "DELIVERED" },
+      where: { status: "COMPLETED" },
       include: { items: true },
       orderBy: { createdAt: "desc" },
     }),
@@ -79,7 +79,7 @@ export default async function AdminStatsPage() {
     prisma.order.count({ where: { status: "NEW" } }),
     prisma.order.count({ where: { status: "PROCESSING" } }),
     prisma.order.count({ where: { status: "SHIPPED" } }),
-    prisma.order.count({ where: { status: "DELIVERED" } }),
+    prisma.order.count({ where: { status: "COMPLETED" } }),
     prisma.order.count({ where: { status: "CANCELED" } }),
     prisma.order.count({ where: { status: "RETURNED" } }),
     prisma.product.count(),
@@ -100,30 +100,30 @@ export default async function AdminStatsPage() {
     prisma.category.count(),
   ]);
 
-  const revenueAll = deliveredOrders.reduce((sum, order) => sum + order.total, 0);
+  const revenueAll = completedOrders.reduce((sum, order) => sum + order.total, 0);
 
-  const revenueToday = deliveredOrders
+  const revenueToday = completedOrders
     .filter((o) => o.createdAt >= todayStart)
     .reduce((sum, o) => sum + o.total, 0);
 
-  const revenue7 = deliveredOrders
+  const revenue7 = completedOrders
     .filter((o) => o.createdAt >= d7)
     .reduce((sum, o) => sum + o.total, 0);
 
-  const revenue30 = deliveredOrders
+  const revenue30 = completedOrders
     .filter((o) => o.createdAt >= d30)
     .reduce((sum, o) => sum + o.total, 0);
 
   const avgCheck =
-    deliveredOrders.length > 0 ? Math.round(revenueAll / deliveredOrders.length) : 0;
+    completedOrders.length > 0 ? Math.round(revenueAll / completedOrders.length) : 0;
 
   const canceledRevenue = canceledOrders.reduce((sum, order) => sum + order.total, 0);
   const canceledCount = canceledOrders.length;
 
-  const deliveredItems = deliveredOrders.flatMap((o) => o.items);
+  const completedItems = completedOrders.flatMap((o) => o.items);
   const topMap = new Map<string, { quantity: number; total: number }>();
 
-  for (const item of deliveredItems) {
+  for (const item of completedItems) {
     const current = topMap.get(item.title) ?? {
       quantity: 0,
       total: 0,
@@ -170,8 +170,8 @@ export default async function AdminStatsPage() {
 
   const usersTable = users.map((u) => {
     const fullName = [u.name, u.lastName].filter(Boolean).join(" ").trim();
-    const deliveredOnly = u.orders.filter((o) => o.status === "DELIVERED");
-    const ordersTotalSum = deliveredOnly.reduce((sum, o) => sum + (o.total ?? 0), 0);
+    const completedOnly = u.orders.filter((o) => o.status === "COMPLETED");
+    const ordersTotalSum = completedOnly.reduce((sum, o) => sum + (o.total ?? 0), 0);
 
     return {
       id: u.id,
@@ -182,7 +182,7 @@ export default async function AdminStatsPage() {
       newsletterEnabled: u.newsletterEnabled,
       createdAt: u.createdAt.toISOString(),
       ordersCount: u.orders.length,
-      deliveredCount: deliveredOnly.length,
+      deliveredCount: completedOnly.length,
       ordersTotalSum,
     };
   });
@@ -199,7 +199,7 @@ export default async function AdminStatsPage() {
         ordersNew,
         ordersProcessing,
         ordersShipped,
-        ordersDelivered,
+        ordersDelivered: ordersCompleted,
         ordersCanceled,
         ordersReturned,
         productsTotal,
