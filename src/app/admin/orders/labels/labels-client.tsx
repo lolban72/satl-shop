@@ -55,7 +55,7 @@ function OneLabelHTML({
     JsBarcode(barcodeRef.current, trackNumber, {
       format: "CODE128",
       width: 1.08,
-      height: 30,
+      height: 44,
       displayValue: false,
       margin: 0,
     });
