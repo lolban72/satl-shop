@@ -30,9 +30,15 @@ function OneLabelHTML({
   const productTitle = val(firstItem?.title);
   const size = val(firstItem?.variant?.size);
   const color = val(firstItem?.variant?.color);
+
   const pvz = val(
-    order?.pvzName || order?.pvzAddress || order?.pvz || order?.pickupPoint || "СДЭК"
+    order?.pvzName ||
+      order?.pvzAddress ||
+      order?.pvz ||
+      order?.pickupPoint ||
+      "СДЭК"
   );
+
   const trackNumber = useMemo(
     () => cleanTrackNumber(order?.trackNumber),
     [order?.trackNumber]
@@ -69,11 +75,6 @@ function OneLabelHTML({
         <div className="row row-top">
           <span className="k">Товар:</span>
           <span className="v v-wrap">{productTitle}</span>
-        </div>
-
-        <div className="row">
-          <span className="k">Цвет:</span>
-          <span className="v">{color === "default" ? "—" : color}</span>
         </div>
 
         <div className="row">
@@ -132,6 +133,7 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
     }
 
     run();
+
     return () => {
       cancelled = true;
     };
@@ -156,12 +158,18 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
           height: 40mm;
           box-sizing: border-box;
           padding: 2.7mm 3.2mm 2.1mm 3.2mm;
+
           display: flex;
           flex-direction: column;
           gap: 1.2mm;
+
           background: #fff;
           color: #000;
+
           font-family: Arial, Helvetica, sans-serif;
+          font-size: 7.6px;
+          line-height: 1.18;
+
           overflow: hidden;
         }
 
@@ -184,18 +192,20 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
         .barcode-empty {
           width: 41.5mm;
           height: 10mm;
+
           display: flex;
           align-items: center;
           justify-content: center;
+
           border: 0.2mm dashed #999;
-          font-size: 7px;
+
+          font-family: Arial, Helvetica, sans-serif;
+          font-size: 7.6px;
           font-weight: 700;
           letter-spacing: 0.04em;
         }
 
         .meta {
-          font-size: 7.5px;
-          line-height: 1.16;
           display: flex;
           flex-direction: column;
           gap: 0.7mm;
@@ -216,7 +226,7 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
         }
 
         .k {
-          font-weight: 800;
+          font-weight: 700;
           white-space: nowrap;
           flex: 0 0 auto;
         }
@@ -244,9 +254,8 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
 
         .mono {
           font-family: Arial, Helvetica, sans-serif;
-          letter-spacing: 0;
-          font-size: 7.3px;
           font-weight: 600;
+          letter-spacing: 0;
         }
 
         @media print {
