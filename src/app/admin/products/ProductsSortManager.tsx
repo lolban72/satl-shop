@@ -162,7 +162,7 @@ export default function ProductsSortManager({
                     <div className="font-semibold">
                       {(p.price / 100).toFixed(2)}р
                     </div>
-                    <div className="text-sm text-gray-600">stock: {p.stock}</div>
+                    <div className="text-sm text-gray-600">Осталось: {p.stock}</div>
 
                     <div className="mt-3 flex items-center justify-end gap-2">
                       <input

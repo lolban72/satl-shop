@@ -430,18 +430,6 @@ export default function ProductEditForm({
       </label>
 
       <label className="grid gap-1">
-        <span className="text-sm font-medium">Slug</span>
-        <input
-          className="rounded-xl border p-2"
-          value={slug}
-          onChange={(e) => setSlug(e.target.value)}
-        />
-        <div className="text-xs text-gray-600">
-          Итоговый slug: <b>{computedSlug || "—"}</b>
-        </div>
-      </label>
-
-      <label className="grid gap-1">
         <span className="text-sm font-medium">Категория</span>
         <select
           className="rounded-xl border p-2"
@@ -466,7 +454,7 @@ export default function ProductEditForm({
           className="rounded-xl border p-2 min-h-[120px]"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Описание товара (показывается на странице товара)"
+          placeholder="Описание товара"
         />
       </label>
 
@@ -480,7 +468,7 @@ export default function ProductEditForm({
       </label>
 
       <label className="grid gap-1">
-        <span className="text-sm font-medium">Цена (р) — без скидки</span>
+        <span className="text-sm font-medium">Цена — без скидки</span>
         <input
           className="rounded-xl border p-2"
           value={priceRub}
@@ -498,7 +486,7 @@ export default function ProductEditForm({
       {/* ✅ Цена со скидкой */}
       <label className="grid gap-1">
         <span className="text-sm font-medium">
-          Цена со скидкой (р) — если есть
+          Цена со скидкой — если есть
         </span>
         <input
           className="rounded-xl border p-2"
@@ -537,14 +525,14 @@ export default function ProductEditForm({
         ) : null}
         {!isSoon ? (
           <div className="text-xs text-gray-600">
-            0..99 (если 0 — плашка не показывается)
+            от 0 до 99 (если 0 — плашка не показывается)
           </div>
         ) : null}
       </label>
 
       {/* ✅ Обложка */}
       <div className="grid gap-2">
-        <div className="text-sm font-medium">Фото на главную (обложка)</div>
+        <div className="text-sm font-medium">Фото на главную</div>
 
         <div className="flex flex-wrap items-start gap-4">
           <div className="grid gap-2">
@@ -559,7 +547,7 @@ export default function ProductEditForm({
 
           <div className="grid gap-2">
             <div className="text-xs text-gray-600">
-              Новое (если нужно заменить)
+              Новое
             </div>
             <input
               type="file"
@@ -644,7 +632,7 @@ export default function ProductEditForm({
 
       {/* ✅ Таблица размеров */}
       <div className="rounded-xl border p-3">
-        <div className="text-sm font-medium">Таблица размеров (картинка)</div>
+        <div className="text-sm font-medium">Таблица размеров</div>
 
         <div className="mt-2 flex flex-wrap items-start gap-4">
           <div className="grid gap-2">
@@ -693,9 +681,6 @@ export default function ProductEditForm({
                 className="h-32 w-32 rounded-xl border object-cover"
               />
             ) : null}
-            <div className="text-[11px] text-gray-500">
-              Если загрузишь — при сохранении заменит текущую.
-            </div>
           </div>
         </div>
       </div>
@@ -756,11 +741,6 @@ export default function ProductEditForm({
               </button>
             </div>
           ))}
-          {!isSoon ? (
-            <div className="text-xs text-gray-600">
-              Сохраняется в Variant (color = default).
-            </div>
-          ) : null}
         </div>
       </div>
 
