@@ -26,18 +26,13 @@ export async function POST(req: Request) {
     const name = String(body?.name ?? "").trim();
     const phone = String(body?.phone ?? "").trim();
 
-    // доставка только в ПВЗ — address будет адресом ПВЗ
     const address = String(body?.address ?? "").trim();
 
-    // СДЭК ПВЗ
     const city = String(body?.city ?? "").trim();
     const pvzCode = String(body?.pvzCode ?? "").trim();
     const pvzAddress = String(body?.pvzAddress ?? "").trim();
-
-    // имя ПВЗ (опционально)
     const pvzName = body?.pvzName != null ? String(body.pvzName).trim() : null;
 
-    // доставка (копейки + дни) — приходит с фронта после /api/cdek/calc
     const deliveryPriceRaw =
       body?.deliveryPrice != null ? Number(body.deliveryPrice) : null;
     const deliveryDaysRaw =
@@ -86,10 +81,9 @@ export async function POST(req: Request) {
       );
     }
 
-    // пересчёт товаров (копейки)
     const itemsTotal = items.reduce((sum: number, it: any) => {
       const price = Number(it?.price) || 0;
-      const qty = Number(it?.qty) || 0;
+      const qty = Number(it?.qty ?? it?.quantity) || 0;
       return sum + price * qty;
     }, 0);
 
@@ -97,7 +91,6 @@ export async function POST(req: Request) {
       return Response.json({ error: "Некорректная сумма" }, { status: 400 });
     }
 
-    // доставка обязательна
     if (deliveryPriceBase == null || deliveryPriceBase < 0) {
       return Response.json(
         { error: "deliveryPrice required (calc delivery first)" },
@@ -105,12 +98,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // +10% к доставке — обязательно
     const deliveryPrice = addDeliveryFee(deliveryPriceBase);
-
-    // итоговая сумма заказа
     const total = itemsTotal + deliveryPrice;
-
     const finalAddress = pvzAddress || address;
 
     const draft = await prisma.paymentDraft.create({
@@ -121,13 +110,11 @@ export async function POST(req: Request) {
         phone,
         address: finalAddress,
 
-        // ПВЗ
         pvzCity: city,
         pvzCode,
         pvzAddress,
         pvzName,
 
-        // сохраняем уже доставку С НАЦЕНКОЙ
         deliveryPrice,
         deliveryDays,
 

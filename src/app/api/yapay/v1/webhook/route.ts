@@ -373,11 +373,6 @@ async function notifyUserOrderStatus(params: {
   await tgSendMessage(u.tgChatId, text).catch(() => {});
 }
 
-/**
- * JSON вебхук статусов — вызывается из админки.
- * Тело: { orderId: string, status: "SHIPPED" | "READY_FOR_PICKUP" | "DELIVERED" | ..., trackNumber?: string }
- * Заголовок: x-webhook-secret: <ORDER_STATUS_WEBHOOK_SECRET>
- */
 async function handleStatusWebhook(req: Request) {
   const secret = req.headers.get("x-webhook-secret") || "";
   const expected = process.env.ORDER_STATUS_WEBHOOK_SECRET || "";
@@ -472,9 +467,6 @@ async function handleStatusWebhook(req: Request) {
   return Response.json({ ok: true, changed: (result as any).changed });
 }
 
-/**
- * Yandex Pay webhook (JWT body) — оплата CAPTURED → создаём Order + уведомления
- */
 async function handleYaPayWebhook(req: Request) {
   const jwt = (await req.text()).trim();
 
@@ -707,9 +699,7 @@ async function handleYaPayWebhook(req: Request) {
     `${deliveryLine}` +
     `${packageLine}` +
     `Адрес: ${draft.address}\n` +
-    `Пользователь: ${
-      draft.email || "Не указан (клиент не авторизован)"
-    }\n\n` +
+    `Пользователь: ${draft.email || "Не указан (клиент не авторизован)"}\n\n` +
     `<b>Состав заказа:</b>\n` +
     items
       .map((i) => {

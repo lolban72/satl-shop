@@ -29,7 +29,11 @@ export async function POST(req: Request) {
       return Response.json({ error: "draft not found" }, { status: 404 });
     }
 
-    const merchantId = process.env.YAPAY_MERCHANT_ID || process.env.NEXT_PUBLIC_YAPAY_MERCHANT_ID || "";
+    const merchantId =
+      process.env.YAPAY_MERCHANT_ID ||
+      process.env.NEXT_PUBLIC_YAPAY_MERCHANT_ID ||
+      "";
+
     if (!merchantId) {
       return Response.json(
         { error: "YAPAY_MERCHANT_ID is missing" },
@@ -38,7 +42,7 @@ export async function POST(req: Request) {
     }
 
     const isProd = process.env.NEXT_PUBLIC_YAPAY_ENV === "PRODUCTION";
-    const apiKey = isProd ? (process.env.YAPAY_API_KEY || "") : merchantId;
+    const apiKey = isProd ? process.env.YAPAY_API_KEY || "" : merchantId;
 
     if (isProd && !apiKey) {
       return Response.json(
@@ -52,7 +56,6 @@ export async function POST(req: Request) {
       : "https://sandbox.pay.yandex.ru/api/merchant/v1/orders";
 
     const rawItems: any[] = Array.isArray(draft.itemsJson) ? draft.itemsJson : [];
-
     const items: Array<{
       productId: string;
       title: string;
@@ -66,7 +69,7 @@ export async function POST(req: Request) {
       const it = rawItems[idx];
       const productId = String(it?.productId ?? `item-${idx}`);
       const title = String(it?.title ?? "Товар");
-      const qty = Number(it?.qty ?? 1);
+      const qty = Number(it?.qty ?? it?.quantity ?? 1);
       const priceCents = Number(it?.price ?? it?.priceCents ?? 0);
       const lineTotalCents = priceCents * qty;
 
@@ -80,9 +83,7 @@ export async function POST(req: Request) {
       });
     }
 
-    // ВАЖНО:
-    // deliveryPrice в draft уже сохранена С +10% наценкой.
-    // Повторно добавлять 10% здесь нельзя.
+    // deliveryPrice уже сохранена в draft С НАЦЕНКОЙ +10%
     const deliveryCents =
       Number.isFinite(Number(draft.deliveryPrice ?? 0)) &&
       Number(draft.deliveryPrice ?? 0) > 0
