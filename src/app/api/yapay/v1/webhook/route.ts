@@ -511,6 +511,10 @@ async function handleYaPayWebhook(req: Request) {
       pvzName: true,
       deliveryPrice: true,
       deliveryDays: true,
+
+      promoCodeId: true,
+      promoCode: true,
+      discount: true,
     },
   });
 
@@ -581,6 +585,17 @@ async function handleYaPayWebhook(req: Request) {
         phone: true,
       },
     });
+
+    if (draft.promoCodeId) {
+      await tx.promoCode.update({
+        where: { id: draft.promoCodeId },
+        data: {
+          usedCount: {
+            increment: 1,
+          },
+        },
+      });
+    }
 
     for (const it of items) {
       const variantId = it?.variantId ? String(it.variantId) : null;
@@ -678,6 +693,15 @@ async function handleYaPayWebhook(req: Request) {
         }\n`
       : "";
 
+  const promoLine = draft.promoCode
+    ? `Промокод: <code>${draft.promoCode}</code>\n`
+    : "";
+
+  const discountLine =
+    Number(draft.discount ?? 0) > 0
+      ? `Скидка: ${rubFromCents(Number(draft.discount))}\n`
+      : "";
+
   const packageLine = cdekPackageInfo
     ? `Упаковка: ${cdekPackageInfo.type} (${cdekPackageInfo.lengthCm}×${cdekPackageInfo.widthCm}×${cdekPackageInfo.heightCm} см, ${cdekPackageInfo.weightGr} г)\n`
     : "";
@@ -697,6 +721,8 @@ async function handleYaPayWebhook(req: Request) {
     `Телефон: ${draft.phone}\n` +
     `${pvzLine}` +
     `${deliveryLine}` +
+    `${promoLine}` +
+    `${discountLine}` +
     `${packageLine}` +
     `Адрес: ${draft.address}\n` +
     `Пользователь: ${draft.email || "Не указан (клиент не авторизован)"}\n\n` +
@@ -729,8 +755,10 @@ async function handleYaPayWebhook(req: Request) {
       const userText =
         `<b>Заказ успешно оплачен ✅</b>\n` +
         `Номер заказа: <code>${createdOrder.id}</code>\n` +
-        `Сумма: ${rubFromCents(draft.total)}\n\n` +
-        `<b>Спасибо за покупку! 🎉</b>\n` +
+        `Сумма: ${rubFromCents(draft.total)}\n` +
+        `${draft.promoCode ? `<b>Промокод:</b> <code>${draft.promoCode}</code>\n` : ""}` +
+        `${Number(draft.discount ?? 0) > 0 ? `<b>Скидка:</b> ${rubFromCents(Number(draft.discount))}\n` : ""}` +
+        `\n<b>Спасибо за покупку! 🎉</b>\n` +
         `Ваш заказ находится в обработке. Ожидайте уведомлений о доставке.\n\n` +
         `${userTrackLine}` +
         `Вы можете отслеживать статус: <a href="https://satl.shop/account/orders" target="_blank">Мои заказы</a>.`;

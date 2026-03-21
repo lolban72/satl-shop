@@ -95,6 +95,14 @@ export default function CheckoutForm(props: {
 
   const [deliveryLoading, setDeliveryLoading] = useState(false);
 
+  const [promoCode, setPromoCode] = useState("");
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [appliedPromo, setAppliedPromo] = useState<{
+    code: string;
+    discount: number;
+  } | null>(null);
+
   const isTelegramNotLinked = !String(props.initial.tgChatId ?? "").trim();
 
   const deliveryMarkupCents = delivery
@@ -105,7 +113,8 @@ export default function CheckoutForm(props: {
     ? delivery.priceCents + deliveryMarkupCents
     : 0;
 
-  const payTotal = itemsTotal + deliveryTotalCents;
+  const promoDiscountCents = appliedPromo?.discount ?? 0;
+  const payTotal = Math.max(itemsTotal - promoDiscountCents, 0) + deliveryTotalCents;
 
   const deliveryAbortRef = useRef<AbortController | null>(null);
 
@@ -251,6 +260,61 @@ export default function CheckoutForm(props: {
     }
   }
 
+  async function applyPromo() {
+    const normalized = promoCode.trim().toUpperCase();
+
+    setPromoError(null);
+    setErr(null);
+
+    if (!normalized) {
+      setAppliedPromo(null);
+      return setPromoError("Введите промокод.");
+    }
+
+    if (itemsTotal <= 0) {
+      setAppliedPromo(null);
+      return setPromoError("Корзина пуста.");
+    }
+
+    try {
+      setPromoLoading(true);
+
+      const res = await fetch("/api/promo/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: normalized,
+          orderTotal: itemsTotal,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Не удалось применить промокод");
+      }
+
+      const discount = Number(data?.discount ?? 0);
+
+      setAppliedPromo({
+        code: normalized,
+        discount: Number.isFinite(discount) ? discount : 0,
+      });
+      setPromoCode(normalized);
+    } catch (e: any) {
+      setAppliedPromo(null);
+      setPromoError(e?.message || "Ошибка применения промокода");
+    } finally {
+      setPromoLoading(false);
+    }
+  }
+
+  function clearPromo() {
+    setPromoCode("");
+    setAppliedPromo(null);
+    setPromoError(null);
+  }
+
   function selectPvz(item: PvzItem) {
     const next = {
       code: item.code,
@@ -319,6 +383,7 @@ export default function CheckoutForm(props: {
     }
 
     if (deliveryLoading) return setErr("Считаем доставку... подождите.");
+    if (promoLoading) return setErr("Проверяем промокод... подождите.");
     if (!delivery) {
       return setErr(
         "Не удалось рассчитать доставку. Выберите ПВЗ ещё раз."
@@ -343,6 +408,7 @@ export default function CheckoutForm(props: {
           pvzName: pvz.name ?? null,
           deliveryPrice: delivery.priceCents,
           deliveryDays: delivery.daysMax ?? delivery.daysMin ?? null,
+          promoCode: appliedPromo?.code ?? null,
           items: items.map((i: any) => ({
             productId: i.productId,
             variantId: i.variantId ?? null,
@@ -482,6 +548,57 @@ export default function CheckoutForm(props: {
                 </label>
 
                 <div className="grid gap-[10px]">
+                  <span className={label}>Промокод</span>
+
+                  <div className="grid gap-[10px] sm:grid-cols-[1fr_180px]">
+                    <input
+                      className={input}
+                      value={promoCode}
+                      style={{ fontFamily: "Brygada" }}
+                      onChange={(e) => {
+                        setPromoCode(e.target.value.toUpperCase());
+                        setPromoError(null);
+                      }}
+                      placeholder="Введите промокод"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={applyPromo}
+                      disabled={promoLoading || !promoCode.trim()}
+                      className={btn}
+                    >
+                      {promoLoading ? "Проверяем..." : "Применить"}
+                    </button>
+                  </div>
+
+                  {appliedPromo ? (
+                    <div className="flex items-center justify-between border border-black/15 bg-black/[0.03] px-[14px] py-[12px] text-[12px]">
+                      <div>
+                        <div className="font-semibold uppercase tracking-[0.08em] text-[10px]">
+                          Промокод применён
+                        </div>
+                        <div className="mt-[4px] text-black/70">
+                          {appliedPromo.code} · скидка {moneyRub(appliedPromo.discount)}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={clearPromo}
+                        className="text-[10px] font-bold uppercase tracking-[0.12em] text-black/60 hover:text-black transition"
+                      >
+                        Убрать
+                      </button>
+                    </div>
+                  ) : null}
+
+                  {promoError ? (
+                    <div className="text-[12px] text-black/60">{promoError}</div>
+                  ) : null}
+                </div>
+
+                <div className="grid gap-[10px]">
                   <span className={label}>Пункт выдачи СДЭК</span>
 
                   <label className="grid gap-[4px]">
@@ -598,7 +715,12 @@ export default function CheckoutForm(props: {
 
               <button
                 className={clsx(btn, "mt-[18px]")}
-                disabled={loading || items.length === 0 || deliveryLoading}
+                disabled={
+                  loading ||
+                  items.length === 0 ||
+                  deliveryLoading ||
+                  promoLoading
+                }
                 onClick={submit}
                 type="button"
               >
@@ -606,6 +728,8 @@ export default function CheckoutForm(props: {
                   ? "Переходим к оплате..."
                   : deliveryLoading
                   ? "Считаем доставку..."
+                  : promoLoading
+                  ? "Проверяем промокод..."
                   : "Перейти к оплате"}
               </button>
 
@@ -694,6 +818,15 @@ export default function CheckoutForm(props: {
                 {moneyRub(itemsTotal)}
               </span>
             </div>
+
+            {appliedPromo ? (
+              <div className="flex items-center justify-between">
+                <span>Промокод ({appliedPromo.code})</span>
+                <span style={{ fontFamily: "Brygada" }} className="text-black">
+                  −{moneyRub(appliedPromo.discount)}
+                </span>
+              </div>
+            ) : null}
 
             <div className="flex items-center justify-between">
               <span>Доставка</span>

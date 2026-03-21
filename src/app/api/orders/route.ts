@@ -9,6 +9,7 @@ const BodySchema = z.object({
     address: z.string().min(5, "Адрес слишком короткий"),
   }),
   deliveryPrice: z.coerce.number().int().min(0, "Некорректная стоимость доставки"),
+  promoCode: z.string().trim().optional(),
   items: z
     .array(
       z.object({
@@ -57,8 +58,8 @@ export async function POST(req: Request) {
 
     const body = BodySchema.parse(await req.json());
 
-    // считаем total и собираем itemsJson
-    let total = 0;
+    // считаем subtotal и собираем itemsJson
+    let subtotal = 0;
     const itemsJson: any[] = [];
 
     for (const i of body.items) {
@@ -89,7 +90,7 @@ export async function POST(req: Request) {
         );
       }
 
-      total += product.price * i.qty;
+      subtotal += product.price * i.qty;
 
       itemsJson.push({
         productId: product.id,
@@ -100,11 +101,62 @@ export async function POST(req: Request) {
       });
     }
 
+    // промокод применяется к товарам до доставки
+    let discount = 0;
+    let promoId: string | null = null;
+    let appliedPromoCode: string | null = null;
+
+    if (body.promoCode) {
+      const normalizedCode = body.promoCode.trim().toUpperCase();
+
+      const promo = await prisma.promoCode.findUnique({
+        where: { code: normalizedCode },
+      });
+
+      if (!promo || !promo.isActive) {
+        return Response.json({ error: "Промокод недействителен" }, { status: 400 });
+      }
+
+      if (promo.expiresAt && promo.expiresAt < new Date()) {
+        return Response.json({ error: "Срок действия промокода истёк" }, { status: 400 });
+      }
+
+      if (promo.maxUses !== null && promo.maxUses !== undefined && promo.usedCount >= promo.maxUses) {
+        return Response.json({ error: "Лимит использований промокода исчерпан" }, { status: 400 });
+      }
+
+      if (
+        promo.minOrderTotal !== null &&
+        promo.minOrderTotal !== undefined &&
+        subtotal < promo.minOrderTotal
+      ) {
+        return Response.json(
+          { error: "Сумма заказа слишком маленькая для этого промокода" },
+          { status: 400 }
+        );
+      }
+
+      if (promo.discountType === "percent") {
+        discount = Math.round((subtotal * promo.discountValue) / 100);
+      } else if (promo.discountType === "fixed") {
+        discount = promo.discountValue;
+      }
+
+      if (discount > subtotal) {
+        discount = subtotal;
+      }
+
+      promoId = promo.id;
+      appliedPromoCode = promo.code;
+    }
+
     // добавляем доставку + 10% от доставки
     const deliveryPrice = body.deliveryPrice;
     const deliveryTax = Math.round(deliveryPrice * 0.1);
 
-    total += deliveryPrice + deliveryTax;
+    let total = subtotal - discount + deliveryPrice + deliveryTax;
+
+    if (total < 0) total = 0;
 
     // сохраняем данные пользователя
     await prisma.user.update({
@@ -127,11 +179,24 @@ export async function POST(req: Request) {
         itemsJson,
         total,
         status: "PENDING",
+        promoCodeId: promoId,
+        promoCode: appliedPromoCode,
+        discount,
+        deliveryPrice,
+        deliveryTax,
       },
       select: { id: true },
     });
 
-    return Response.json({ draftId: draft.id });
+    return Response.json({
+      draftId: draft.id,
+      total,
+      subtotal,
+      discount,
+      deliveryPrice,
+      deliveryTax,
+      promoCode: appliedPromoCode,
+    });
   } catch (e: any) {
     const msg = e?.issues?.[0]?.message || e?.message || "Ошибка обработки заказа";
     return Response.json({ error: msg }, { status: 400 });

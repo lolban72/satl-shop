@@ -33,6 +33,9 @@ export async function POST(req: Request) {
     const pvzAddress = String(body?.pvzAddress ?? "").trim();
     const pvzName = body?.pvzName != null ? String(body.pvzName).trim() : null;
 
+    const promoCodeRaw = String(body?.promoCode ?? "").trim();
+    const promoCodeNormalized = promoCodeRaw.toUpperCase();
+
     const deliveryPriceRaw =
       body?.deliveryPrice != null ? Number(body.deliveryPrice) : null;
     const deliveryDaysRaw =
@@ -98,8 +101,65 @@ export async function POST(req: Request) {
       );
     }
 
+    let promoId: string | null = null;
+    let appliedPromoCode: string | null = null;
+    let discount = 0;
+
+    if (promoCodeNormalized) {
+      const promo = await prisma.promoCode.findUnique({
+        where: { code: promoCodeNormalized },
+      });
+
+      if (!promo || !promo.isActive) {
+        return Response.json({ error: "Промокод недействителен" }, { status: 400 });
+      }
+
+      if (promo.expiresAt && promo.expiresAt < new Date()) {
+        return Response.json(
+          { error: "Срок действия промокода истёк" },
+          { status: 400 }
+        );
+      }
+
+      if (
+        promo.maxUses !== null &&
+        promo.maxUses !== undefined &&
+        promo.usedCount >= promo.maxUses
+      ) {
+        return Response.json(
+          { error: "Лимит использований промокода исчерпан" },
+          { status: 400 }
+        );
+      }
+
+      if (
+        promo.minOrderTotal !== null &&
+        promo.minOrderTotal !== undefined &&
+        itemsTotal < promo.minOrderTotal
+      ) {
+        return Response.json(
+          { error: "Сумма заказа слишком маленькая для этого промокода" },
+          { status: 400 }
+        );
+      }
+
+      if (promo.discountType === "percent") {
+        discount = Math.round((itemsTotal * promo.discountValue) / 100);
+      } else if (promo.discountType === "fixed") {
+        discount = promo.discountValue;
+      }
+
+      if (discount > itemsTotal) {
+        discount = itemsTotal;
+      }
+
+      promoId = promo.id;
+      appliedPromoCode = promo.code;
+    }
+
+    const deliveryTax = Math.round(deliveryPriceBase * 0.1);
     const deliveryPrice = addDeliveryFee(deliveryPriceBase);
-    const total = itemsTotal + deliveryPrice;
+    const total = Math.max(itemsTotal - discount, 0) + deliveryPrice;
     const finalAddress = pvzAddress || address;
 
     const draft = await prisma.paymentDraft.create({
@@ -118,6 +178,11 @@ export async function POST(req: Request) {
         deliveryPrice,
         deliveryDays,
 
+        promoCodeId: promoId,
+        promoCode: appliedPromoCode,
+        discount,
+        deliveryTax,
+
         itemsJson: items,
         total,
         status: "PENDING",
@@ -125,7 +190,15 @@ export async function POST(req: Request) {
       select: { id: true },
     });
 
-    return Response.json({ draftId: draft.id });
+    return Response.json({
+      draftId: draft.id,
+      total,
+      itemsTotal,
+      discount,
+      promoCode: appliedPromoCode,
+      deliveryPrice,
+      deliveryTax,
+    });
   } catch (e: any) {
     console.error("api/pay/draft error:", e);
     return Response.json(

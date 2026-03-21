@@ -23,10 +23,11 @@ const nav = [
   { href: "/admin/products", label: "Товары" },
   { href: "/admin/products/new", label: "Добавить товар" },
   { href: "/admin/categories", label: "Категории" },
+  { href: "/admin/promo", label: "Промокоды" },
   { href: "/admin/marketing/hero", label: "Баннер" },
   { href: "/admin/marquee", label: "Бегущая строка" },
 
-  // ✅ NEW: Контакты (футер)
+  // ✅ Контакты (футер)
   { href: "/admin/settings/contacts", label: "Контакты" },
 ];
 

@@ -14,10 +14,8 @@ model User {
   lastName String?
   phone    String?
 
-  // старое поле можно оставить для совместимости
   address String?
 
-  // ✅ новые поля для доставки
   addressCountry   String?
   addressRegion    String?
   addressCity      String?
@@ -27,18 +25,14 @@ model User {
   addressPostcode  String?
   addressComment   String?
 
-  // ✅ ПВЗ
   pvzCode    String?
   pvzAddress String?
   pvzName    String?
 
   role String @default("user")
 
-  // ✅ общий флаг подтверждения аккаунта
-  // (можешь включать его после успешной привязки TG)
   isVerified Boolean @default(false)
 
-  // ✅ Telegram (привязка)
   tgChatId     String?   @unique
   tgUsername   String?
   tgLinkedAt   DateTime?
@@ -67,7 +61,7 @@ model PasswordResetToken {
 
 model TgAdminState {
   chatId    String   @id
-  mode      String   @default("IDLE") // IDLE | BROADCAST_DRAFT
+  mode      String   @default("IDLE")
   draftText String?
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
@@ -93,11 +87,9 @@ model Category {
   slug  String @unique
   title String
 
-  // показ
   showInNav  Boolean @default(true)
   showOnHome Boolean @default(true)
 
-  // раздельная сортировка
   navOrder  Int @default(0)
   homeOrder Int @default(0)
 
@@ -124,7 +116,6 @@ model HeroBanner {
 model SiteSettings {
   id String @id @default("main")
 
-  // Контакты в футере (две колонки)
   contactsLeft  Json
   contactsRight Json
 
@@ -166,7 +157,7 @@ model Product {
   lengthCm        Int?
   widthCm         Int?
   heightCm        Int?
-  sortOrder Int @default(0)
+  sortOrder       Int       @default(0)
 }
 
 model Variant {
@@ -232,6 +223,21 @@ model OrderItem {
   quantity Int
 }
 
+model PromoCode {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  discountType  String
+  discountValue Int
+  minOrderTotal Int?
+  maxUses       Int?
+  usedCount     Int      @default(0)
+  expiresAt     DateTime?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  paymentDrafts PaymentDraft[]
+}
+
 model PaymentDraft {
   id String @id @default(cuid())
 
@@ -257,7 +263,15 @@ model PaymentDraft {
   deliveryPrice Int?
   deliveryDays  Int?
 
+  promoCodeId String?
+  promoCode   String?
+  discount    Int     @default(0)
+  deliveryTax Int     @default(0)
+
+  promo PromoCode? @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
+
   @@index([status])
+  @@index([promoCodeId])
 }
 
 enum OrderStatus {

@@ -64,12 +64,13 @@ function Card({
 }
 
 export default async function AdminDashboard() {
-  const [productsCount, categoriesCount, ordersCount] = await Promise.all([
-    prisma.product.count(),
-    prisma.category.count(),
-    prisma.order.count(),
-  ]);
-
+  const [productsCount, categoriesCount, ordersCount, promoCount] =
+    await Promise.all([
+      prisma.product.count(),
+      prisma.category.count(),
+      prisma.order.count(),
+      prisma.promoCode.count(),
+    ]);
 
   const cards = [
     {
@@ -95,6 +96,11 @@ export default async function AdminDashboard() {
       title: "Категории",
       desc: "Создание и управление категориями.",
       links: [{ href: "/admin/categories", label: "Управление категориями" }],
+    },
+    {
+      title: "Промокоды",
+      desc: "Создание, включение, отключение и удаление промокодов.",
+      links: [{ href: "/admin/promo", label: "Управление промокодами" }],
     },
     {
       title: "Маркетинг",
@@ -123,10 +129,11 @@ export default async function AdminDashboard() {
           </div>
         </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatPill label="Товары" value={productsCount} />
           <StatPill label="Категории" value={categoriesCount} />
           <StatPill label="Заказы" value={ordersCount} />
+          <StatPill label="Промокоды" value={promoCount} />
         </div>
       </div>
 
