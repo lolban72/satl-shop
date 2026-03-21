@@ -29,10 +29,10 @@ export async function POST(req: Request) {
       return Response.json({ error: "draft not found" }, { status: 404 });
     }
 
-    const merchantId = process.env.NEXT_PUBLIC_YAPAY_MERCHANT_ID || "";
+    const merchantId = process.env.YAPAY_MERCHANT_ID || process.env.NEXT_PUBLIC_YAPAY_MERCHANT_ID || "";
     if (!merchantId) {
       return Response.json(
-        { error: "NEXT_PUBLIC_YAPAY_MERCHANT_ID is missing" },
+        { error: "YAPAY_MERCHANT_ID is missing" },
         { status: 500 }
       );
     }
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
       total: string;
     }> = [];
 
-    let cartTotalCents = 0;
+    let itemsTotalCents = 0;
 
     for (let idx = 0; idx < rawItems.length; idx++) {
       const it = rawItems[idx];
@@ -70,7 +70,7 @@ export async function POST(req: Request) {
       const priceCents = Number(it?.price ?? it?.priceCents ?? 0);
       const lineTotalCents = priceCents * qty;
 
-      cartTotalCents += lineTotalCents;
+      itemsTotalCents += lineTotalCents;
 
       items.push({
         productId,
@@ -80,11 +80,16 @@ export async function POST(req: Request) {
       });
     }
 
-    const baseDeliveryCents = Number(draft.deliveryPrice ?? 0);
+    // ВАЖНО:
+    // deliveryPrice в draft уже сохранена С +10% наценкой.
+    // Повторно добавлять 10% здесь нельзя.
     const deliveryCents =
-      Number.isFinite(baseDeliveryCents) && baseDeliveryCents > 0
-        ? baseDeliveryCents + Math.round(baseDeliveryCents * 0.1)
+      Number.isFinite(Number(draft.deliveryPrice ?? 0)) &&
+      Number(draft.deliveryPrice ?? 0) > 0
+        ? Number(draft.deliveryPrice)
         : 0;
+
+    let cartTotalCents = itemsTotalCents;
 
     if (deliveryCents > 0) {
       const city = String(draft.pvzCity ?? "").trim();
@@ -102,6 +107,19 @@ export async function POST(req: Request) {
         quantity: { count: "1" },
         total: rub2(deliveryCents),
       });
+    }
+
+    const expectedTotalCents = Number(draft.total || 0);
+    if (expectedTotalCents !== cartTotalCents) {
+      return Response.json(
+        {
+          error: "total mismatch",
+          expectedTotalCents,
+          actualTotalCents: cartTotalCents,
+          draftId,
+        },
+        { status: 400 }
+      );
     }
 
     const payload = {
