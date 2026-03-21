@@ -29,8 +29,14 @@ function OneLabelHTML({
 
   const productTitle = val(firstItem?.title);
   const size = val(firstItem?.variant?.size);
-  const pvz = val(order?.pvzName || order?.pvzAddress || order?.pvz || order?.pickupPoint || "СДЭК");
-  const trackNumber = useMemo(() => cleanTrackNumber(order?.trackNumber), [order?.trackNumber]);
+  const color = val(firstItem?.variant?.color);
+  const pvz = val(
+    order?.pvzName || order?.pvzAddress || order?.pvz || order?.pickupPoint || "СДЭК"
+  );
+  const trackNumber = useMemo(
+    () => cleanTrackNumber(order?.trackNumber),
+    [order?.trackNumber]
+  );
 
   useEffect(() => {
     if (!barcodeRef.current) return;
@@ -42,8 +48,8 @@ function OneLabelHTML({
 
     JsBarcode(barcodeRef.current, trackNumber, {
       format: "CODE128",
-      width: 1.35,
-      height: 28,
+      width: 1.08,
+      height: 30,
       displayValue: false,
       margin: 0,
     });
@@ -63,6 +69,11 @@ function OneLabelHTML({
         <div className="row row-top">
           <span className="k">Товар:</span>
           <span className="v v-wrap">{productTitle}</span>
+        </div>
+
+        <div className="row">
+          <span className="k">Цвет:</span>
+          <span className="v">{color === "default" ? "—" : color}</span>
         </div>
 
         <div className="row">
@@ -144,34 +155,35 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
           width: 58mm;
           height: 40mm;
           box-sizing: border-box;
-          padding: 1.4mm 1.5mm 1.2mm;
+          padding: 2.7mm 3.2mm 2.1mm 3.2mm;
           display: flex;
           flex-direction: column;
-          gap: 1mm;
+          gap: 1.2mm;
           background: #fff;
           color: #000;
-          font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+          font-family: Arial, Helvetica, sans-serif;
           overflow: hidden;
         }
 
         .barcode-wrap {
           width: 100%;
-          min-height: 9.5mm;
+          min-height: 10.5mm;
           display: flex;
           justify-content: center;
           align-items: flex-start;
-          padding-top: 0.2mm;
+          padding-top: 0.6mm;
+          margin-bottom: 0.9mm;
         }
 
         .barcode {
-          width: 54mm;
+          width: 41.5mm;
           height: auto;
           display: block;
         }
 
         .barcode-empty {
-          width: 54mm;
-          height: 9mm;
+          width: 41.5mm;
+          height: 10mm;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -182,18 +194,18 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
         }
 
         .meta {
-          font-size: 7px;
-          line-height: 1.08;
+          font-size: 7.5px;
+          line-height: 1.16;
           display: flex;
           flex-direction: column;
-          gap: 0.65mm;
+          gap: 0.7mm;
           text-align: left;
           min-height: 0;
         }
 
         .row {
           display: flex;
-          gap: 1.6mm;
+          gap: 1.2mm;
           align-items: baseline;
           justify-content: flex-start;
           min-width: 0;
@@ -216,6 +228,7 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
+          font-weight: 500;
         }
 
         .v-wrap {
@@ -230,9 +243,10 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
         }
 
         .mono {
-          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace;
-          letter-spacing: 0.01em;
-          font-size: 6.8px;
+          font-family: Arial, Helvetica, sans-serif;
+          letter-spacing: 0;
+          font-size: 7.3px;
+          font-weight: 600;
         }
 
         @media print {
@@ -249,6 +263,7 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
           body {
             margin: 0 !important;
             padding: 0 !important;
+            background: #fff !important;
           }
 
           .label-root {
