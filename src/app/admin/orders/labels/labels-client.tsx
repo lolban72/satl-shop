@@ -173,8 +173,10 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
           display: flex;
           flex-direction: column;
           align-items: center;
-          justify-content: center;
+          justify-content: flex-start;
           gap: 1.2mm;
+
+          padding-top: 1.2mm;
         }
 
         .barcode-wrap {
