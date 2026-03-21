@@ -82,11 +82,22 @@ export default function AdminPromoPage() {
       setSaving(true);
       setError("");
 
+      const numericDiscountValue = Number(discountValue);
+
+      if (!Number.isFinite(numericDiscountValue) || numericDiscountValue <= 0) {
+        throw new Error("Введите корректное значение скидки");
+      }
+
       const payload = {
         code: code.trim().toUpperCase(),
         discountType,
-        discountValue: Number(discountValue),
-        minOrderTotal: minOrderTotal.trim() ? Number(minOrderTotal) * 100 : null,
+        discountValue:
+          discountType === "fixed"
+            ? Math.round(numericDiscountValue * 100)
+            : Math.round(numericDiscountValue),
+        minOrderTotal: minOrderTotal.trim()
+          ? Math.round(Number(minOrderTotal) * 100)
+          : null,
         maxUses: maxUses.trim() ? Number(maxUses) : null,
         expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
         isActive,

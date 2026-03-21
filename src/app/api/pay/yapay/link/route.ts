@@ -22,6 +22,8 @@ export async function POST(req: Request) {
         deliveryPrice: true,
         pvzCity: true,
         pvzAddress: true,
+        promoCode: true,
+        discount: true,
       },
     });
 
@@ -83,14 +85,31 @@ export async function POST(req: Request) {
       });
     }
 
-    // deliveryPrice уже сохранена в draft С НАЦЕНКОЙ +10%
+    const discountCents =
+      Number.isFinite(Number(draft.discount ?? 0)) &&
+      Number(draft.discount ?? 0) > 0
+        ? Number(draft.discount)
+        : 0;
+
+    if (discountCents > 0) {
+      items.push({
+        productId: "promo-discount",
+        title: draft.promoCode
+          ? `Скидка по промокоду ${draft.promoCode}`
+          : "Скидка",
+        quantity: { count: "1" },
+        total: rub2(-discountCents),
+      });
+    }
+
+    // deliveryPrice уже сохранена в draft с наценкой +10%
     const deliveryCents =
       Number.isFinite(Number(draft.deliveryPrice ?? 0)) &&
       Number(draft.deliveryPrice ?? 0) > 0
         ? Number(draft.deliveryPrice)
         : 0;
 
-    let cartTotalCents = itemsTotalCents;
+    let cartTotalCents = Math.max(itemsTotalCents - discountCents, 0);
 
     if (deliveryCents > 0) {
       const city = String(draft.pvzCity ?? "").trim();
@@ -117,6 +136,9 @@ export async function POST(req: Request) {
           error: "total mismatch",
           expectedTotalCents,
           actualTotalCents: cartTotalCents,
+          itemsTotalCents,
+          discountCents,
+          deliveryCents,
           draftId,
         },
         { status: 400 }
