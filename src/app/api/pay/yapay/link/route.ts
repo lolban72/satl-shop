@@ -24,11 +24,19 @@ export async function POST(req: Request) {
         pvzAddress: true,
         promoCode: true,
         discount: true,
+        status: true,
       },
     });
 
     if (!draft) {
       return Response.json({ error: "draft not found" }, { status: 404 });
+    }
+
+    if (draft.status !== "PENDING") {
+      return Response.json(
+        { error: "draft is not payable", status: draft.status },
+        { status: 400 }
+      );
     }
 
     const merchantId =
@@ -65,17 +73,13 @@ export async function POST(req: Request) {
       total: string;
     }> = [];
 
-    let itemsTotalCents = 0;
-
     for (let idx = 0; idx < rawItems.length; idx++) {
       const it = rawItems[idx];
       const productId = String(it?.productId ?? `item-${idx}`);
       const title = String(it?.title ?? "Товар");
-      const qty = Number(it?.qty ?? it?.quantity ?? 1);
-      const priceCents = Number(it?.price ?? it?.priceCents ?? 0);
+      const qty = Math.max(1, Number(it?.qty ?? it?.quantity ?? 1));
+      const priceCents = Math.max(0, Number(it?.price ?? it?.priceCents ?? 0));
       const lineTotalCents = priceCents * qty;
-
-      itemsTotalCents += lineTotalCents;
 
       items.push({
         productId,
@@ -85,31 +89,11 @@ export async function POST(req: Request) {
       });
     }
 
-    const discountCents =
-      Number.isFinite(Number(draft.discount ?? 0)) &&
-      Number(draft.discount ?? 0) > 0
-        ? Number(draft.discount)
-        : 0;
-
-    if (discountCents > 0) {
-      items.push({
-        productId: "promo-discount",
-        title: draft.promoCode
-          ? `Скидка по промокоду ${draft.promoCode}`
-          : "Скидка",
-        quantity: { count: "1" },
-        total: rub2(-discountCents),
-      });
-    }
-
-    // deliveryPrice уже сохранена в draft с наценкой +10%
     const deliveryCents =
       Number.isFinite(Number(draft.deliveryPrice ?? 0)) &&
       Number(draft.deliveryPrice ?? 0) > 0
         ? Number(draft.deliveryPrice)
         : 0;
-
-    let cartTotalCents = Math.max(itemsTotalCents - discountCents, 0);
 
     if (deliveryCents > 0) {
       const city = String(draft.pvzCity ?? "").trim();
@@ -119,30 +103,12 @@ export async function POST(req: Request) {
           ? `Доставка СДЭК до ПВЗ (${[city, addr].filter(Boolean).join(", ")})`
           : "Доставка СДЭК до ПВЗ";
 
-      cartTotalCents += deliveryCents;
-
       items.push({
         productId: "delivery",
         title: label,
         quantity: { count: "1" },
         total: rub2(deliveryCents),
       });
-    }
-
-    const expectedTotalCents = Number(draft.total || 0);
-    if (expectedTotalCents !== cartTotalCents) {
-      return Response.json(
-        {
-          error: "total mismatch",
-          expectedTotalCents,
-          actualTotalCents: cartTotalCents,
-          itemsTotalCents,
-          discountCents,
-          deliveryCents,
-          draftId,
-        },
-        { status: 400 }
-      );
     }
 
     const payload = {
@@ -157,7 +123,7 @@ export async function POST(req: Request) {
       },
       cart: {
         items,
-        total: { amount: rub2(cartTotalCents) },
+        total: { amount: rub2(Number(draft.total || 0)) },
       },
     };
 
@@ -174,7 +140,11 @@ export async function POST(req: Request) {
 
     if (!r.ok) {
       return Response.json(
-        { error: "Yandex Pay order create failed", details: data, payload },
+        {
+          error: "Yandex Pay order create failed",
+          details: data,
+          payload,
+        },
         { status: 500 }
       );
     }
