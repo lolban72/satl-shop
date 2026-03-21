@@ -3,20 +3,33 @@ import { auth } from "@/auth";
 import { z } from "zod";
 
 const CreatePromoSchema = z.object({
-  code: z.string().trim().min(2),
+  code: z.string().trim().min(2, "Введите код промокода"),
   discountType: z.enum(["percent", "fixed"]),
-  discountValue: z.coerce.number().int().positive(),
-  minOrderTotal: z.coerce.number().int().min(0).optional().nullable(),
-  maxUses: z.coerce.number().int().min(1).optional().nullable(),
-  expiresAt: z.string().datetime().optional().nullable(),
+  discountValue: z.coerce.number().int().positive("Скидка должна быть больше 0"),
+  minOrderTotal: z.coerce.number().int().min(0).nullable().optional(),
+  maxUses: z.coerce.number().int().min(1).nullable().optional(),
+  expiresAt: z.string().nullable().optional(),
   isActive: z.coerce.boolean().optional(),
 });
 
+function parseAdminEmails(v?: string) {
+  return (v ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function isAdminEmail(email?: string | null) {
+  const e = (email ?? "").trim().toLowerCase();
+  if (!e) return false;
+  const admins = parseAdminEmails(process.env.ADMIN_EMAILS);
+  return admins.includes(e);
+}
+
 async function requireAdmin() {
   const session = await auth();
-  const role = (session?.user as any)?.role;
 
-  if (role !== "admin") {
+  if (!session?.user?.email || !isAdminEmail(session.user.email)) {
     throw new Error("FORBIDDEN");
   }
 }
@@ -43,7 +56,7 @@ export async function POST(req: Request) {
 
     const promo = await prisma.promoCode.create({
       data: {
-        code: body.code.toUpperCase(),
+        code: body.code.trim().toUpperCase(),
         discountType: body.discountType,
         discountValue: body.discountValue,
         minOrderTotal: body.minOrderTotal ?? null,
@@ -55,7 +68,14 @@ export async function POST(req: Request) {
 
     return Response.json({ promo });
   } catch (e: any) {
-    const msg = e?.issues?.[0]?.message || e?.message || "Ошибка создания промокода";
+    if (e?.message === "FORBIDDEN") {
+      return Response.json({ error: "Доступ запрещён" }, { status: 403 });
+    }
+
+    const msg =
+      e?.issues?.[0]?.message ||
+      e?.message ||
+      "Ошибка создания промокода";
 
     return Response.json({ error: msg }, { status: 400 });
   }
