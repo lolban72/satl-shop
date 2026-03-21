@@ -54,7 +54,7 @@ function OneLabelHTML({
     JsBarcode(barcodeRef.current, trackNumber, {
       format: "CODE128",
       width: 1.08,
-      height: 42,
+      height: 40,
       displayValue: false,
       margin: 0,
     });
@@ -62,33 +62,35 @@ function OneLabelHTML({
 
   return (
     <div ref={htmlRef} className="label-58x40">
-      <div className="barcode-wrap">
-        {trackNumber ? (
-          <svg ref={barcodeRef} className="barcode" />
-        ) : (
-          <div className="barcode-empty">НЕТ ТРЕК-НОМЕРА</div>
-        )}
-      </div>
-
-      <div className="meta">
-        <div className="row row-top">
-          <span className="k">Товар:</span>
-          <span className="v v-wrap">{productTitle}</span>
+      <div className="label-inner">
+        <div className="barcode-wrap">
+          {trackNumber ? (
+            <svg ref={barcodeRef} className="barcode" />
+          ) : (
+            <div className="barcode-empty">НЕТ ТРЕК-НОМЕРА</div>
+          )}
         </div>
 
-        <div className="row">
-          <span className="k">Размер:</span>
-          <span className="v">{size}</span>
-        </div>
+        <div className="meta">
+          <div className="row row-top">
+            <span className="k">Товар:</span>
+            <span className="v v-wrap">{productTitle}</span>
+          </div>
 
-        <div className="row row-top">
-          <span className="k">ПВЗ:</span>
-          <span className="v v-wrap">{pvz}</span>
-        </div>
+          <div className="row">
+            <span className="k">Размер:</span>
+            <span className="v">{size}</span>
+          </div>
 
-        <div className="row">
-          <span className="k">Трек:</span>
-          <span className="v mono">{trackNumber || "—"}</span>
+          <div className="row row-top">
+            <span className="k">ПВЗ:</span>
+            <span className="v v-wrap">{pvz}</span>
+          </div>
+
+          <div className="row">
+            <span className="k">Трек:</span>
+            <span className="v mono">{trackNumber || "—"}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -155,36 +157,31 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
         .label-58x40 {
           width: 58mm;
           height: 40mm;
-
           box-sizing: border-box;
-          padding: 2.7mm 3.2mm 2.1mm 3.2mm;
-
+          padding: 0;
           display: flex;
-          flex-direction: column;
-
           justify-content: center;
           align-items: center;
-
-          gap: 1.4mm;
-
           background: #fff;
           color: #000;
-
-          font-family: Arial, Helvetica, sans-serif;
-          font-size: 7.6px;
-          line-height: 1.18;
-
           overflow: hidden;
+          font-family: Arial, Helvetica, sans-serif;
+        }
+
+        .label-inner {
+          width: 51.6mm;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 1.2mm;
         }
 
         .barcode-wrap {
           width: 100%;
-
           display: flex;
           justify-content: center;
           align-items: center;
-
-          margin-bottom: 1mm;
         }
 
         .barcode {
@@ -196,79 +193,69 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
         .barcode-empty {
           width: 41.5mm;
           height: 12mm;
-
           display: flex;
           align-items: center;
           justify-content: center;
-
           border: 0.2mm dashed #999;
-
-          font-family: Arial, Helvetica, sans-serif;
           font-size: 7.6px;
           font-weight: 700;
+          font-family: Arial, Helvetica, sans-serif;
         }
 
         .meta {
+          width: 100%;
           display: flex;
           flex-direction: column;
-
-          gap: 0.9mm;
-
-          width: 100%;
-
-          text-align: center;
+          gap: 0.8mm;
+          text-align: left;
+          font-size: 7.6px;
+          line-height: 1.18;
         }
 
         .row {
           display: flex;
-
-          justify-content: center;
-          align-items: center;
-
           gap: 1.2mm;
-
+          align-items: baseline;
+          justify-content: flex-start;
           min-width: 0;
+          width: 100%;
         }
 
         .row-top {
-          align-items: center;
+          align-items: flex-start;
         }
 
         .k {
           font-weight: 700;
           white-space: nowrap;
+          flex: 0 0 auto;
         }
 
         .v {
+          flex: 1 1 auto;
           min-width: 0;
-
-          text-align: center;
-
+          text-align: left;
           overflow: hidden;
           text-overflow: ellipsis;
-
           white-space: nowrap;
-
           font-weight: 500;
         }
 
         .v-wrap {
           white-space: normal;
-
+          overflow: hidden;
+          text-overflow: clip;
           display: -webkit-box;
           -webkit-box-orient: vertical;
           -webkit-line-clamp: 2;
-
           line-clamp: 2;
-
           word-break: break-word;
-
-          text-align: center;
         }
 
         .mono {
           font-family: Arial, Helvetica, sans-serif;
           font-weight: 600;
+          letter-spacing: 0;
         }
 
         @media print {
