@@ -18,13 +18,13 @@ export async function POST(req: Request) {
       select: {
         id: true,
         total: true,
+        status: true,
         itemsJson: true,
         deliveryPrice: true,
         pvzCity: true,
         pvzAddress: true,
         promoCode: true,
         discount: true,
-        status: true,
       },
     });
 
@@ -66,12 +66,15 @@ export async function POST(req: Request) {
       : "https://sandbox.pay.yandex.ru/api/merchant/v1/orders";
 
     const rawItems: any[] = Array.isArray(draft.itemsJson) ? draft.itemsJson : [];
+
     const items: Array<{
       productId: string;
       title: string;
       quantity: { count: string };
       total: string;
     }> = [];
+
+    let itemsTotalCents = 0;
 
     for (let idx = 0; idx < rawItems.length; idx++) {
       const it = rawItems[idx];
@@ -81,12 +84,51 @@ export async function POST(req: Request) {
       const priceCents = Math.max(0, Number(it?.price ?? it?.priceCents ?? 0));
       const lineTotalCents = priceCents * qty;
 
+      itemsTotalCents += lineTotalCents;
+
       items.push({
         productId,
         title,
         quantity: { count: String(qty) },
         total: rub2(lineTotalCents),
       });
+    }
+
+    const discountCents =
+      Number.isFinite(Number(draft.discount ?? 0)) &&
+      Number(draft.discount ?? 0) > 0
+        ? Number(draft.discount)
+        : 0;
+
+    // Применяем скидку прямо к первой товарной позиции,
+    // чтобы сумма item'ов совпадала с draft.total
+    if (discountCents > 0 && items.length > 0) {
+      let remainingDiscount = discountCents;
+
+      for (let i = 0; i < items.length; i++) {
+        const currentCents = Math.round(Number(items[i].total) * 100);
+        if (currentCents <= 0) continue;
+
+        const discountForThisItem = Math.min(currentCents, remainingDiscount);
+        const nextCents = currentCents - discountForThisItem;
+
+        items[i].total = rub2(nextCents);
+        remainingDiscount -= discountForThisItem;
+
+        if (remainingDiscount <= 0) break;
+      }
+
+      if (remainingDiscount > 0) {
+        return Response.json(
+          {
+            error: "discount exceeds items total",
+            draftId,
+            discountCents,
+            itemsTotalCents,
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const deliveryCents =
@@ -111,6 +153,27 @@ export async function POST(req: Request) {
       });
     }
 
+    const actualCartTotalCents = items.reduce((sum, item) => {
+      return sum + Math.round(Number(item.total) * 100);
+    }, 0);
+
+    const expectedTotalCents = Number(draft.total || 0);
+
+    if (expectedTotalCents !== actualCartTotalCents) {
+      return Response.json(
+        {
+          error: "total mismatch after discount distribution",
+          expectedTotalCents,
+          actualTotalCents: actualCartTotalCents,
+          draftId,
+          discountCents,
+          deliveryCents,
+          items,
+        },
+        { status: 400 }
+      );
+    }
+
     const payload = {
       orderId: draft.id,
       merchantId,
@@ -123,7 +186,7 @@ export async function POST(req: Request) {
       },
       cart: {
         items,
-        total: { amount: rub2(Number(draft.total || 0)) },
+        total: { amount: rub2(expectedTotalCents) },
       },
     };
 
