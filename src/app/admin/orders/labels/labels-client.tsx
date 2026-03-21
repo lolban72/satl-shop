@@ -185,7 +185,7 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
           justify-content: center;
           align-items: center;
 
-          margin-bottom: 3mm; /* ← поднимает штрих-код выше текста */
+          margin-bottom: 3.4mm; /* ← поднимает штрих-код выше текста */
         }
 
         .barcode {
