@@ -364,19 +364,6 @@ export default function ProductCreateForm() {
       </label>
 
       <label className="grid gap-1">
-        <span className="text-sm font-medium">Slug (необязательно)</span>
-        <input
-          className="rounded-xl border p-2"
-          value={slug}
-          onChange={(e) => setSlug(e.target.value)}
-          placeholder="hoodie-gray"
-        />
-        <div className="text-xs text-gray-600">
-          Итоговый slug: <b>{computedSlug || "—"}</b>
-        </div>
-      </label>
-
-      <label className="grid gap-1">
         <span className="text-sm font-medium">Категория</span>
         <select className="rounded-xl border p-2" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
           {categories.length === 0 ? (
@@ -397,7 +384,7 @@ export default function ProductCreateForm() {
           className="rounded-xl border p-2 min-h-[110px]"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          placeholder="Описание товара (будет на странице товара)"
+          placeholder="Описание товара"
         />
       </label>
 
@@ -407,7 +394,7 @@ export default function ProductCreateForm() {
       </label>
 
       <label className="grid gap-1">
-        <span className="text-sm font-medium">Цена (р) — без скидки</span>
+        <span className="text-sm font-medium">Цена — без скидки</span>
         <input
           className="rounded-xl border p-2"
           value={priceRub}
@@ -421,7 +408,7 @@ export default function ProductCreateForm() {
 
       {/* ✅ NEW: цена со скидкой */}
       <label className="grid gap-1">
-        <span className="text-sm font-medium">Цена со скидкой (р) — если есть</span>
+        <span className="text-sm font-medium">Цена со скидкой — если есть</span>
         <input
           className="rounded-xl border p-2"
           value={discountPriceRub}
@@ -450,12 +437,12 @@ export default function ProductCreateForm() {
           inputMode="numeric"
         />
         {isSoon ? <div className="text-xs text-gray-600">В режиме "Скоро" скидка не нужна.</div> : null}
-        {!isSoon ? <div className="text-xs text-gray-600">0..99 (если 0 — плашка не показывается)</div> : null}
+        {!isSoon ? <div className="text-xs text-gray-600">от 0 до 99 (если 0 — плашка не показывается)</div> : null}
       </label>
 
       {/* ✅ Фото на главную */}
       <label className="grid gap-1">
-        <span className="text-sm font-medium">Фото на главную (обложка)</span>
+        <span className="text-sm font-medium">Фото на главную</span>
         <input
           type="file"
           accept="image/*"
@@ -472,7 +459,7 @@ export default function ProductCreateForm() {
 
       {/* ✅ Фото в галерею */}
       <label className="grid gap-1">
-        <span className="text-sm font-medium">Фото в галерею (несколько)</span>
+        <span className="text-sm font-medium">Фото в галерею</span>
         <input
           type="file"
           accept="image/*"
@@ -498,14 +485,13 @@ export default function ProductCreateForm() {
 
       {/* ✅ NEW: Размерная таблица */}
       <label className="grid gap-1">
-        <span className="text-sm font-medium">Размерная таблица (картинка, необязательно)</span>
+        <span className="text-sm font-medium">Размерная таблица</span>
         <input
           type="file"
           accept="image/*"
           className="rounded-xl border p-2"
           onChange={(e) => setSizeChartFile(e.target.files?.[0] ?? null)}
         />
-        <div className="text-xs text-gray-600">Будет показываться на странице товара по кнопке «Таблица размеров».</div>
       </label>
 
       {sizeChartPreview ? (
@@ -552,7 +538,6 @@ export default function ProductCreateForm() {
               </button>
             </div>
           ))}
-          {!isSoon ? <div className="text-xs text-gray-600">Размеры будут созданы как variants (color = default).</div> : null}
         </div>
       </div>
 

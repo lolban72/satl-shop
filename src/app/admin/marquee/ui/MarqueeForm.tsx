@@ -95,7 +95,6 @@ export default function MarqueeForm() {
       >
         {saving ? "Сохраняю..." : "Сохранить"}
       </button>
-      <div className="text-xs text-gray-600">Нажми 2 раза на кнопку, чтобы сохранить</div>
     </div>
   );
 }

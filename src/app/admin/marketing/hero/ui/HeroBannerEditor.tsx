@@ -165,12 +165,12 @@ export default function HeroBannerEditor() {
       </label>
 
       <label className="grid gap-1">
-        <span className="text-sm font-medium">Заголовок (необязательно)</span>
+        <span className="text-sm font-medium">Заголовок</span>
         <input
           className="rounded-xl border p-2"
           value={b.title ?? ""}
           onChange={(e) => setB({ ...b, title: e.target.value })}
-          placeholder="Можно оставить пустым"
+          placeholder="(необязательно)"
         />
       </label>
 
@@ -294,9 +294,6 @@ export default function HeroBannerEditor() {
         {uploading ? "Загружаю..." : saving ? "Сохраняю..." : "Сохранить"}
       </button>
 
-      <div className="text-xs text-gray-500">
-        Пустые поля (подзаголовок/кнопка/ссылки) сохраняются как <b>null</b>. Заголовок может быть пустым.
-      </div>
     </div>
   );
 }

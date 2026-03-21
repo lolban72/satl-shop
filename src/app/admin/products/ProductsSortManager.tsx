@@ -146,9 +146,6 @@ export default function ProductsSortManager({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="font-medium">{p.title}</div>
-                    <div className="text-sm text-gray-600 break-all">
-                      /product/{p.slug}
-                    </div>
                     <div className="mt-1 text-xs text-gray-600">
                       Категория: {p.categoryTitle}
                     </div>
@@ -159,21 +156,6 @@ export default function ProductsSortManager({
                         {p.sortOrder}
                       </span>
                     </div>
-
-                    {p.sizeChartImage && (
-                      <div className="mt-2">
-                        <span className="text-sm text-gray-600">
-                          Таблица размеров:
-                        </span>
-                        <a
-                          href={p.sizeChartImage}
-                          target="_blank"
-                          className="ml-2 text-sm text-blue-500 underline"
-                        >
-                          Скачать
-                        </a>
-                      </div>
-                    )}
                   </div>
 
                   <div className="text-right">
