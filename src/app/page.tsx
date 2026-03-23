@@ -85,7 +85,6 @@ export default async function HomePage() {
                           price={p.price}
                           discountPrice={discountPrice ?? null}
                           imageUrl={p.images?.[0] ?? null}
-                          images={p.images ?? []}
                           isSoon={p.isSoon}
                           discountPercent={p.discountPercent ?? 0}
                           isSoldOut={isSoldOut}
