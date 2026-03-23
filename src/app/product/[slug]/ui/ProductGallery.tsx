@@ -20,7 +20,7 @@ export default function ProductGallery({
   const [displaySrc, setDisplaySrc] = useState(activeSrc);
   const [fade, setFade] = useState(false);
 
-  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [zoomOpen, setZoomOpen] = useState(false);
   const [zoom, setZoom] = useState(1);
 
   const thumbsRef = useRef<HTMLDivElement | null>(null);
@@ -87,33 +87,15 @@ export default function ProductGallery({
   }, []);
 
   useEffect(() => {
-    if (!lightboxOpen) return;
+    if (!zoomOpen) return;
 
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setLightboxOpen(false);
+        setZoomOpen(false);
         setZoom(1);
-      }
-
-      if (e.key === "ArrowLeft" && safe.length > 1) {
-        setActive((prev) => (prev === 0 ? safe.length - 1 : prev - 1));
-        setZoom(1);
-      }
-
-      if (e.key === "ArrowRight" && safe.length > 1) {
-        setActive((prev) => (prev === safe.length - 1 ? 0 : prev + 1));
-        setZoom(1);
-      }
-
-      if (e.key === "+" || e.key === "=") {
-        setZoom((z) => Math.min(4, +(z + 0.25).toFixed(2)));
-      }
-
-      if (e.key === "-") {
-        setZoom((z) => Math.max(1, +(z - 0.25).toFixed(2)));
       }
     };
 
@@ -123,7 +105,7 @@ export default function ProductGallery({
       document.body.style.overflow = prevOverflow;
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [lightboxOpen, safe.length]);
+  }, [zoomOpen]);
 
   function scrollThumbIntoView(idx: number) {
     const root = thumbsRef.current;
@@ -154,24 +136,14 @@ export default function ProductGallery({
     setZoom(1);
   }
 
-  function openLightbox() {
-    setLightboxOpen(true);
+  function openZoom() {
+    setZoomOpen(true);
     setZoom(1);
   }
 
-  function closeLightbox() {
-    setLightboxOpen(false);
+  function closeZoom() {
+    setZoomOpen(false);
     setZoom(1);
-  }
-
-  function zoomIn(e?: React.MouseEvent) {
-    e?.stopPropagation();
-    setZoom((z) => Math.min(4, +(z + 0.25).toFixed(2)));
-  }
-
-  function zoomOut(e?: React.MouseEvent) {
-    e?.stopPropagation();
-    setZoom((z) => Math.max(1, +(z - 0.25).toFixed(2)));
   }
 
   if (!safe.length) return null;
@@ -201,7 +173,7 @@ export default function ProductGallery({
                 alt={title}
                 className="h-full w-full object-contain cursor-zoom-in select-none"
                 draggable={false}
-                onClick={openLightbox}
+                onClick={openZoom}
                 style={{
                   opacity: fade ? 0 : 1,
                   transform: fade ? "scale(0.985)" : "scale(1)",
@@ -359,88 +331,11 @@ export default function ProductGallery({
         </div>
       </div>
 
-      {lightboxOpen && (
+      {zoomOpen && (
         <div
-          className="fixed inset-0 z-[999] bg-black/92"
-          onClick={closeLightbox}
+          className="fixed inset-0 z-[999] bg-white/92 backdrop-blur-[2px]"
+          onClick={closeZoom}
         >
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              closeLightbox();
-            }}
-            className="
-              absolute right-4 top-4 z-[1001]
-              h-11 w-11 rounded-full border border-white/30
-              bg-white/10 text-white text-xl
-              backdrop-blur-sm
-            "
-            aria-label="Закрыть"
-          >
-            ✕
-          </button>
-
-          <div className="absolute left-4 top-4 z-[1001] flex items-center gap-2">
-            <button
-              type="button"
-              onClick={zoomOut}
-              className="
-                h-11 w-11 rounded-full border border-white/30
-                bg-white/10 text-white text-xl backdrop-blur-sm
-              "
-              aria-label="Уменьшить"
-            >
-              −
-            </button>
-
-            <button
-              type="button"
-              onClick={zoomIn}
-              className="
-                h-11 w-11 rounded-full border border-white/30
-                bg-white/10 text-white text-xl backdrop-blur-sm
-              "
-              aria-label="Увеличить"
-            >
-              +
-            </button>
-
-            <div className="rounded-full border border-white/20 bg-white/10 px-3 py-2 text-sm text-white backdrop-blur-sm">
-              {Math.round(zoom * 100)}%
-            </div>
-          </div>
-
-          {safe.length > 1 && (
-            <>
-              <button
-                type="button"
-                onClick={goPrev}
-                className="
-                  absolute left-4 top-1/2 z-[1001] -translate-y-1/2
-                  h-12 w-12 rounded-full border border-white/30
-                  bg-white/10 text-white text-2xl backdrop-blur-sm
-                "
-                aria-label="Предыдущее фото"
-              >
-                ‹
-              </button>
-
-              <button
-                type="button"
-                onClick={goNext}
-                className="
-                  absolute right-4 top-1/2 z-[1001] -translate-y-1/2
-                  h-12 w-12 rounded-full border border-white/30
-                  bg-white/10 text-white text-2xl backdrop-blur-sm
-                "
-                aria-label="Следующее фото"
-              >
-                ›
-              </button>
-            </>
-          )}
-
           <div
             className="absolute inset-0 flex items-center justify-center overflow-auto p-6 md:p-12"
             onClick={(e) => e.stopPropagation()}
@@ -461,41 +356,12 @@ export default function ProductGallery({
               className="max-h-none max-w-none select-none object-contain transition-transform duration-200"
               style={{
                 transform: `scale(${zoom})`,
-                maxWidth: "85vw",
-                maxHeight: "85vh",
+                maxWidth: "88vw",
+                maxHeight: "88vh",
                 cursor: zoom > 1 ? "zoom-out" : "zoom-in",
               }}
             />
           </div>
-
-          {safe.length > 1 && (
-            <div className="absolute bottom-5 left-1/2 z-[1001] flex -translate-x-1/2 items-center gap-2">
-              {safe.map((src, idx) => (
-                <button
-                  key={src + idx}
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setActive(idx);
-                    setZoom(1);
-                  }}
-                  className={`overflow-hidden rounded-lg border ${
-                    idx === active
-                      ? "border-white"
-                      : "border-white/20 opacity-70"
-                  }`}
-                  aria-label={`Открыть фото ${idx + 1}`}
-                >
-                  <img
-                    src={src}
-                    alt={`${title}-${idx}`}
-                    className="h-12 w-12 object-cover"
-                    draggable={false}
-                  />
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       )}
     </>
