@@ -1,14 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+
+export const metadata = {
+  title: "Редактирование товара | SATL-админ",
+};
 
 type Category = { id: string; title: string; slug: string };
 
 type VariantRow = {
   size: string;
-  stock: string;
-  color?: string;
+  stock: string; // строкой для инпутов
+  color?: string; // опционально, у тебя default
 };
 
 type ProductInput = {
@@ -16,22 +20,24 @@ type ProductInput = {
   title: string;
   slug: string;
   price: number;
+
+  // ✅ цена со скидкой (в копейках) или null
   discountPrice?: number | null;
+
   description: string;
-  homeImage: string | null;
-  galleryImages: string[];
+
+  homeImage: string | null; // images[0]
+  galleryImages: string[]; // images.slice(1)
+
   variants: { id?: string; size: string; color: string; stock: number }[];
+
   categoryId: string | null;
+
   isSoon: boolean;
   discountPercent: number;
-  sizeChartImage?: string | null;
-};
 
-type GalleryItem = {
-  id: string;
-  kind: "existing" | "new";
-  url: string;
-  file?: File;
+  // ✅ таблица размеров (URL картинки)
+  sizeChartImage?: string | null;
 };
 
 function slugify(input: string) {
@@ -47,24 +53,17 @@ function isValidPositiveNumberString(s: string) {
   const n = Number(String(s).replace(",", "."));
   return Number.isFinite(n) && n > 0;
 }
-
 function isValidNonNegativeIntString(s: string) {
   const n = Number(s);
   return Number.isFinite(n) && Number.isInteger(n) && n >= 0;
 }
-
 function parseDiscount(s: string): number | null {
   const n = Math.floor(Number(s));
   if (!Number.isFinite(n) || n < 0 || n > 99) return null;
   return n;
 }
-
 function normSize(s: string) {
   return s.trim().toUpperCase();
-}
-
-function makeId() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
 export default function ProductEditForm({
@@ -78,49 +77,49 @@ export default function ProductEditForm({
 
   const [title, setTitle] = useState(product.title);
   const [slug, setSlug] = useState(product.slug);
+
   const [description, setDescription] = useState(product.description ?? "");
+
   const [isSoon, setIsSoon] = useState(Boolean(product.isSoon));
   const [priceRub, setPriceRub] = useState(
     String((product.price / 100).toFixed(0))
   );
 
+  // ✅ NEW: цена со скидкой (р) — редактируемая
   const [discountPriceRub, setDiscountPriceRub] = useState(
     product.discountPrice != null && product.discountPrice > 0
       ? String((product.discountPrice / 100).toFixed(0))
       : ""
   );
 
-  const [categoryId, setCategoryId] = useState<string>(product.categoryId ?? "");
+  const [categoryId, setCategoryId] = useState<string>(
+    product.categoryId ?? ""
+  );
+
   const [discountPercent, setDiscountPercent] = useState(
     String(product.discountPercent ?? 0)
   );
 
+  // ✅ Обложка
   const [homeUrl, setHomeUrl] = useState<string>(product.homeImage ?? "");
   const [homeFile, setHomeFile] = useState<File | null>(null);
   const [homePreview, setHomePreview] = useState<string>("");
 
-  const [galleryItems, setGalleryItems] = useState<GalleryItem[]>(
-    (product.galleryImages ?? []).map((url) => ({
-      id: makeId(),
-      kind: "existing",
-      url,
-    }))
+  // ✅ Галерея (URL’ы)
+  const [galleryUrls, setGalleryUrls] = useState<string[]>(
+    product.galleryImages ?? []
   );
-  const [draggedGalleryIndex, setDraggedGalleryIndex] = useState<number | null>(
-    null
-  );
+  const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
+  const [galleryPreviews, setGalleryPreviews] = useState<string[]>([]);
 
-  const galleryItemsRef = useRef<GalleryItem[]>(galleryItems);
-  useEffect(() => {
-    galleryItemsRef.current = galleryItems;
-  }, [galleryItems]);
-
+  // ✅ Таблица размеров (URL + файл + превью)
   const [sizeChartUrl, setSizeChartUrl] = useState<string>(
     product.sizeChartImage ?? ""
   );
   const [sizeChartFile, setSizeChartFile] = useState<File | null>(null);
   const [sizeChartPreview, setSizeChartPreview] = useState<string>("");
 
+  // ✅ Размеры
   const [variants, setVariants] = useState<VariantRow[]>(
     (
       product.variants?.length
@@ -150,15 +149,17 @@ export default function ProductEditForm({
     }, 0);
   }, [variants]);
 
+  // ✅ при "Скоро" — скидка 0 и цена 0, а варианты делаем ONE/0
   useEffect(() => {
     if (isSoon) {
       setPriceRub("0");
-      setDiscountPriceRub("");
+      setDiscountPriceRub(""); // UI пустое
       setDiscountPercent("0");
       setVariants([{ size: "ONE", stock: "0", color: "default" }]);
     }
   }, [isSoon]);
 
+  // preview: home
   useEffect(() => {
     if (!homeFile) {
       setHomePreview("");
@@ -169,6 +170,18 @@ export default function ProductEditForm({
     return () => URL.revokeObjectURL(url);
   }, [homeFile]);
 
+  // preview: gallery files
+  useEffect(() => {
+    if (!galleryFiles.length) {
+      setGalleryPreviews([]);
+      return;
+    }
+    const urls = galleryFiles.map((f) => URL.createObjectURL(f));
+    setGalleryPreviews(urls);
+    return () => urls.forEach((u) => URL.revokeObjectURL(u));
+  }, [galleryFiles]);
+
+  // preview: size chart
   useEffect(() => {
     if (!sizeChartFile) {
       setSizeChartPreview("");
@@ -179,45 +192,41 @@ export default function ProductEditForm({
     return () => URL.revokeObjectURL(url);
   }, [sizeChartFile]);
 
-  useEffect(() => {
-    return () => {
-      for (const item of galleryItemsRef.current) {
-        if (item.kind === "new" && item.url.startsWith("blob:")) {
-          URL.revokeObjectURL(item.url);
-        }
-      }
-    };
-  }, []);
-
   async function uploadOne(file: File): Promise<string> {
     const fd = new FormData();
     fd.append("file", file);
 
     const res = await fetch("/api/upload", { method: "POST", body: fd });
     const data = await res.json();
-
     if (!res.ok) throw new Error(data?.error || "Не удалось загрузить фото");
+
     return String(data.url || "");
   }
 
-  async function uploadGalleryInOrder(items: GalleryItem[]): Promise<string[]> {
-    const out: string[] = [];
+  async function uploadAll(): Promise<{
+    home?: string;
+    gallery: string[];
+    sizeChart?: string;
+  }> {
+    setUploading(true);
+    try {
+      const outGallery: string[] = [];
 
-    for (const item of items) {
-      if (item.kind === "existing") {
-        out.push(item.url);
-        continue;
+      let nextHome: string | undefined = undefined;
+      if (homeFile) nextHome = await uploadOne(homeFile);
+
+      let nextSizeChart: string | undefined = undefined;
+      if (sizeChartFile) nextSizeChart = await uploadOne(sizeChartFile);
+
+      for (const f of galleryFiles) {
+        const u = await uploadOne(f);
+        if (u) outGallery.push(u);
       }
 
-      if (!item.file) {
-        throw new Error("Не найден файл для загрузки фото галереи");
-      }
-
-      const uploadedUrl = await uploadOne(item.file);
-      out.push(uploadedUrl);
+      return { home: nextHome, gallery: outGallery, sizeChart: nextSizeChart };
+    } finally {
+      setUploading(false);
     }
-
-    return out;
   }
 
   function addVariantRow() {
@@ -226,11 +235,9 @@ export default function ProductEditForm({
       { size: "", stock: "0", color: "default" },
     ]);
   }
-
   function removeVariantRow(idx: number) {
     setVariants((prev) => prev.filter((_, i) => i !== idx));
   }
-
   function updateVariantRow(idx: number, patch: Partial<VariantRow>) {
     setVariants((prev) =>
       prev.map((r, i) => (i === idx ? { ...r, ...patch } : r))
@@ -250,44 +257,11 @@ export default function ProductEditForm({
     for (const v of cleaned) {
       if (seen.has(v.size)) return `Дублируется размер: ${v.size}`;
       seen.add(v.size);
-      if (!isValidNonNegativeIntString(v.stock)) {
+      if (!isValidNonNegativeIntString(v.stock))
         return `Некорректный stock у размера ${v.size}`;
-      }
     }
 
     return null;
-  }
-
-  function moveGalleryItem(from: number, to: number) {
-    setGalleryItems((prev) => {
-      const copy = [...prev];
-      const [moved] = copy.splice(from, 1);
-      copy.splice(to, 0, moved);
-      return copy;
-    });
-  }
-
-  function addGalleryFiles(files: FileList | null) {
-    if (!files?.length) return;
-
-    const nextItems: GalleryItem[] = Array.from(files).map((file) => ({
-      id: makeId(),
-      kind: "new",
-      url: URL.createObjectURL(file),
-      file,
-    }));
-
-    setGalleryItems((prev) => [...prev, ...nextItems]);
-  }
-
-  function removeGalleryItem(idx: number) {
-    setGalleryItems((prev) => {
-      const item = prev[idx];
-      if (item?.kind === "new" && item.url.startsWith("blob:")) {
-        URL.revokeObjectURL(item.url);
-      }
-      return prev.filter((_, i) => i !== idx);
-    });
   }
 
   async function save() {
@@ -297,33 +271,29 @@ export default function ProductEditForm({
     if (title.trim().length < 2) return setErr("Название слишком короткое");
     if (computedSlug.length < 2) return setErr("Slug слишком короткий");
 
+    // фото обязательно (обложка + минимум 1 в галерее)
     const hasHome = Boolean(homeFile) || Boolean(homeUrl);
     if (!hasHome) return setErr("Нужно фото на главную (обложка)");
 
-    if (galleryItems.length === 0) {
-      return setErr("Добавь хотя бы одно фото в галерею");
-    }
+    const hasGallery =
+      (galleryUrls?.length ?? 0) + (galleryFiles?.length ?? 0) > 0;
+    if (!hasGallery) return setErr("Добавь хотя бы одно фото в галерею");
 
     if (!isSoon) {
-      if (!isValidPositiveNumberString(priceRub)) {
+      if (!isValidPositiveNumberString(priceRub))
         return setErr("Некорректная цена (без скидки)");
-      }
-
       const d = parseDiscount(discountPercent);
       if (d === null) return setErr("Некорректная скидка (0..99)");
 
+      // ✅ NEW: валидация цены со скидкой (если заполнена)
       const dp = discountPriceRub.trim();
       if (dp) {
-        if (!isValidPositiveNumberString(dp)) {
+        if (!isValidPositiveNumberString(dp))
           return setErr("Некорректная цена со скидкой");
-        }
-
         const base = Number(String(priceRub).replace(",", "."));
         const disc = Number(String(dp).replace(",", "."));
-
-        if (disc >= base) {
+        if (disc >= base)
           return setErr("Цена со скидкой должна быть меньше обычной цены");
-        }
       }
 
       const vErr = validateVariants();
@@ -331,38 +301,43 @@ export default function ProductEditForm({
     }
 
     setSaving(true);
-    setUploading(true);
-
     try {
-      let nextHome = homeUrl;
-      if (homeFile) {
-        nextHome = await uploadOne(homeFile);
-      }
+      // upload new files (если выбраны)
+      const uploaded = await uploadAll();
 
-      let nextSizeChart = sizeChartUrl;
-      if (sizeChartFile) {
-        nextSizeChart = await uploadOne(sizeChartFile);
-      }
+      const nextHome = uploaded.home ?? homeUrl; // если новый не загружали — оставляем старый
+      const nextGallery = [...galleryUrls, ...uploaded.gallery].filter(Boolean);
 
-      const nextGallery = await uploadGalleryInOrder(galleryItems);
+      // таблица размеров: новый upload или старый URL (или пусто)
+      const nextSizeChart = uploaded.sizeChart ?? sizeChartUrl ?? "";
 
+      // payload
       const payload: any = {
         title: title.trim(),
         slug: computedSlug,
         categoryId: categoryId || null,
         isSoon,
+
         description: description.trim() || "",
+
         homeImage: nextHome,
-        images: nextGallery,
+        images: nextGallery, // только галерея, без обложки
+
         sizeChartImage: nextSizeChart || null,
       };
 
       if (!isSoon) {
         payload.priceRub = priceRub;
+
+        // ✅ ВАЖНО: всегда отправляем ключ:
+        // - строка => сохранить
+        // - null => очистить
         payload.discountPriceRub = discountPriceRub.trim()
           ? discountPriceRub.trim()
           : null;
+
         payload.discountPercent = parseDiscount(discountPercent) ?? 0;
+
         payload.variants = variants
           .map((v) => ({
             size: normSize(v.size),
@@ -372,7 +347,7 @@ export default function ProductEditForm({
           .filter((v) => v.size.length > 0);
       } else {
         payload.discountPercent = 0;
-        payload.discountPriceRub = null;
+        payload.discountPriceRub = null; // ✅ явно чистим
         payload.variants = [{ size: "ONE", color: "default", stock: 0 }];
       }
 
@@ -385,35 +360,28 @@ export default function ProductEditForm({
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Не удалось сохранить");
 
-      for (const item of galleryItems) {
-        if (item.kind === "new" && item.url.startsWith("blob:")) {
-          URL.revokeObjectURL(item.url);
-        }
-      }
-
-      setGalleryItems(
-        nextGallery.map((url) => ({
-          id: makeId(),
-          kind: "existing",
-          url,
-        }))
-      );
-
       setOk("Сохранено ✅");
+
+      // сброс только новых файлов/превью
       setHomeFile(null);
       setHomePreview("");
+      setGalleryFiles([]);
+      setGalleryPreviews([]);
+
       setSizeChartFile(null);
       setSizeChartPreview("");
 
-      if (nextHome) setHomeUrl(nextHome);
-      setSizeChartUrl(nextSizeChart || "");
+      // обновляем URL’ы если загрузили новые
+      if (uploaded.home) setHomeUrl(uploaded.home);
+      if (uploaded.gallery.length)
+        setGalleryUrls((prev) => [...prev, ...uploaded.gallery]);
+      if (uploaded.sizeChart) setSizeChartUrl(uploaded.sizeChart);
 
       router.refresh();
     } catch (e: any) {
       setErr(e?.message || "Ошибка");
     } finally {
       setSaving(false);
-      setUploading(false);
     }
   }
 
@@ -423,13 +391,11 @@ export default function ProductEditForm({
     setErr(null);
     setOk(null);
     setSaving(true);
-
     try {
       const res = await fetch(`/api/admin/products/${product.id}`, {
         method: "DELETE",
       });
       const data = await res.json();
-
       if (!res.ok) throw new Error(data?.error || "Не удалось удалить");
 
       router.push("/admin/products");
@@ -448,7 +414,6 @@ export default function ProductEditForm({
           {err}
         </div>
       )}
-
       {ok && (
         <div className="rounded-xl border border-green-300 bg-green-50 p-3 text-sm">
           {ok}
@@ -479,15 +444,14 @@ export default function ProductEditForm({
           ))}
         </select>
         <div className="text-xs text-gray-600">
-          Если убрать категорию — товар исчезнет из категорий на главной/в
-          шапке.
+          Если убрать категорию — товар исчезнет из категорий на главной/в шапке.
         </div>
       </label>
 
       <label className="grid gap-1">
         <span className="text-sm font-medium">Описание</span>
         <textarea
-          className="min-h-[120px] rounded-xl border p-2"
+          className="rounded-xl border p-2 min-h-[120px]"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Описание товара"
@@ -519,8 +483,11 @@ export default function ProductEditForm({
         ) : null}
       </label>
 
+      {/* ✅ Цена со скидкой */}
       <label className="grid gap-1">
-        <span className="text-sm font-medium">Цена со скидкой — если есть</span>
+        <span className="text-sm font-medium">
+          Цена со скидкой — если есть
+        </span>
         <input
           className="rounded-xl border p-2"
           value={discountPriceRub}
@@ -563,6 +530,7 @@ export default function ProductEditForm({
         ) : null}
       </label>
 
+      {/* ✅ Обложка */}
       <div className="grid gap-2">
         <div className="text-sm font-medium">Фото на главную</div>
 
@@ -578,12 +546,16 @@ export default function ProductEditForm({
           </div>
 
           <div className="grid gap-2">
-            <div className="text-xs text-gray-600">Новое</div>
+            <div className="text-xs text-gray-600">
+              Новое
+            </div>
             <input
               type="file"
               accept="image/*"
               className="rounded-xl border p-2"
-              onChange={(e) => setHomeFile(e.target.files?.[0] ?? null)}
+              onChange={(e) =>
+                setHomeFile(e.target.files?.[0] ?? null)
+              }
             />
             {homePreview ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -597,54 +569,28 @@ export default function ProductEditForm({
         </div>
       </div>
 
+      {/* ✅ Галерея */}
       <div className="grid gap-2">
         <div className="text-sm font-medium">Фото галереи</div>
 
-        {galleryItems.length ? (
+        {galleryUrls.length ? (
           <div className="flex flex-wrap gap-2">
-            {galleryItems.map((item, idx) => (
-              <div
-                key={item.id}
-                draggable
-                onDragStart={() => setDraggedGalleryIndex(idx)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => {
-                  if (
-                    draggedGalleryIndex === null ||
-                    draggedGalleryIndex === idx
-                  ) {
-                    return;
-                  }
-                  moveGalleryItem(draggedGalleryIndex, idx);
-                  setDraggedGalleryIndex(null);
-                }}
-                onDragEnd={() => setDraggedGalleryIndex(null)}
-                className={`relative cursor-move rounded-xl ${
-                  draggedGalleryIndex === idx ? "opacity-50" : ""
-                }`}
-                title="Перетащи, чтобы поменять местами"
-              >
+            {galleryUrls.map((u, idx) => (
+              <div key={u + idx} className="relative">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={item.url}
+                  src={u}
                   alt={`gallery-${idx}`}
                   className="h-24 w-24 rounded-xl border object-cover"
                 />
-
-                <div className="absolute bottom-1 left-1 rounded-md border bg-white/90 px-2 py-0.5 text-[10px]">
-                  {idx + 1}
-                </div>
-
-                {item.kind === "new" ? (
-                  <div className="absolute bottom-1 right-1 rounded-md border bg-black/80 px-2 py-0.5 text-[10px] text-white">
-                    new
-                  </div>
-                ) : null}
-
                 <button
                   type="button"
-                  className="absolute right-1 top-1 rounded-md border bg-white/90 px-2 py-1 text-[11px]"
-                  onClick={() => removeGalleryItem(idx)}
+                  className="absolute right-1 top-1 rounded-md bg-white/90 border px-2 py-1 text-[11px]"
+                  onClick={() =>
+                    setGalleryUrls((prev) =>
+                      prev.filter((_, i) => i !== idx)
+                    )
+                  }
                   title="Удалить"
                 >
                   ✕
@@ -657,22 +603,34 @@ export default function ProductEditForm({
         )}
 
         <div className="grid gap-1">
-          <div className="text-xs text-gray-600">
-            Добавить новые фото. Можно удалять и менять местами до сохранения.
-          </div>
+          <div className="text-xs text-gray-600">Добавить новые фото</div>
           <input
             type="file"
             accept="image/*"
             multiple
             className="rounded-xl border p-2"
-            onChange={(e) => {
-              addGalleryFiles(e.target.files);
-              e.currentTarget.value = "";
-            }}
+            onChange={(e) =>
+              setGalleryFiles(Array.from(e.target.files ?? []))
+            }
           />
         </div>
+
+        {galleryPreviews.length ? (
+          <div className="flex flex-wrap gap-2">
+            {galleryPreviews.map((src, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={src + i}
+                src={src}
+                alt={`new-${i}`}
+                className="h-24 w-24 rounded-xl border object-cover"
+              />
+            ))}
+          </div>
+        ) : null}
       </div>
 
+      {/* ✅ Таблица размеров */}
       <div className="rounded-xl border p-3">
         <div className="text-sm font-medium">Таблица размеров</div>
 
@@ -693,7 +651,7 @@ export default function ProductEditForm({
             {sizeChartUrl ? (
               <button
                 type="button"
-                className="text-xs text-red-700 underline"
+                className="text-xs underline text-red-700"
                 onClick={() => {
                   setSizeChartUrl("");
                   setSizeChartFile(null);
@@ -711,7 +669,9 @@ export default function ProductEditForm({
               type="file"
               accept="image/*"
               className="rounded-xl border p-2"
-              onChange={(e) => setSizeChartFile(e.target.files?.[0] ?? null)}
+              onChange={(e) =>
+                setSizeChartFile(e.target.files?.[0] ?? null)
+              }
             />
             {sizeChartPreview ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -725,6 +685,7 @@ export default function ProductEditForm({
         </div>
       </div>
 
+      {/* ✅ Размеры */}
       <div className="rounded-xl border p-3">
         <div className="flex items-center justify-between">
           <div className="text-sm font-medium">Размеры</div>
