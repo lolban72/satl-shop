@@ -26,6 +26,13 @@ export default function ProductGallery({
   const thumbsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    if (!safe.length) return;
+    if (active > safe.length - 1) {
+      setActive(0);
+    }
+  }, [safe, active]);
+
+  useEffect(() => {
     if (!activeSrc) return;
     if (activeSrc === displaySrc) return;
 
@@ -61,6 +68,7 @@ export default function ProductGallery({
     const onWheel = (e: WheelEvent) => {
       if (window.innerWidth < 768) return;
       e.preventDefault();
+
       target += e.deltaY;
 
       const max = el.scrollHeight - el.clientHeight;
@@ -122,6 +130,7 @@ export default function ProductGallery({
     if (!root) return;
     const btn = root.querySelector<HTMLButtonElement>(`button[data-idx="${idx}"]`);
     if (!btn) return;
+
     btn.scrollIntoView({
       behavior: "smooth",
       block: "nearest",
@@ -132,6 +141,7 @@ export default function ProductGallery({
   function goPrev(e?: React.MouseEvent) {
     e?.stopPropagation();
     if (safe.length <= 1) return;
+
     setActive((prev) => (prev === 0 ? safe.length - 1 : prev - 1));
     setZoom(1);
   }
@@ -139,6 +149,7 @@ export default function ProductGallery({
   function goNext(e?: React.MouseEvent) {
     e?.stopPropagation();
     if (safe.length <= 1) return;
+
     setActive((prev) => (prev === safe.length - 1 ? 0 : prev + 1));
     setZoom(1);
   }
@@ -168,7 +179,6 @@ export default function ProductGallery({
   return (
     <>
       <div className="flex flex-col md:flex-row items-start gap-[14px] sm:gap-[18px] md:gap-[24px]">
-        {/* MAIN IMAGE */}
         <div className="relative w-full md:w-auto order-1 md:order-2">
           <div className="relative h-[360px] sm:h-[440px] w-full md:h-[580px] md:w-[680px]">
             <div
@@ -185,17 +195,13 @@ export default function ProductGallery({
               aria-hidden="true"
             />
 
-            <button
-              type="button"
-              onClick={openLightbox}
-              className="absolute inset-0 z-10 text-left"
-              aria-label={`Открыть фото товара ${title}`}
-            >
+            <div className="absolute inset-0 z-10 flex items-center justify-center">
               <img
                 src={displaySrc}
                 alt={title}
-                className="h-full w-full object-contain"
+                className="h-full w-full object-contain cursor-zoom-in select-none"
                 draggable={false}
+                onClick={openLightbox}
                 style={{
                   opacity: fade ? 0 : 1,
                   transform: fade ? "scale(0.985)" : "scale(1)",
@@ -203,7 +209,7 @@ export default function ProductGallery({
                   willChange: "opacity, transform",
                 }}
               />
-            </button>
+            </div>
 
             {safe.length > 1 && (
               <>
@@ -248,7 +254,9 @@ export default function ProductGallery({
                         setZoom(1);
                       }}
                       className={`rounded-full transition-all ${
-                        idx === active ? "w-5 h-1.5 bg-white" : "w-1.5 h-1.5 bg-white/50"
+                        idx === active
+                          ? "w-5 h-1.5 bg-white"
+                          : "w-1.5 h-1.5 bg-white/50"
                       }`}
                       aria-label={`Перейти к фото ${idx + 1}`}
                     />
@@ -256,16 +264,10 @@ export default function ProductGallery({
                 </div>
               </>
             )}
-
-            <div className="absolute right-[10px] bottom-[10px] z-20 rounded-full border border-white/50 bg-black/20 px-2 py-1 text-[10px] md:text-[11px] text-white backdrop-blur-sm">
-              Нажми, чтобы увеличить
-            </div>
           </div>
         </div>
 
-        {/* THUMBS */}
         <div className="w-full md:w-auto order-2 md:order-1">
-          {/* MOBILE: горизонтально */}
           <div className="md:hidden">
             <div
               ref={thumbsRef}
@@ -310,7 +312,6 @@ export default function ProductGallery({
             </div>
           </div>
 
-          {/* DESKTOP: вертикально */}
           <div className="hidden md:block">
             <div
               ref={thumbsRef}
