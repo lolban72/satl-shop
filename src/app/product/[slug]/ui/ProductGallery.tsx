@@ -23,7 +23,24 @@ export default function ProductGallery({
   const [zoomOpen, setZoomOpen] = useState(false);
   const [zoom, setZoom] = useState(1);
 
+  const [panX, setPanX] = useState(0);
+  const [panY, setPanY] = useState(0);
+
   const thumbsRef = useRef<HTMLDivElement | null>(null);
+
+  const pinchStateRef = useRef<{
+    startDistance: number;
+    startZoom: number;
+    isPinching: boolean;
+  } | null>(null);
+
+  const panStateRef = useRef<{
+    startX: number;
+    startY: number;
+    originPanX: number;
+    originPanY: number;
+    isPanning: boolean;
+  } | null>(null);
 
   useEffect(() => {
     if (!safe.length) return;
@@ -92,8 +109,7 @@ export default function ProductGallery({
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setZoomOpen(false);
-        setZoom(1);
+        closeZoom();
       }
     };
 
@@ -122,24 +138,122 @@ export default function ProductGallery({
     e?.stopPropagation();
     if (safe.length <= 1) return;
     setActive((prev) => (prev === 0 ? safe.length - 1 : prev - 1));
-    setZoom(1);
+    resetZoomState();
   }
 
   function goNext(e?: React.MouseEvent) {
     e?.stopPropagation();
     if (safe.length <= 1) return;
     setActive((prev) => (prev === safe.length - 1 ? 0 : prev + 1));
+    resetZoomState();
+  }
+
+  function resetZoomState() {
     setZoom(1);
+    setPanX(0);
+    setPanY(0);
+    pinchStateRef.current = null;
+    panStateRef.current = null;
   }
 
   function openZoom() {
     setZoomOpen(true);
-    setZoom(1);
+    resetZoomState();
   }
 
   function closeZoom() {
     setZoomOpen(false);
-    setZoom(1);
+    resetZoomState();
+  }
+
+  function distance(
+    t1: { clientX: number; clientY: number },
+    t2: { clientX: number; clientY: number }
+  ) {
+    const dx = t2.clientX - t1.clientX;
+    const dy = t2.clientY - t1.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  function clampZoom(value: number) {
+    return Math.max(1, Math.min(4, value));
+  }
+
+  function handleTouchStart(e: React.TouchEvent<HTMLImageElement>) {
+    e.stopPropagation();
+
+    if (e.touches.length === 2) {
+      const d = distance(e.touches[0], e.touches[1]);
+      pinchStateRef.current = {
+        startDistance: d,
+        startZoom: zoom,
+        isPinching: true,
+      };
+      panStateRef.current = null;
+      return;
+    }
+
+    if (e.touches.length === 1 && zoom > 1) {
+      panStateRef.current = {
+        startX: e.touches[0].clientX,
+        startY: e.touches[0].clientY,
+        originPanX: panX,
+        originPanY: panY,
+        isPanning: true,
+      };
+    }
+  }
+
+  function handleTouchMove(e: React.TouchEvent<HTMLImageElement>) {
+    e.stopPropagation();
+
+    if (e.touches.length === 2) {
+      e.preventDefault();
+
+      const pinch = pinchStateRef.current;
+      if (!pinch) return;
+
+      const d = distance(e.touches[0], e.touches[1]);
+      const scale = d / pinch.startDistance;
+      const nextZoom = clampZoom(pinch.startZoom * scale);
+      setZoom(nextZoom);
+
+      if (nextZoom <= 1) {
+        setPanX(0);
+        setPanY(0);
+      }
+
+      return;
+    }
+
+    if (e.touches.length === 1 && zoom > 1) {
+      const pan = panStateRef.current;
+      if (!pan?.isPanning) return;
+
+      e.preventDefault();
+
+      const dx = e.touches[0].clientX - pan.startX;
+      const dy = e.touches[0].clientY - pan.startY;
+
+      setPanX(pan.originPanX + dx);
+      setPanY(pan.originPanY + dy);
+    }
+  }
+
+  function handleTouchEnd(e: React.TouchEvent<HTMLImageElement>) {
+    e.stopPropagation();
+
+    if (e.touches.length < 2) {
+      pinchStateRef.current = null;
+    }
+
+    if (e.touches.length === 0) {
+      panStateRef.current = null;
+      if (zoom <= 1) {
+        setPanX(0);
+        setPanY(0);
+      }
+    }
   }
 
   if (!safe.length) return null;
@@ -219,7 +333,7 @@ export default function ProductGallery({
                       onClick={(e) => {
                         e.stopPropagation();
                         setActive(idx);
-                        setZoom(1);
+                        resetZoomState();
                       }}
                       className={`rounded-full transition-all ${
                         idx === active
@@ -257,7 +371,7 @@ export default function ProductGallery({
                     type="button"
                     onClick={() => {
                       setActive(idx);
-                      setZoom(1);
+                      resetZoomState();
                       scrollThumbIntoView(idx);
                     }}
                     className="h-[90px] w-[70px] shrink-0 flex items-center justify-center"
@@ -302,7 +416,7 @@ export default function ProductGallery({
                     type="button"
                     onClick={() => {
                       setActive(idx);
-                      setZoom(1);
+                      resetZoomState();
                       scrollThumbIntoView(idx);
                     }}
                     className="h-[200px] w-[140px] transition flex items-center justify-center"
@@ -340,7 +454,13 @@ export default function ProductGallery({
               onClick={(e) => e.stopPropagation()}
               onDoubleClick={(e) => {
                 e.stopPropagation();
-                setZoom((z) => (z > 1 ? 1 : 2));
+                if (zoom > 1) {
+                  setZoom(1);
+                  setPanX(0);
+                  setPanY(0);
+                } else {
+                  setZoom(2);
+                }
               }}
               onWheel={(e) => {
                 e.preventDefault();
@@ -351,18 +471,33 @@ export default function ProductGallery({
                     e.deltaY < 0
                       ? Math.min(4, +(z + 0.15).toFixed(2))
                       : Math.max(1, +(z - 0.15).toFixed(2));
+
+                  if (next <= 1) {
+                    setPanX(0);
+                    setPanY(0);
+                  }
+
                   return next;
                 });
               }}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onTouchCancel={handleTouchEnd}
               className="select-none object-contain"
               style={{
-                transform: `scale(${zoom})`,
+                transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
                 maxWidth: "88vw",
                 maxHeight: "88vh",
-                cursor: zoom > 1 ? "zoom-out" : "zoom-in",
-                transition: "transform 180ms ease",
+                cursor: zoom > 1 ? "grab" : "zoom-in",
+                transition:
+                  pinchStateRef.current?.isPinching ||
+                  panStateRef.current?.isPanning
+                    ? "none"
+                    : "transform 180ms ease",
                 touchAction: "none",
                 WebkitUserSelect: "none",
+                transformOrigin: "center center",
               }}
             />
           </div>
