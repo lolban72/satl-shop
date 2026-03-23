@@ -26,7 +26,11 @@ export default function ProductGallery({
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
 
+  const [originX, setOriginX] = useState(50);
+  const [originY, setOriginY] = useState(50);
+
   const thumbsRef = useRef<HTMLDivElement | null>(null);
+  const zoomImgRef = useRef<HTMLImageElement | null>(null);
 
   const pinchStateRef = useRef<{
     startDistance: number;
@@ -152,6 +156,8 @@ export default function ProductGallery({
     setZoom(1);
     setPanX(0);
     setPanY(0);
+    setOriginX(50);
+    setOriginY(50);
     pinchStateRef.current = null;
     panStateRef.current = null;
   }
@@ -179,11 +185,30 @@ export default function ProductGallery({
     return Math.max(1, Math.min(4, value));
   }
 
+  function setOriginFromClientPoint(clientX: number, clientY: number) {
+    const el = zoomImgRef.current;
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    const x = ((clientX - rect.left) / rect.width) * 100;
+    const y = ((clientY - rect.top) / rect.height) * 100;
+
+    setOriginX(Math.max(0, Math.min(100, x)));
+    setOriginY(Math.max(0, Math.min(100, y)));
+  }
+
   function handleTouchStart(e: React.TouchEvent<HTMLImageElement>) {
     e.stopPropagation();
 
     if (e.touches.length === 2) {
       const d = distance(e.touches[0], e.touches[1]);
+      const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+
+      setOriginFromClientPoint(centerX, centerY);
+
       pinchStateRef.current = {
         startDistance: d,
         startZoom: zoom,
@@ -212,6 +237,10 @@ export default function ProductGallery({
 
       const pinch = pinchStateRef.current;
       if (!pinch) return;
+
+      const centerX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const centerY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      setOriginFromClientPoint(centerX, centerY);
 
       const d = distance(e.touches[0], e.touches[1]);
       const scale = d / pinch.startDistance;
@@ -448,12 +477,15 @@ export default function ProductGallery({
         >
           <div className="flex min-h-screen items-center justify-center p-6 md:p-12">
             <img
+              ref={zoomImgRef}
               src={safe[active]}
               alt={title}
               draggable={false}
               onClick={(e) => e.stopPropagation()}
               onDoubleClick={(e) => {
                 e.stopPropagation();
+                setOriginFromClientPoint(e.clientX, e.clientY);
+
                 if (zoom > 1) {
                   setZoom(1);
                   setPanX(0);
@@ -465,6 +497,8 @@ export default function ProductGallery({
               onWheel={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
+
+                setOriginFromClientPoint(e.clientX, e.clientY);
 
                 setZoom((z) => {
                   const next =
@@ -497,7 +531,7 @@ export default function ProductGallery({
                     : "transform 180ms ease",
                 touchAction: "none",
                 WebkitUserSelect: "none",
-                transformOrigin: "center center",
+                transformOrigin: `${originX}% ${originY}%`,
               }}
             />
           </div>
