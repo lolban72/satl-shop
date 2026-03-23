@@ -27,9 +27,7 @@ export default function ProductGallery({
 
   useEffect(() => {
     if (!safe.length) return;
-    if (active > safe.length - 1) {
-      setActive(0);
-    }
+    if (active > safe.length - 1) setActive(0);
   }, [safe, active]);
 
   useEffect(() => {
@@ -123,7 +121,6 @@ export default function ProductGallery({
   function goPrev(e?: React.MouseEvent) {
     e?.stopPropagation();
     if (safe.length <= 1) return;
-
     setActive((prev) => (prev === 0 ? safe.length - 1 : prev - 1));
     setZoom(1);
   }
@@ -131,7 +128,6 @@ export default function ProductGallery({
   function goNext(e?: React.MouseEvent) {
     e?.stopPropagation();
     if (safe.length <= 1) return;
-
     setActive((prev) => (prev === safe.length - 1 ? 0 : prev + 1));
     setZoom(1);
   }
@@ -336,29 +332,37 @@ export default function ProductGallery({
           className="fixed inset-0 z-[999] bg-white/92 backdrop-blur-[2px]"
           onClick={closeZoom}
         >
-          <div
-            className="absolute inset-0 flex items-center justify-center overflow-auto p-6 md:p-12"
-            onClick={(e) => e.stopPropagation()}
-            onWheel={(e) => {
-              e.preventDefault();
-              if (e.deltaY < 0) {
-                setZoom((z) => Math.min(4, +(z + 0.15).toFixed(2)));
-              } else {
-                setZoom((z) => Math.max(1, +(z - 0.15).toFixed(2)));
-              }
-            }}
-          >
+          <div className="flex min-h-screen items-center justify-center p-6 md:p-12">
             <img
               src={safe[active]}
               alt={title}
               draggable={false}
-              onDoubleClick={() => setZoom((z) => (z > 1 ? 1 : 2))}
-              className="max-h-none max-w-none select-none object-contain transition-transform duration-200"
+              onClick={(e) => e.stopPropagation()}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                setZoom((z) => (z > 1 ? 1 : 2));
+              }}
+              onWheel={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                setZoom((z) => {
+                  const next =
+                    e.deltaY < 0
+                      ? Math.min(4, +(z + 0.15).toFixed(2))
+                      : Math.max(1, +(z - 0.15).toFixed(2));
+                  return next;
+                });
+              }}
+              className="select-none object-contain"
               style={{
                 transform: `scale(${zoom})`,
                 maxWidth: "88vw",
                 maxHeight: "88vh",
                 cursor: zoom > 1 ? "zoom-out" : "zoom-in",
+                transition: "transform 180ms ease",
+                touchAction: "none",
+                WebkitUserSelect: "none",
               }}
             />
           </div>
