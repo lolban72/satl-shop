@@ -27,7 +27,11 @@ export default function ProductCard({
     discountPrice == null ? null : Number(discountPrice ?? 0);
 
   const hasDiscount =
-    !isSoon && !isSoldOut && discPrice != null && discPrice > 0 && discPrice < basePrice;
+    !isSoon &&
+    !isSoldOut &&
+    discPrice != null &&
+    discPrice > 0 &&
+    discPrice < basePrice;
 
   const showDiscountBadge = hasDiscount && (discountPercent ?? 0) > 0;
 
@@ -147,15 +151,16 @@ export default function ProductCard({
             {title}
           </div>
 
-          {/* SOLD OUT */}
-          {isSoldOut ? (
+          {isSoldOut && (
             <div
               className="mt-2 text-[18px] md:text-[25px] leading-none uppercase text-black/70"
               style={{ fontFamily: "Yeast" }}
             >
               Sold out
             </div>
-          ) : hasDiscount ? (
+          )}
+
+          {hasDiscount ? (
             <div className="mt-2 flex items-baseline justify-center gap-2 md:gap-3">
               <div
                 className="text-[14px] md:text-[18px] leading-none opacity-70 line-through"
