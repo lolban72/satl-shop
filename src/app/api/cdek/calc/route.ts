@@ -103,7 +103,7 @@ export async function POST(req: Request) {
       0
     );
 
-    const { totalWeightGr, pack } = buildPackageFromItemsCount(itemsCount);
+    const { pack } = buildPackageFromItemsCount(itemsCount);
 
     const [fromCode, toCode] = await Promise.all([
       cdekResolveCityCode(fromCity),
@@ -148,7 +148,7 @@ export async function POST(req: Request) {
       itemsCount,
       package: {
         type: pack.packageType,
-        weightGr: totalWeightGr,
+        weightGr: pack.weight,
         lengthCm: pack.length,
         widthCm: pack.width,
         heightCm: pack.height,

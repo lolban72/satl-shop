@@ -40,6 +40,8 @@ export async function POST(req: Request) {
       body?.deliveryPrice != null ? Number(body.deliveryPrice) : null;
     const deliveryDaysRaw =
       body?.deliveryDays != null ? Number(body.deliveryDays) : null;
+    const tariffCodeRaw =
+      body?.tariffCode != null ? Number(body.tariffCode) : null;
 
     const deliveryPriceBase =
       deliveryPriceRaw != null && Number.isFinite(deliveryPriceRaw)
@@ -49,6 +51,11 @@ export async function POST(req: Request) {
     const deliveryDays =
       deliveryDaysRaw != null && Number.isFinite(deliveryDaysRaw)
         ? Math.round(deliveryDaysRaw)
+        : null;
+
+    const tariffCode =
+      tariffCodeRaw != null && Number.isFinite(tariffCodeRaw) && tariffCodeRaw > 0
+        ? Math.round(tariffCodeRaw)
         : null;
 
     const items = Array.isArray(body?.items) ? body.items : [];
@@ -97,6 +104,13 @@ export async function POST(req: Request) {
     if (deliveryPriceBase == null || deliveryPriceBase < 0) {
       return Response.json(
         { error: "deliveryPrice required (calc delivery first)" },
+        { status: 400 }
+      );
+    }
+
+    if (tariffCode == null) {
+      return Response.json(
+        { error: "tariffCode required (calc delivery first)" },
         { status: 400 }
       );
     }
@@ -177,6 +191,7 @@ export async function POST(req: Request) {
 
         deliveryPrice,
         deliveryDays,
+        tariffCode,
 
         promoCodeId: promoId,
         promoCode: appliedPromoCode,
@@ -198,6 +213,7 @@ export async function POST(req: Request) {
       promoCode: appliedPromoCode,
       deliveryPrice,
       deliveryTax,
+      tariffCode,
     });
   } catch (e: any) {
     console.error("api/pay/draft error:", e);

@@ -47,11 +47,6 @@ function normalizePhone(phone: string) {
   return `+${digits}`;
 }
 
-function safeNumber(value: unknown, fallback: number) {
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? n : fallback;
-}
-
 function extractCdekError(err: any) {
   return {
     message: err?.message || "CDEK request failed",
@@ -239,14 +234,20 @@ async function registerCdekOrder(params: {
   recipientName: string;
   recipientPhone: string;
   pvzCode: string;
+  tariffCode: number;
   items: DraftItem[];
 }) {
   const fromCity = String(process.env.CDEK_FROM_CITY ?? "").trim();
+  const fromPvz = String(process.env.CDEK_FROM_PVZ_CODE ?? "").trim();
+
   if (!fromCity) {
     throw new Error("CDEK_FROM_CITY env required");
   }
 
-  const tariffCode = safeNumber(process.env.CDEK_DEFAULT_TARIFF_CODE, 11);
+  if (!Number.isFinite(params.tariffCode) || params.tariffCode <= 0) {
+    throw new Error("CDEK tariffCode is missing");
+  }
+
   const client = getCdekClient();
 
   const { itemName, pack } = buildOrderPackage(params.items);
@@ -254,7 +255,7 @@ async function registerCdekOrder(params: {
   const payload = {
     type: 1,
     number: params.orderId,
-    tariff_code: tariffCode,
+    tariff_code: Math.round(params.tariffCode),
     recipient: {
       name: params.recipientName,
       phones: [{ number: normalizePhone(params.recipientPhone) }],
@@ -262,6 +263,7 @@ async function registerCdekOrder(params: {
     from_location: {
       city: fromCity,
     },
+    ...(fromPvz ? { shipment_point: fromPvz } : {}),
     delivery_point: params.pvzCode,
     packages: [
       {
@@ -511,6 +513,7 @@ async function handleYaPayWebhook(req: Request) {
       pvzName: true,
       deliveryPrice: true,
       deliveryDays: true,
+      tariffCode: true,
 
       promoCodeId: true,
       promoCode: true,
@@ -564,6 +567,7 @@ async function handleYaPayWebhook(req: Request) {
         pvzName: draft.pvzName ?? null,
         deliveryPrice: draft.deliveryPrice ?? null,
         deliveryDays: draft.deliveryDays ?? null,
+        tariffCode: draft.tariffCode ?? null,
 
         trackNumber: draft.trackNumber ?? null,
         items: {
@@ -583,6 +587,7 @@ async function handleYaPayWebhook(req: Request) {
         pvzCode: true,
         name: true,
         phone: true,
+        tariffCode: true,
       },
     });
 
@@ -632,11 +637,16 @@ async function handleYaPayWebhook(req: Request) {
 
   if (createdOrder.pvzCode) {
     try {
+      if (!createdOrder.tariffCode) {
+        throw new Error("Order tariffCode is missing");
+      }
+
       const cdek = await registerCdekOrder({
         orderId: createdOrder.id,
         recipientName: createdOrder.name,
         recipientPhone: createdOrder.phone,
         pvzCode: createdOrder.pvzCode,
+        tariffCode: createdOrder.tariffCode,
         items,
       });
 
@@ -664,6 +674,7 @@ async function handleYaPayWebhook(req: Request) {
         orderId: createdOrder.id,
         uuid: cdek.uuid,
         cdekNumber: cdek.cdekNumber,
+        tariffCode: createdOrder.tariffCode,
         package: cdek.package,
       });
     } catch (e: any) {
@@ -691,6 +702,11 @@ async function handleYaPayWebhook(req: Request) {
       ? `Доставка: ${rubFromCents(Number(draft.deliveryPrice))}${
           draft.deliveryDays != null ? ` (${draft.deliveryDays} дн.)` : ""
         }\n`
+      : "";
+
+  const tariffLine =
+    draft.tariffCode != null
+      ? `Тариф СДЭК: <code>${draft.tariffCode}</code>\n`
       : "";
 
   const promoLine = draft.promoCode
@@ -721,6 +737,7 @@ async function handleYaPayWebhook(req: Request) {
     `Телефон: ${draft.phone}\n` +
     `${pvzLine}` +
     `${deliveryLine}` +
+    `${tariffLine}` +
     `${promoLine}` +
     `${discountLine}` +
     `${packageLine}` +

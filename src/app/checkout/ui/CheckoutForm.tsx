@@ -91,6 +91,7 @@ export default function CheckoutForm(props: {
     priceCents: number;
     daysMin: number | null;
     daysMax: number | null;
+    tariffCode: number;
   } | null>(null);
 
   const [deliveryLoading, setDeliveryLoading] = useState(false);
@@ -237,9 +238,14 @@ export default function CheckoutForm(props: {
 
       const best = data?.best;
       const priceRub = Number(best?.delivery_sum);
+      const tariffCode = Number(best?.tariff_code);
 
       if (!Number.isFinite(priceRub)) {
         throw new Error("СДЭК не вернул цену доставки");
+      }
+
+      if (!Number.isFinite(tariffCode) || tariffCode <= 0) {
+        throw new Error("СДЭК не вернул tariff_code");
       }
 
       const priceCents = Math.round(priceRub * 100);
@@ -250,6 +256,7 @@ export default function CheckoutForm(props: {
         priceCents,
         daysMin: Number.isFinite(dMin as any) ? dMin : null,
         daysMax: Number.isFinite(dMax as any) ? dMax : null,
+        tariffCode,
       });
     } catch (e: any) {
       if (String(e?.name) === "AbortError") return;
@@ -408,6 +415,7 @@ export default function CheckoutForm(props: {
           pvzName: pvz.name ?? null,
           deliveryPrice: delivery.priceCents,
           deliveryDays: delivery.daysMax ?? delivery.daysMin ?? null,
+          tariffCode: delivery.tariffCode,
           promoCode: appliedPromo?.code ?? null,
           items: items.map((i: any) => ({
             productId: i.productId,

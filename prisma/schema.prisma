@@ -205,6 +205,7 @@ model Order {
   cdekStatusAt  DateTime?
   deliveryPrice Int?
   deliveryDays  Int?
+  tariffCode    Int?
 
   items OrderItem[]
 }
@@ -262,6 +263,7 @@ model PaymentDraft {
   pvzCity       String?
   deliveryPrice Int?
   deliveryDays  Int?
+  tariffCode    Int?
 
   promoCodeId String?
   promoCode   String?
