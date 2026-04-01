@@ -16,7 +16,15 @@ function toSafeInt(v: unknown, def: number) {
 }
 
 export function getDefaultUnitWeightGr() {
-  return toSafeInt(process.env.CDEK_DEFAULT_WEIGHT_GR, 500);
+  return toSafeInt(process.env.CDEK_DEFAULT_WEIGHT_GR, 400);
+}
+
+export function getDefaultPackageSize() {
+  return {
+    length: toSafeInt(process.env.CDEK_DEFAULT_LENGTH_CM, 25),
+    width: toSafeInt(process.env.CDEK_DEFAULT_WIDTH_CM, 30),
+    height: toSafeInt(process.env.CDEK_DEFAULT_HEIGHT_CM, 5),
+  };
 }
 
 export function getPackageForOrder(params: {
@@ -25,15 +33,16 @@ export function getPackageForOrder(params: {
 }): CdekPackage {
   const itemsCount = Math.max(1, Number(params.itemsCount || 0));
   const totalWeightGr = Math.max(1, Number(params.totalWeightGr || 0));
+  const base = getDefaultPackageSize();
 
   // S — 1 легкая вещь
   if (itemsCount <= 1 && totalWeightGr <= 500) {
     return {
       packageType: "S",
-      weight: Math.max(300, totalWeightGr),
-      length: 20,
-      width: 15,
-      height: 10,
+      weight: Math.max(400, totalWeightGr),
+      length: base.length,
+      width: base.width,
+      height: base.height,
     };
   }
 
@@ -42,9 +51,9 @@ export function getPackageForOrder(params: {
     return {
       packageType: "M",
       weight: Math.max(700, totalWeightGr),
-      length: 30,
-      width: 20,
-      height: 12,
+      length: Math.max(base.length, 30),
+      width: Math.max(base.width, 30),
+      height: Math.max(base.height, 10),
     };
   }
 
@@ -52,9 +61,9 @@ export function getPackageForOrder(params: {
   return {
     packageType: "L",
     weight: Math.max(1500, totalWeightGr),
-    length: 40,
-    width: 30,
-    height: 15,
+    length: Math.max(base.length, 40),
+    width: Math.max(base.width, 40),
+    height: Math.max(base.height, 15),
   };
 }
 
