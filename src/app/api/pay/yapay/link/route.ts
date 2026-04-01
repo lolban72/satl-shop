@@ -51,8 +51,12 @@ export async function POST(req: Request) {
       );
     }
 
-    const isProd = process.env.NEXT_PUBLIC_YAPAY_ENV === "PRODUCTION";
-    const apiKey = isProd ? process.env.YAPAY_API_KEY || "" : merchantId;
+    const envName = String(process.env.NEXT_PUBLIC_YAPAY_ENV || "").toUpperCase();
+    const isProd = envName === "PROD" || envName === "PRODUCTION";
+
+    const apiKey = isProd
+      ? String(process.env.YAPAY_API_KEY || "").trim()
+      : merchantId;
 
     if (isProd && !apiKey) {
       return Response.json(
@@ -100,8 +104,6 @@ export async function POST(req: Request) {
         ? Number(draft.discount)
         : 0;
 
-    // Применяем скидку прямо к первой товарной позиции,
-    // чтобы сумма item'ов совпадала с draft.total
     if (discountCents > 0 && items.length > 0) {
       let remainingDiscount = discountCents;
 
@@ -207,6 +209,9 @@ export async function POST(req: Request) {
           error: "Yandex Pay order create failed",
           details: data,
           payload,
+          isProd,
+          envName,
+          baseUrl,
         },
         { status: 500 }
       );
