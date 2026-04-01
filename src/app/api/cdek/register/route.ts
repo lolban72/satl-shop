@@ -20,11 +20,6 @@ function normalizePhone(phone: string) {
   return `+${digits}`;
 }
 
-function safeNumber(value: unknown, fallback: number) {
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? n : fallback;
-}
-
 function toInt(v: any, def: number) {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? Math.round(n) : def;
@@ -59,10 +54,7 @@ export async function POST(req: Request) {
     const phone = normalizePhone(body?.phone ?? "");
     const items: any[] = Array.isArray(body?.items) ? body.items : [];
 
-    const tariffCode = safeNumber(
-      body?.tariffCode ?? process.env.CDEK_DEFAULT_TARIFF_CODE ?? 11,
-      11
-    );
+    const tariffCode = Number(body?.tariffCode);
 
     if (!city) {
       return NextResponse.json({ error: "city required" }, { status: 400 });
@@ -80,7 +72,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "phone required" }, { status: 400 });
     }
 
+    if (!Number.isFinite(tariffCode) || tariffCode <= 0) {
+      return NextResponse.json(
+        { error: "tariffCode required" },
+        { status: 400 }
+      );
+    }
+
     const fromCity = String(process.env.CDEK_FROM_CITY ?? "").trim();
+    const fromPvz = String(process.env.CDEK_FROM_PVZ_CODE ?? "").trim();
+
     if (!fromCity) {
       return NextResponse.json(
         { error: "CDEK_FROM_CITY env required" },
@@ -128,7 +129,7 @@ export async function POST(req: Request) {
     const { pack } = buildPackageFromItemsCount(itemsCount);
 
     const ts = Date.now();
-    const orderNumber = String(body?.number ?? `TEST-${ts}`).trim();
+    const orderNumber = String(body?.number ?? `ORDER-${ts}`).trim();
 
     const payload = {
       type: 1,
@@ -141,6 +142,7 @@ export async function POST(req: Request) {
       from_location: {
         city: fromCity,
       },
+      ...(fromPvz ? { shipment_point: fromPvz } : {}),
       delivery_point: pvzCode,
       packages: [
         {
