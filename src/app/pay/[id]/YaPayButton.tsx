@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 
 declare global {
   interface Window {
@@ -12,7 +11,6 @@ declare global {
 export default function YaPayButton({ draftId }: { draftId: string }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const router = useRouter();
 
   useEffect(() => {
     let cancelled = false;
@@ -46,38 +44,32 @@ export default function YaPayButton({ draftId }: { draftId: string }) {
           );
         }
 
-        // Берём итоговую сумму с бэка по draftId (чтобы totalAmount был реальным)
         const sumRes = await fetch(`/api/pay/status?draftId=${encodeURIComponent(draftId)}`);
         const sumData = await sumRes.json().catch(() => ({}));
-        if (!sumRes.ok) throw new Error(sumData?.error || "Не удалось получить сумму заказа");
+        if (!sumRes.ok) {
+          throw new Error(sumData?.error || "Не удалось получить сумму заказа");
+        }
 
         const totalAmount = String(sumData?.totalAmount ?? "").trim();
         if (!totalAmount) throw new Error("totalAmount пустой");
 
+        const envName = String(process.env.NEXT_PUBLIC_YAPAY_ENV || "").toUpperCase();
+        const isProd = envName === "PROD" || envName === "PRODUCTION";
+
+        console.log("NEXT_PUBLIC_YAPAY_ENV =", process.env.NEXT_PUBLIC_YAPAY_ENV);
+        console.log("YaPay frontend env =", isProd ? "PRODUCTION" : "SANDBOX");
+
         const paymentData = {
-          env:
-            process.env.NEXT_PUBLIC_YAPAY_ENV === "PRODUCTION"
-              ? YaPay.PaymentEnv.Production
-              : YaPay.PaymentEnv.Sandbox,
-
-          // ✅ актуальный сценарий "оплата на форме Yandex Pay"
+          env: isProd ? YaPay.PaymentEnv.Production : YaPay.PaymentEnv.Sandbox,
           version: 4,
-
           countryCode: YaPay.CountryCode.Ru,
           currencyCode: YaPay.CurrencyCode.Rub,
-
           merchantId,
           totalAmount,
-
-          // внешний вид кнопки/доступные способы
           availablePaymentMethods: ["CARD", "SPLIT"],
-
-          // если используешь API flow с /order/render по orderId — можно передать orderId
           orderId: draftId,
         };
 
-        // В этом сценарии по клику мы просто открываем форму.
-        // Если Яндекс не сможет открыть форму — вызовется onFormOpenError.
         async function onPayButtonClick() {
           const res = await fetch("/api/pay/yapay/link", {
             method: "POST",
@@ -91,7 +83,7 @@ export default function YaPayButton({ draftId }: { draftId: string }) {
             throw new Error(data?.error || "Не удалось получить ссылку оплаты");
           }
 
-          return data.paymentUrl; // ✅ критично
+          return data.paymentUrl;
         }
 
         function onFormOpenError(e: any) {
