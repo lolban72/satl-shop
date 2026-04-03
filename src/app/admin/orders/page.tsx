@@ -21,48 +21,10 @@ function isOrderStatus(v?: string): v is OrderStatus {
   return (STATUS_ORDER as readonly string[]).includes(v);
 }
 
-function isIsoDate(s: string) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(s);
-}
-
-/** day: "today" | "yesterday" | "YYYY-MM-DD" */
-function getDayRangeUTC(dayRaw?: string) {
-  const day = (dayRaw ?? "today").trim();
-
-  const now = new Date();
-  const todayUTC = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0)
-  );
-
-  let start = todayUTC;
-
-  if (day === "yesterday") {
-    start = new Date(todayUTC.getTime() - 24 * 60 * 60 * 1000);
-  } else if (isIsoDate(day)) {
-    const [y, m, d] = day.split("-").map(Number);
-    start = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
-  } else {
-    start = todayUTC;
-  }
-
-  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-  return { start, end, day };
-}
-
-function todayIsoUTC() {
-  const n = new Date();
-  const y = n.getUTCFullYear();
-  const m = String(n.getUTCMonth() + 1).padStart(2, "0");
-  const d = String(n.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
 export default async function AdminOrdersPage(props: {
   searchParams?: Promise<{
     q?: string;
     status?: string;
-    day?: string;
-    date?: string;
   }>;
 }) {
   const sp = (await props.searchParams) ?? {};
@@ -70,12 +32,7 @@ export default async function AdminOrdersPage(props: {
   const q = (sp.q ?? "").trim();
   const statusRaw = (sp.status ?? "").trim().toUpperCase();
 
-  const dayInput = (sp.date ?? "").trim() || (sp.day ?? "today");
-  const { start, end, day } = getDayRangeUTC(dayInput);
-
-  const where: any = {
-    createdAt: { gte: start, lt: end },
-  };
+  const where: any = {};
 
   if (q) {
     where.OR = [
@@ -100,18 +57,11 @@ export default async function AdminOrdersPage(props: {
 
   const ordersCount = orders.length;
 
-  async function printLabelsAction(formData: FormData) {
+  async function printLabelsAction() {
     "use server";
-
-    const day = String(formData.get("day") || "today");
-    const date = String(formData.get("date") || "").trim();
-    const dayInput = date || day;
-
-    const { start, end, day: normalized } = getDayRangeUTC(dayInput);
 
     const newOrders = await prisma.order.findMany({
       where: {
-        createdAt: { gte: start, lt: end },
         status: "NEW",
       },
       select: { id: true },
@@ -122,13 +72,7 @@ export default async function AdminOrdersPage(props: {
     const ids = newOrders.map((o) => o.id);
 
     if (ids.length === 0) {
-      redirect(
-        `/admin/orders?${
-          isIsoDate(normalized)
-            ? `date=${encodeURIComponent(normalized)}`
-            : `day=${encodeURIComponent(normalized)}`
-        }`
-      );
+      redirect("/admin/orders");
     }
 
     await prisma.order.updateMany({
@@ -143,20 +87,15 @@ export default async function AdminOrdersPage(props: {
     redirect(`/admin/orders/labels?ids=${encodeURIComponent(ids.join(","))}`);
   }
 
-  const isoToday = todayIsoUTC();
-  const isCustomDay = isIsoDate(day);
-
   return (
     <div className="min-w-0">
       <div className="mb-4 flex items-end justify-between gap-4">
         <div>
           <div className="text-xl font-semibold">Заказы</div>
-          <div className="text-sm text-black/55">Показаны заказы за выбранный день</div>
+          <div className="text-sm text-black/55">Показаны все заказы с учетом фильтров</div>
         </div>
 
         <form action={printLabelsAction} className="flex items-center gap-2">
-          <input type="hidden" name="day" value={isCustomDay ? "today" : day} />
-          <input type="hidden" name="date" value={isCustomDay ? day : ""} />
           <button className="h-9 rounded-xl bg-black px-4 text-sm font-semibold text-white">
             Печать этикеток
           </button>
@@ -164,23 +103,6 @@ export default async function AdminOrdersPage(props: {
       </div>
 
       <form className="mb-6 flex flex-wrap items-center gap-3" method="GET">
-        <select
-          name="day"
-          defaultValue={isCustomDay ? "today" : day}
-          className="h-9 rounded-xl border px-3 text-sm"
-        >
-          <option value="today">Сегодня</option>
-          <option value="yesterday">Вчера</option>
-        </select>
-
-        <input
-          name="date"
-          defaultValue={isCustomDay ? day : ""}
-          placeholder={isoToday}
-          className="h-9 w-[150px] rounded-xl border px-3 text-sm"
-          title="Дата в формате YYYY-MM-DD"
-        />
-
         <input
           name="q"
           defaultValue={q}

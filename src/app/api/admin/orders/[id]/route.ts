@@ -15,6 +15,7 @@ function parseAdminEmails(v?: string) {
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
 }
+
 function isAdminEmail(email?: string | null) {
   const e = (email ?? "").trim().toLowerCase();
   if (!e) return false;
@@ -24,7 +25,7 @@ function isAdminEmail(email?: string | null) {
 function statusLabel(s: OrderStatus) {
   if (s === "SHIPPED") return "В доставке 🚚";
   if (s === "DELIVERED") return "Доставлен ✅";
-  // на всякий
+  if (s === "RETURNED") return "Возврат ↩️";
   return s;
 }
 
@@ -61,64 +62,113 @@ export async function PATCH(
   req: Request,
   ctx: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth();
-  if (!session?.user || !isAdminEmail(session.user.email)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  try {
+    const session = await auth();
 
-  const { id } = await ctx.params;
-  const body = await req.json().catch(() => ({}));
+    if (!session?.user || !isAdminEmail(session.user.email)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
-  const next = String(body?.status ?? "").toUpperCase() as OrderStatus;
+    const { id } = await ctx.params;
+    const body = await req.json().catch(() => ({}));
 
-  // ✅ проверяем что статус вообще существует
-  if (!STATUS_ORDER.includes(next)) {
-    return NextResponse.json({ error: "Некорректный статус" }, { status: 400 });
-  }
+    const next = String(body?.status ?? "").toUpperCase() as OrderStatus;
 
-  // ✅ узнаём текущий статус + userId + trackNumber (нужно для уведомления)
-  const current = await prisma.order.findUnique({
-    where: { id },
-    select: { status: true, userId: true, trackNumber: true },
-  });
+    if (!STATUS_ORDER.includes(next)) {
+      return NextResponse.json(
+        { error: "Некорректный статус" },
+        { status: 400 }
+      );
+    }
 
-  if (!current) {
-    return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
-  }
+    const current = await prisma.order.findUnique({
+      where: { id },
+      select: {
+        status: true,
+        userId: true,
+        trackNumber: true,
+      },
+    });
 
-  const from = current.status as OrderStatus;
+    if (!current) {
+      return NextResponse.json({ error: "Заказ не найден" }, { status: 404 });
+    }
 
-  // Если статус тот же — ничего не делаем
-  if (from === next) {
-    return NextResponse.json({ ok: true, changed: false });
-  }
+    const from = current.status as OrderStatus;
 
-  // ✅ запрещаем нелогичные переходы
-  if (!isAllowedTransition(from, next)) {
+    if (from === next) {
+      return NextResponse.json({ ok: true, changed: false });
+    }
+
+    if (!isAllowedTransition(from, next)) {
+      return NextResponse.json(
+        { error: `Нельзя сменить статус: ${from} → ${next}` },
+        { status: 400 }
+      );
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      if (next === "RETURNED" && from !== "RETURNED") {
+        const orderWithItems = await tx.order.findUnique({
+          where: { id },
+          select: {
+            items: {
+              select: {
+                variantId: true,
+                quantity: true,
+              },
+            },
+          },
+        });
+
+        if (!orderWithItems) {
+          throw new Error("Заказ не найден");
+        }
+
+        for (const item of orderWithItems.items) {
+          if (!item.variantId) continue;
+
+          await tx.variant.update({
+            where: { id: item.variantId },
+            data: {
+              stock: {
+                increment: item.quantity,
+              },
+            },
+          });
+        }
+      }
+
+      return tx.order.update({
+        where: { id },
+        data: { status: next },
+        select: {
+          id: true,
+          status: true,
+          userId: true,
+          trackNumber: true,
+        },
+      });
+    });
+
+    if (next === "SHIPPED" || next === "DELIVERED" || next === "RETURNED") {
+      await notifyClientStatus({
+        userId: updated.userId ?? null,
+        orderId: updated.id,
+        status: next,
+        trackNumber: updated.trackNumber ?? null,
+      });
+    }
+
+    revalidatePath("/admin/orders");
+    revalidatePath(`/admin/orders/${id}`);
+    revalidatePath("/account/orders");
+
+    return NextResponse.json({ ok: true, changed: true });
+  } catch (e: any) {
     return NextResponse.json(
-      { error: `Нельзя сменить статус: ${from} → ${next}` },
+      { error: e?.message || "Ошибка при обновлении статуса заказа" },
       { status: 400 }
     );
   }
-
-  const updated = await prisma.order.update({
-    where: { id },
-    data: { status: next },
-    select: { id: true, status: true, userId: true, trackNumber: true },
-  });
-
-  // ✅ уведомление клиенту только на SHIPPED / DELIVERED
-  if (next === "SHIPPED" || next === "DELIVERED") {
-    await notifyClientStatus({
-      userId: updated.userId ?? null,
-      orderId: updated.id,
-      status: next,
-      trackNumber: updated.trackNumber ?? null,
-    });
-  }
-
-  revalidatePath("/admin/orders");
-  revalidatePath(`/admin/orders/${id}`);
-
-  return NextResponse.json({ ok: true, changed: true });
 }
