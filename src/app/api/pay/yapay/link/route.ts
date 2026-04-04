@@ -4,6 +4,15 @@ function rub2(totalCents: number) {
   return (Number(totalCents || 0) / 100).toFixed(2);
 }
 
+function getYaPayReasonCode(data: any) {
+  return String(
+    data?.reasonCode ??
+      data?.details?.reasonCode ??
+      data?.data?.reasonCode ??
+      ""
+  ).trim();
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
@@ -51,7 +60,9 @@ export async function POST(req: Request) {
       );
     }
 
-    const envName = String(process.env.NEXT_PUBLIC_YAPAY_ENV || "").toUpperCase();
+    const envName = String(
+      process.env.NEXT_PUBLIC_YAPAY_ENV || ""
+    ).toUpperCase();
     const isProd = envName === "PROD" || envName === "PRODUCTION";
 
     const apiKey = isProd
@@ -204,6 +215,21 @@ export async function POST(req: Request) {
     const data = await r.json().catch(() => ({}));
 
     if (!r.ok) {
+      const reasonCode = getYaPayReasonCode(data);
+
+      if (reasonCode === "ORDER_ALREADY_EXISTS") {
+        return Response.json(
+          {
+            error:
+              "Ссылка на оплату для этого заказа уже была создана. Обновите страницу и не нажимайте кнопку оплаты повторно.",
+            reasonCode,
+            details: data,
+            draftId,
+          },
+          { status: 409 }
+        );
+      }
+
       return Response.json(
         {
           error: "Yandex Pay order create failed",
