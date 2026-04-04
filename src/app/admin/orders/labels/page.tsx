@@ -10,7 +10,15 @@ function getDayRangeUTC(dayRaw?: string) {
 
   const now = new Date();
   const todayUTC = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0)
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      0,
+      0,
+      0,
+      0
+    )
   );
 
   let start = todayUTC;
@@ -36,41 +44,61 @@ export default async function LabelsPage(props: {
     .map((s) => s.trim())
     .filter(Boolean);
 
-  let orders: any[] = [];
+  let rawOrders: any[] = [];
 
   if (ids.length > 0) {
-    orders = await prisma.order.findMany({
+    rawOrders = await prisma.order.findMany({
       where: {
         id: { in: ids },
       },
       orderBy: { createdAt: "asc" },
       include: {
-        items: {
-          include: {
-            variant: true,
-          },
-        },
+        items: true,
       },
       take: 2000,
     });
   } else {
     const { start, end } = getDayRangeUTC(sp.day);
 
-    orders = await prisma.order.findMany({
+    rawOrders = await prisma.order.findMany({
       where: {
         createdAt: { gte: start, lt: end },
       },
       orderBy: { createdAt: "asc" },
       include: {
-        items: {
-          include: {
-            variant: true,
-          },
-        },
+        items: true,
       },
       take: 2000,
     });
   }
+
+  const variantIds = Array.from(
+    new Set(
+      rawOrders.flatMap((order) =>
+        (order.items ?? [])
+          .map((item: any) => item.variantId)
+          .filter(Boolean)
+      )
+    )
+  ) as string[];
+
+  const variants =
+    variantIds.length > 0
+      ? await prisma.variant.findMany({
+          where: { id: { in: variantIds } },
+          select: { id: true, size: true, color: true },
+        })
+      : [];
+
+  const vmap = new Map(variants.map((v) => [v.id, v]));
+
+  const orders = rawOrders.map((order) => ({
+    ...order,
+    items: (order.items ?? []).map((item: any) => ({
+      ...item,
+      variant: item.variantId ? vmap.get(item.variantId) ?? null : null,
+    })),
+  }));
 
   return <LabelsClient orders={orders} />;
 }

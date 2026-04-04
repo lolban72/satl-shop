@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { cdekResolveCityCode, cdekTariffList } from "@/lib/cdek";
 import { buildPackageFromItemsCount } from "@/lib/cdek-package";
@@ -14,7 +15,16 @@ function toInt(v: any, def: number) {
   return Number.isFinite(n) && n > 0 ? Math.round(n) : def;
 }
 
+function getAllowedTariffs() {
+  return String(process.env.CDEK_ALLOWED_TARIFFS ?? "")
+    .split(",")
+    .map((x) => Number(x.trim()))
+    .filter((x) => Number.isFinite(x) && x > 0);
+}
+
 function pickBestTariff(raw: any) {
+  const allowed = new Set(getAllowedTariffs());
+
   const list = Array.isArray(raw)
     ? raw
     : Array.isArray(raw?.tariff_codes)
@@ -25,13 +35,18 @@ function pickBestTariff(raw: any) {
 
   const normalized = list
     .map((t: any) => ({
-      tariff_code: t.tariff_code ?? t.tariffCode ?? null,
+      tariff_code: Number(t.tariff_code ?? t.tariffCode ?? NaN),
       tariff_name: t.tariff_name ?? t.tariffName ?? null,
       delivery_sum: Number(t.delivery_sum ?? t.deliverySum ?? NaN),
       period_min: t.period_min ?? t.periodMin ?? null,
       period_max: t.period_max ?? t.periodMax ?? null,
+      delivery_mode: Number(t.delivery_mode ?? t.deliveryMode ?? NaN),
     }))
-    .filter((t: any) => t.tariff_code && Number.isFinite(t.delivery_sum));
+    .filter(
+      (t: any) =>
+        Number.isFinite(t.tariff_code) && Number.isFinite(t.delivery_sum)
+    )
+    .filter((t: any) => allowed.size === 0 || allowed.has(t.tariff_code));
 
   normalized.sort((a: any, b: any) => a.delivery_sum - b.delivery_sum);
 
@@ -44,20 +59,25 @@ function pickBestTariff(raw: any) {
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => null);
+
     if (!body) {
-      return Response.json({ error: "Bad JSON" }, { status: 400 });
+      return NextResponse.json({ error: "Bad JSON" }, { status: 400 });
     }
 
     const city = String(body?.city ?? "").trim();
     const pvzCode = String(body?.pvzCode ?? "").trim();
     const items: any[] = Array.isArray(body?.items) ? body.items : [];
 
-    if (!city || !pvzCode) {
-      return Response.json({ error: "city/pvzCode required" }, { status: 400 });
+    if (!city) {
+      return NextResponse.json({ error: "city required" }, { status: 400 });
+    }
+
+    if (!pvzCode) {
+      return NextResponse.json({ error: "pvzCode required" }, { status: 400 });
     }
 
     if (items.length === 0) {
-      return Response.json({ error: "items required" }, { status: 400 });
+      return NextResponse.json({ error: "items required" }, { status: 400 });
     }
 
     const fromCity = String(process.env.CDEK_FROM_CITY ?? "Краснодар").trim();
@@ -73,7 +93,7 @@ export async function POST(req: Request) {
       .filter((x: NormalizedItem) => x.productId.length > 0 && x.qty > 0);
 
     if (normalizedItems.length === 0) {
-      return Response.json(
+      return NextResponse.json(
         { error: "items must contain productId/qty" },
         { status: 400 }
       );
@@ -92,7 +112,7 @@ export async function POST(req: Request) {
     const missing = productIds.filter((id) => !existingIds.has(id));
 
     if (missing.length > 0) {
-      return Response.json(
+      return NextResponse.json(
         { error: "Some products not found", missingProductIds: missing },
         { status: 400 }
       );
@@ -113,8 +133,6 @@ export async function POST(req: Request) {
     const payload: any = {
       type: 1,
       lang: "rus",
-      from_location: { code: fromCode },
-      to_location: { code: toCode },
       packages: [
         {
           weight: pack.weight,
@@ -123,24 +141,41 @@ export async function POST(req: Request) {
           height: pack.height,
         },
       ],
-      delivery_point: pvzCode,
     };
 
+    // Откуда
     if (fromPvz) {
       payload.shipment_point = fromPvz;
+    } else {
+      payload.from_location = { code: fromCode };
     }
+
+    // Куда
+    if (pvzCode) {
+      payload.delivery_point = pvzCode;
+    } else {
+      payload.to_location = { code: toCode };
+    }
+
+    console.log("[CDEK_CALC] request body:", JSON.stringify(body, null, 2));
+    console.log("[CDEK_CALC] payload:", JSON.stringify(payload, null, 2));
 
     const data = await cdekTariffList(payload);
     const { best, variants } = pickBestTariff(data);
 
     if (!best) {
-      return Response.json(
-        { error: "No tariffs", details: data, payload },
+      return NextResponse.json(
+        {
+          error: "No tariffs",
+          details: data,
+          payload,
+          allowedTariffs: getAllowedTariffs(),
+        },
         { status: 400 }
       );
     }
 
-    return Response.json({
+    return NextResponse.json({
       ok: true,
       fromCity,
       toCity: city,
@@ -158,7 +193,8 @@ export async function POST(req: Request) {
     });
   } catch (e: any) {
     const msg = String(e?.message || e || "CDEK calc error");
-    console.log("❌ /api/cdek/calc error:", msg);
-    return Response.json({ error: msg }, { status: 500 });
+    console.error("[CDEK_CALC] error:", e);
+
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

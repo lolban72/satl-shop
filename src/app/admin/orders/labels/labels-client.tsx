@@ -13,6 +13,10 @@ function cleanTrackNumber(v: any) {
   return String(v ?? "").trim();
 }
 
+function getItemSize(item: any) {
+  return val(item?.variant?.size ?? item?.size);
+}
+
 function OneLabelHTML({
   order,
   htmlRef,
@@ -28,7 +32,7 @@ function OneLabelHTML({
   }, [order?.items]);
 
   const productTitle = val(firstItem?.title);
-  const size = val(firstItem?.variant?.size);
+  const size = getItemSize(firstItem);
 
   const pvz = val(
     order?.pvzName ||
@@ -175,7 +179,6 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
           align-items: center;
           justify-content: flex-start;
           gap: 1.2mm;
-
           padding-top: 1.2mm;
         }
 
@@ -184,8 +187,7 @@ export default function LabelsClient({ orders }: { orders: any[] }) {
           display: flex;
           justify-content: center;
           align-items: center;
-
-          margin-bottom: 3.4mm; /* ← поднимает штрих-код выше текста */
+          margin-bottom: 3.4mm;
         }
 
         .barcode {

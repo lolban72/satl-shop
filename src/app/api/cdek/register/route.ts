@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCdekClient } from "@/lib/cdek-client";
 import { buildPackageFromItemsCount } from "@/lib/cdek-package";
+import { cdekResolveCityCode } from "@/lib/cdek";
 
 export const runtime = "nodejs";
 
@@ -16,6 +17,18 @@ function normalizePhone(phone: string) {
 
   const digits = raw.replace(/\D/g, "");
   if (!digits) return "";
+
+  if (digits.length === 11 && digits.startsWith("8")) {
+    return `+7${digits.slice(1)}`;
+  }
+
+  if (digits.length === 11 && digits.startsWith("7")) {
+    return `+${digits}`;
+  }
+
+  if (digits.length === 10) {
+    return `+7${digits}`;
+  }
 
   return `+${digits}`;
 }
@@ -53,7 +66,6 @@ export async function POST(req: Request) {
     const name = String(body?.name ?? "").trim();
     const phone = normalizePhone(body?.phone ?? "");
     const items: any[] = Array.isArray(body?.items) ? body.items : [];
-
     const tariffCode = Number(body?.tariffCode);
 
     if (!city) {
@@ -91,6 +103,7 @@ export async function POST(req: Request) {
 
     let itemsCount = 1;
     let itemName = "SATL item";
+    let declaredCost = 1000;
 
     if (items.length > 0) {
       const normalizedItems: NormalizedItem[] = items
@@ -107,10 +120,11 @@ export async function POST(req: Request) {
 
         const products = await prisma.product.findMany({
           where: { id: { in: productIds } },
-          select: { id: true, title: true },
+          select: { id: true, title: true, price: true },
         });
 
         const byId = new Map(products.map((p) => [p.id, p]));
+
         itemsCount = normalizedItems.reduce((sum, it) => sum + it.qty, 0);
 
         const firstProduct = normalizedItems
@@ -123,6 +137,16 @@ export async function POST(req: Request) {
               ? `${firstProduct.title} и др.`
               : String(firstProduct.title);
         }
+
+        declaredCost = normalizedItems.reduce((sum, it) => {
+          const p = byId.get(it.productId);
+          const price = Number(p?.price ?? 0);
+          return sum + price * it.qty;
+        }, 0);
+
+        if (!Number.isFinite(declaredCost) || declaredCost <= 0) {
+          declaredCost = 1000;
+        }
       }
     }
 
@@ -131,7 +155,12 @@ export async function POST(req: Request) {
     const ts = Date.now();
     const orderNumber = String(body?.number ?? `ORDER-${ts}`).trim();
 
-    const payload = {
+    const [fromCode, toCode] = await Promise.all([
+      cdekResolveCityCode(fromCity),
+      cdekResolveCityCode(city),
+    ]);
+
+    const payload: any = {
       type: 1,
       number: orderNumber,
       tariff_code: tariffCode,
@@ -139,11 +168,6 @@ export async function POST(req: Request) {
         name,
         phones: [{ number: phone }],
       },
-      from_location: {
-        city: fromCity,
-      },
-      ...(fromPvz ? { shipment_point: fromPvz } : {}),
-      delivery_point: pvzCode,
       packages: [
         {
           number: `PKG-${ts}`,
@@ -156,14 +180,31 @@ export async function POST(req: Request) {
               name: itemName,
               ware_key: `ORDER-${orderNumber}`,
               payment: { value: 0 },
-              cost: 1000,
-              amount: 1,
-              weight: pack.weight,
+              cost: declaredCost,
+              amount: itemsCount,
+              weight: Math.max(
+                1,
+                Math.round(pack.weight / Math.max(itemsCount, 1))
+              ),
             },
           ],
         },
       ],
     };
+
+    // Откуда
+    if (fromPvz) {
+      payload.shipment_point = fromPvz;
+    } else {
+      payload.from_location = { code: fromCode };
+    }
+
+    // Куда
+    if (pvzCode) {
+      payload.delivery_point = pvzCode;
+    } else {
+      payload.to_location = { code: toCode };
+    }
 
     console.log("[CDEK_REGISTER] request body:", JSON.stringify(body, null, 2));
     console.log("[CDEK_REGISTER] payload:", JSON.stringify(payload, null, 2));
@@ -191,9 +232,36 @@ export async function POST(req: Request) {
 
     console.log("[CDEK_REGISTER] success:", JSON.stringify(created, null, 2));
 
-    const entity = (created as any)?.entity ?? null;
+    const invalidRequest = Array.isArray(created?.requests)
+      ? created.requests.find(
+          (r: any) =>
+            r?.state === "INVALID" ||
+            (Array.isArray(r?.errors) && r.errors.length > 0)
+        )
+      : null;
+
+    if (invalidRequest) {
+      return NextResponse.json(
+        {
+          error: "CDEK request is invalid",
+          requests: created.requests,
+          payload,
+          raw: created,
+        },
+        { status: 400 }
+      );
+    }
+
+    const entity = created?.entity ?? null;
     const uuid = String(entity?.uuid ?? "").trim();
-    const cdekNumber = String(entity?.cdek_number ?? "").trim();
+
+    const cdekNumber =
+      String(
+        created?.related_entities?.find?.((x: any) => x?.cdek_number)
+          ?.cdek_number ??
+          created?.entity?.cdek_number ??
+          ""
+      ).trim() || null;
 
     if (!uuid) {
       return NextResponse.json(
@@ -209,7 +277,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
       uuid,
-      cdekNumber: cdekNumber || null,
+      cdekNumber,
       package: {
         type: pack.packageType,
         weightGr: pack.weight,
