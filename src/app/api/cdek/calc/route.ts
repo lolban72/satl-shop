@@ -10,16 +10,15 @@ interface NormalizedItem {
   qty: number;
 }
 
+const CDEK_WAREHOUSE_WAREHOUSE_TARIFF = 136;
+
 function toInt(v: any, def: number) {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? Math.round(n) : def;
 }
 
 function getAllowedTariffs() {
-  return String(process.env.CDEK_ALLOWED_TARIFFS ?? "")
-    .split(",")
-    .map((x) => Number(x.trim()))
-    .filter((x) => Number.isFinite(x) && x > 0);
+  return [CDEK_WAREHOUSE_WAREHOUSE_TARIFF];
 }
 
 function pickBestTariff(raw: any) {
@@ -46,7 +45,7 @@ function pickBestTariff(raw: any) {
       (t: any) =>
         Number.isFinite(t.tariff_code) && Number.isFinite(t.delivery_sum)
     )
-    .filter((t: any) => allowed.size === 0 || allowed.has(t.tariff_code));
+    .filter((t: any) => allowed.has(t.tariff_code));
 
   normalized.sort((a: any, b: any) => a.delivery_sum - b.delivery_sum);
 
@@ -82,6 +81,13 @@ export async function POST(req: Request) {
 
     const fromCity = String(process.env.CDEK_FROM_CITY ?? "Краснодар").trim();
     const fromPvz = String(process.env.CDEK_FROM_PVZ_CODE ?? "").trim();
+
+    if (!fromPvz) {
+      return NextResponse.json(
+        { error: "CDEK_FROM_PVZ_CODE env required for warehouse-to-warehouse delivery" },
+        { status: 500 }
+      );
+    }
 
     const normalizedItems: NormalizedItem[] = items
       .map(
@@ -130,9 +136,32 @@ export async function POST(req: Request) {
       cdekResolveCityCode(city),
     ]);
 
+    if (!fromCode) {
+      return NextResponse.json(
+        { error: `Не удалось определить код города отправителя: ${fromCity}` },
+        { status: 400 }
+      );
+    }
+
+    if (!toCode) {
+      return NextResponse.json(
+        { error: `Не удалось определить код города получателя: ${city}` },
+        { status: 400 }
+      );
+    }
+
     const payload: any = {
       type: 1,
       lang: "rus",
+
+      // для расчёта обязательно оставляем оба location
+      from_location: { code: fromCode },
+      to_location: { code: toCode },
+
+      // и одновременно указываем ПВЗ, потому что работаем только склад-склад
+      shipment_point: fromPvz,
+      delivery_point: pvzCode,
+
       packages: [
         {
           weight: pack.weight,
@@ -143,20 +172,6 @@ export async function POST(req: Request) {
       ],
     };
 
-    // Откуда
-    if (fromPvz) {
-      payload.shipment_point = fromPvz;
-    } else {
-      payload.from_location = { code: fromCode };
-    }
-
-    // Куда
-    if (pvzCode) {
-      payload.delivery_point = pvzCode;
-    } else {
-      payload.to_location = { code: toCode };
-    }
-
     console.log("[CDEK_CALC] request body:", JSON.stringify(body, null, 2));
     console.log("[CDEK_CALC] payload:", JSON.stringify(payload, null, 2));
 
@@ -166,7 +181,7 @@ export async function POST(req: Request) {
     if (!best) {
       return NextResponse.json(
         {
-          error: "No tariffs",
+          error: "No warehouse-to-warehouse tariffs found",
           details: data,
           payload,
           allowedTariffs: getAllowedTariffs(),
