@@ -9,7 +9,7 @@ const CDEK_BASE_URL =
     ? "https://api.cdek.ru/v2"
     : "https://api.edu.cdek.ru/v2";
 
-const CDEK_PVZ_TARIFF = 136;
+const CDEK_WAREHOUSE_WAREHOUSE_TARIFF = 136;
 
 type DraftItem = {
   productId?: string;
@@ -107,32 +107,6 @@ function buildOrderPackage(items: DraftItem[]) {
     itemName,
     pack,
   };
-}
-
-function parseAllowedTariffs() {
-  return String(process.env.CDEK_ALLOWED_TARIFFS ?? "")
-    .split(",")
-    .map((x) => Number(String(x).trim()))
-    .filter((x) => Number.isFinite(x) && x > 0);
-}
-
-function resolveTariffCodeForPvz(requestedTariffCode: number | null | undefined) {
-  const requested = Number(requestedTariffCode ?? 0);
-  const allowedTariffs = parseAllowedTariffs();
-
-  if (allowedTariffs.length > 0 && !allowedTariffs.includes(CDEK_PVZ_TARIFF)) {
-    throw new Error(
-      `Для доставки в ПВЗ нужен тариф ${CDEK_PVZ_TARIFF}, но он отсутствует в CDEK_ALLOWED_TARIFFS`
-    );
-  }
-
-  if (requested && requested !== CDEK_PVZ_TARIFF) {
-    console.log(
-      `[CDEK_WEBHOOK] tariff override for PVZ: requested=${requested}, used=${CDEK_PVZ_TARIFF}`
-    );
-  }
-
-  return CDEK_PVZ_TARIFF;
 }
 
 async function getCdekAccessToken() {
@@ -263,21 +237,17 @@ async function registerCdekOrder(params: {
   recipientName: string;
   recipientPhone: string;
   pvzCode: string;
-  tariffCode: number;
   items: DraftItem[];
 }) {
-  const fromCity = String(process.env.CDEK_FROM_CITY ?? "").trim();
   const fromPvz = String(process.env.CDEK_FROM_PVZ_CODE ?? "").trim();
 
-  if (!fromCity) {
-    throw new Error("CDEK_FROM_CITY env required");
+  if (!fromPvz) {
+    throw new Error("CDEK_FROM_PVZ_CODE env required");
   }
 
   if (!params.pvzCode || !String(params.pvzCode).trim()) {
     throw new Error("CDEK pvzCode is missing");
   }
-
-  const effectiveTariffCode = resolveTariffCodeForPvz(params.tariffCode);
 
   const client = getCdekClient();
 
@@ -286,15 +256,12 @@ async function registerCdekOrder(params: {
   const payload = {
     type: 1,
     number: params.orderId,
-    tariff_code: effectiveTariffCode,
+    tariff_code: CDEK_WAREHOUSE_WAREHOUSE_TARIFF,
     recipient: {
       name: params.recipientName,
       phones: [{ number: normalizePhone(params.recipientPhone) }],
     },
-    from_location: {
-      city: fromCity,
-    },
-    ...(fromPvz ? { shipment_point: fromPvz } : {}),
+    shipment_point: fromPvz,
     delivery_point: params.pvzCode,
     packages: [
       {
@@ -316,15 +283,6 @@ async function registerCdekOrder(params: {
       },
     ],
   };
-
-  console.log("[CDEK_WEBHOOK] register start", {
-    orderId: params.orderId,
-    requestedTariffCode: params.tariffCode,
-    effectiveTariffCode,
-    pvzCode: params.pvzCode,
-    fromCity,
-    fromPvz: fromPvz || null,
-  });
 
   console.log(
     "[CDEK_WEBHOOK] register payload:",
@@ -615,7 +573,7 @@ async function handleYaPayWebhook(req: Request) {
         pvzName: draft.pvzName ?? null,
         deliveryPrice: draft.deliveryPrice ?? null,
         deliveryDays: draft.deliveryDays ?? null,
-        tariffCode: draft.tariffCode ?? null,
+        tariffCode: draft.pvzCode ? CDEK_WAREHOUSE_WAREHOUSE_TARIFF : draft.tariffCode ?? null,
 
         trackNumber: draft.trackNumber ?? null,
         items: {
@@ -683,6 +641,10 @@ async function handleYaPayWebhook(req: Request) {
       }
     | null = null;
 
+  const actualTariffCode = createdOrder.pvzCode
+    ? CDEK_WAREHOUSE_WAREHOUSE_TARIFF
+    : createdOrder.tariffCode ?? null;
+
   if (createdOrder.pvzCode) {
     try {
       const cdek = await registerCdekOrder({
@@ -690,13 +652,14 @@ async function handleYaPayWebhook(req: Request) {
         recipientName: createdOrder.name,
         recipientPhone: createdOrder.phone,
         pvzCode: createdOrder.pvzCode,
-        tariffCode: createdOrder.tariffCode ?? CDEK_PVZ_TARIFF,
         items,
       });
 
       cdekPackageInfo = cdek.package;
 
-      const updateData: any = {};
+      const updateData: any = {
+        tariffCode: CDEK_WAREHOUSE_WAREHOUSE_TARIFF,
+      };
 
       if (cdek.uuid) {
         updateData.cdekUuid = cdek.uuid;
@@ -707,18 +670,16 @@ async function handleYaPayWebhook(req: Request) {
         effectiveTrackNumber = cdek.cdekNumber;
       }
 
-      if (Object.keys(updateData).length > 0) {
-        await prisma.order.update({
-          where: { id: createdOrder.id },
-          data: updateData,
-        });
-      }
+      await prisma.order.update({
+        where: { id: createdOrder.id },
+        data: updateData,
+      });
 
       console.log("✅ CDEK order registered:", {
         orderId: createdOrder.id,
         uuid: cdek.uuid,
         cdekNumber: cdek.cdekNumber,
-        tariffCode: CDEK_PVZ_TARIFF,
+        tariffCode: CDEK_WAREHOUSE_WAREHOUSE_TARIFF,
         package: cdek.package,
       });
     } catch (e: any) {
@@ -749,8 +710,8 @@ async function handleYaPayWebhook(req: Request) {
       : "";
 
   const tariffLine =
-    draft.tariffCode != null
-      ? `Тариф СДЭК: <code>${draft.tariffCode}</code>\n`
+    actualTariffCode != null
+      ? `Тариф СДЭК: <code>${actualTariffCode}</code>\n`
       : "";
 
   const promoLine = draft.promoCode
