@@ -9,6 +9,8 @@ const CDEK_BASE_URL =
     ? "https://api.cdek.ru/v2"
     : "https://api.edu.cdek.ru/v2";
 
+const CDEK_PVZ_TARIFF = 136;
+
 type DraftItem = {
   productId?: string;
   variantId?: string | null;
@@ -55,6 +57,7 @@ function extractCdekError(err: any) {
     body: err?.body ?? null,
     errors: err?.errors ?? null,
     cause: err?.cause ?? null,
+    stack: err?.stack ?? null,
   };
 }
 
@@ -104,6 +107,32 @@ function buildOrderPackage(items: DraftItem[]) {
     itemName,
     pack,
   };
+}
+
+function parseAllowedTariffs() {
+  return String(process.env.CDEK_ALLOWED_TARIFFS ?? "")
+    .split(",")
+    .map((x) => Number(String(x).trim()))
+    .filter((x) => Number.isFinite(x) && x > 0);
+}
+
+function resolveTariffCodeForPvz(requestedTariffCode: number | null | undefined) {
+  const requested = Number(requestedTariffCode ?? 0);
+  const allowedTariffs = parseAllowedTariffs();
+
+  if (allowedTariffs.length > 0 && !allowedTariffs.includes(CDEK_PVZ_TARIFF)) {
+    throw new Error(
+      `Для доставки в ПВЗ нужен тариф ${CDEK_PVZ_TARIFF}, но он отсутствует в CDEK_ALLOWED_TARIFFS`
+    );
+  }
+
+  if (requested && requested !== CDEK_PVZ_TARIFF) {
+    console.log(
+      `[CDEK_WEBHOOK] tariff override for PVZ: requested=${requested}, used=${CDEK_PVZ_TARIFF}`
+    );
+  }
+
+  return CDEK_PVZ_TARIFF;
 }
 
 async function getCdekAccessToken() {
@@ -244,9 +273,11 @@ async function registerCdekOrder(params: {
     throw new Error("CDEK_FROM_CITY env required");
   }
 
-  if (!Number.isFinite(params.tariffCode) || params.tariffCode <= 0) {
-    throw new Error("CDEK tariffCode is missing");
+  if (!params.pvzCode || !String(params.pvzCode).trim()) {
+    throw new Error("CDEK pvzCode is missing");
   }
+
+  const effectiveTariffCode = resolveTariffCodeForPvz(params.tariffCode);
 
   const client = getCdekClient();
 
@@ -255,7 +286,7 @@ async function registerCdekOrder(params: {
   const payload = {
     type: 1,
     number: params.orderId,
-    tariff_code: Math.round(params.tariffCode),
+    tariff_code: effectiveTariffCode,
     recipient: {
       name: params.recipientName,
       phones: [{ number: normalizePhone(params.recipientPhone) }],
@@ -286,40 +317,57 @@ async function registerCdekOrder(params: {
     ],
   };
 
+  console.log("[CDEK_WEBHOOK] register start", {
+    orderId: params.orderId,
+    requestedTariffCode: params.tariffCode,
+    effectiveTariffCode,
+    pvzCode: params.pvzCode,
+    fromCity,
+    fromPvz: fromPvz || null,
+  });
+
   console.log(
     "[CDEK_WEBHOOK] register payload:",
     JSON.stringify(payload, null, 2)
   );
 
-  const created = await client.addOrder(payload);
+  try {
+    const created = await client.addOrder(payload);
 
-  console.log(
-    "[CDEK_WEBHOOK] register success:",
-    JSON.stringify(created, null, 2)
-  );
+    console.log(
+      "[CDEK_WEBHOOK] register success:",
+      JSON.stringify(created, null, 2)
+    );
 
-  const entity = (created as any)?.entity ?? null;
-  const uuid = String(entity?.uuid ?? "").trim() || null;
-  const cdekNumber = String(entity?.cdek_number ?? "").trim() || null;
+    const entity = (created as any)?.entity ?? null;
+    const uuid = String(entity?.uuid ?? "").trim() || null;
+    const cdekNumber = String(entity?.cdek_number ?? "").trim() || null;
 
-  const enriched = await enrichCdekOrderAfterCreate({
-    uuid,
-    cdekNumber,
-  });
+    const enriched = await enrichCdekOrderAfterCreate({
+      uuid,
+      cdekNumber,
+    });
 
-  return {
-    uuid: enriched.uuid,
-    cdekNumber: enriched.cdekNumber,
-    package: {
-      type: pack.packageType,
-      weightGr: pack.weight,
-      lengthCm: pack.length,
-      widthCm: pack.width,
-      heightCm: pack.height,
-    },
-    raw: created,
-    lookupRaw: enriched.raw,
-  };
+    return {
+      uuid: enriched.uuid,
+      cdekNumber: enriched.cdekNumber,
+      package: {
+        type: pack.packageType,
+        weightGr: pack.weight,
+        lengthCm: pack.length,
+        widthCm: pack.width,
+        heightCm: pack.height,
+      },
+      raw: created,
+      lookupRaw: enriched.raw,
+    };
+  } catch (e: any) {
+    console.log(
+      "❌ CDEK REGISTER ERROR:",
+      JSON.stringify(extractCdekError(e), null, 2)
+    );
+    throw e;
+  }
 }
 
 async function notifyUserOrderStatus(params: {
@@ -637,16 +685,12 @@ async function handleYaPayWebhook(req: Request) {
 
   if (createdOrder.pvzCode) {
     try {
-      if (!createdOrder.tariffCode) {
-        throw new Error("Order tariffCode is missing");
-      }
-
       const cdek = await registerCdekOrder({
         orderId: createdOrder.id,
         recipientName: createdOrder.name,
         recipientPhone: createdOrder.phone,
         pvzCode: createdOrder.pvzCode,
-        tariffCode: createdOrder.tariffCode,
+        tariffCode: createdOrder.tariffCode ?? CDEK_PVZ_TARIFF,
         items,
       });
 
@@ -674,7 +718,7 @@ async function handleYaPayWebhook(req: Request) {
         orderId: createdOrder.id,
         uuid: cdek.uuid,
         cdekNumber: cdek.cdekNumber,
-        tariffCode: createdOrder.tariffCode,
+        tariffCode: CDEK_PVZ_TARIFF,
         package: cdek.package,
       });
     } catch (e: any) {
