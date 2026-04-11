@@ -99,6 +99,7 @@ export default function PdPolicyPage() {
               <li>номер телефона;</li>
               <li>адрес доставки товара;</li>
               <li>данные о заказах и действиях на сайте;</li>
+              <li>Телеграм ID</li>
               <li>
                 IP-адрес, файлы cookie, сведения о браузере и устройстве
                 (обезличенные данные).
@@ -206,7 +207,7 @@ export default function PdPolicyPage() {
             </p>
 
             <p className="mt-[6px] md:mt-[8px] doc-h3 font-semibold">
-              [ПРОПИСАТЬ ПОЧТУ]
+              Satl.Shop.ru@gmail.com
             </p>
 
             <p className="mt-[6px] md:mt-[8px] doc-h3">
